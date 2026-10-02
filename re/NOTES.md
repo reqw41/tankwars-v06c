@@ -93,6 +93,9 @@ analyzeHeadless re/ghidra bomb25 -import re/bomb25_flat.exe -overwrite \
 Ветер раунда: `2583:2567` в `FUN_2583_2531`; режимы None/Low/Norm/High/Gale/RND (`81f6`);
 модель `scripts/ref/wind.py`. Угол UI = 0..90 + facing ±1. FP сравнение: `scripts/ref/fp_compare.py`.
 
+Макс. мощность = **10×men** (`2583:2925` clamp; DOC `100*MEN` неверен). Men раунда = 100.
+`2583:140f` = `TW_LaserTurn` (оружие 5), не ExplosionDispatch. Проба: `scripts/probe/max_power_probe.py`.
+
 Пересборка с RTL:
 ```
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home

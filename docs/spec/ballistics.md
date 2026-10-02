@@ -10,16 +10,26 @@ Model: `scripts/ref/ballistics.py`. Wind round setup: `scripts/ref/wind.py` (`25
 |---|---|---|
 | X | `p*0x61 + 0x3efc` | int, tank centre |
 | Y | `+0x3efe` | int, screen Y down |
-| Power | `+0x3f0a` | 1 … `100*Men` (DOC); step 1 / Pg±10 |
+| Power | `+0x3f0a` | 0 … **10×Men** (clamp); step 1 / Pg±100 (DOC) |
 | Angle | `+0x3f0c` | **0..90** degrees (UI); not a full 0..180 counter |
 | Facing | `+0x3f0e` | `+1` right / `−1` left — second half of the semicircle |
-| Men | `+0x3f10` | crew; max power = 100×Men |
+| Men | `+0x3f10` | health/crew (round start = **100** @ `2eef:0f48`); max power = **10×Men** |
 | Weapon | `+0x3f13` | 1..18 |
 | Guided | `+0x3f15` | >0 → seek / special (Herb's/Vick's etc.) |
 
 **Angle system:** the gun covers 180° as **angle ∈ [0,90] plus facing ±1**.  
 0° = horizon toward `facing`; 90° = straight up (facing only mirrors Cos for near-vertical).  
 There is no stored “180°” angle — left horizon is `angle=0, facing=−1` (scenario `a0_facem1_p200`).
+
+**Maximum Power** (proven): binary clamps power to **`10 × Men`**, not DOC’s `100*MEN`.
+
+| Site | Role |
+|---|---|
+| `2583:2925..2957` | pre-fire clamp in `TW_StartRound` before AI / `TW_FireShot` |
+| `2b39:0425` | keyboard ±power / Pg± also clamp to `men*10` |
+| `30b8:08a1` | HUD string «Maximum Power:» prints `men*10` |
+
+With round-start men=100 → max power **1000**. Execution: `scripts/probe/max_power_probe.py` → `work/T02/max_power_probe.json` (gamerun, computer players).
 
 Muzzle (flight barrel length **10** px — draw path uses **8**):
 
@@ -107,8 +117,15 @@ if hit_color found:
 
 Then weapons **12..16** on tank colors: `vy ← −vy * 1.2`, clear guided, continue (no explode).
 
-For legal power `≤ 100*Men` and `Men ≤ 9`, always `power < thresh`, so **every dirt hit stops**.  
-With `Men = 10`, `thresh = 980`: power ≥ 980 can pass through dirt unless tank color / palette wrap.
+**Semantics for real men (0..100):** `thresh = 1000 − 2·men`.
+
+| men | thresh | legal max power `10×men` | dirt pass-through? |
+|---|---|---|---|
+| 100 (full) | 800 | 1000 | yes, when power ∈ [800, 1000] (exact 800 cancels dirt stop) |
+| 50 | 900 | 500 | **no** — every legal power < 900 |
+| ≤ 9 (old T02 scen.) | ≥ 982 | ≤ 90 | no |
+
+Tests: `tests/test_ballistics.py` (`test_dirt_fuse_men100_50`) — men=100/50, power above and below thresh.
 
 **Walls** (`DS:8200`):
 
@@ -133,8 +150,9 @@ Palette animation via `1057:0000`; sound gated by `81ff`.
 |---|---|---|
 | Guided `3f15>0` | `2583:06cf` | Steer vx/vy toward target player `3f17` |
 | Weapons 12..16 | `2583:0d71` | Bounce on tank colors ×1.2 |
-| High power + Men=10 | `2583:0d2d` / `0d6c` | dirt pass-through when `power ≥ thresh` |
-| Laser / Sonic / etc. | other overlays / post-hit `1054:0020` | **Outside T02** — explosion dispatch |
+| High power ≥ thresh | `2583:0d2d` / `0d6c` | dirt pass-through (`thresh=1000−2·men`) |
+| Laser (weapon 5) | `2583:140f` (`TW_LaserTurn`) | **Outside T02 flight** — set `2583:2511` |
+| Sonic / CRI / dirt balls | other overlays / post-hit | **Outside T02** |
 
 ## 8. DS globals (flight)
 

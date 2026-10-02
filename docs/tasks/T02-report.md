@@ -67,7 +67,7 @@
 
 **Порог остановки** (`2583:01ce`, `0d2d`, `0d6c`): сравнивается именно **power** (`+0x3f0a`) с локальным `thresh = 1000 − 2*Men` (`Men` at `+0x3f10`).  
 Также `done` при `3eac==3eb0` или цвете танка; отмена при `power==thresh && color==2`.  
-Не ветка Balls-o-Dirt: общий код для всех оружий в `TW_FireShot`. При Men≤9 любой легальный power < thresh → dirt всегда останавливает.
+Не ветка Balls-o-Dirt: общий код для всех оружий в `TW_FireShot`. (Смысл при men=100 — см. Addendum 2.)
 
 **Угол:** UI = **0..90 + facing ±1**; метка `a180_p200` заменена на `a0_facem1_p200` (+ `a90_facem1_p200`).
 
@@ -88,11 +88,52 @@ Cycle Delay: `CRT_Delay(3)` → ≥333.3 step/s; 1619 steps ≈4.86 s; бюдж�
 - Именование Low/Norm в меню vs DOC «None/Norm/High/Gale» — Low есть в бинаре (`None/Low/Norm/High/Gale/RND`); DOC сокращён.
 - Оценка циклов 8080 — порядковая, не замеры на железе.
 
+## Addendum 2
+
+Стенд: `scripts/t03/gamerun.py` + `scripts/probe/max_power_probe.py` (игроки-компьютеры).  
+Числа: `work/T02/max_power_probe.json`.  
+`pytest tests/`: `475 passed, 2 skipped in 8.31s` (`work/T02/pytest_all_addendum2.txt`).
+
+### Доказано
+
+**Maximum Power = 10×men**, не DOC `100*MEN`.
+
+| Адрес | Роль |
+|---|---|
+| `2583:2925..2957` | pre-fire clamp: `if power > men*10: power ← men*10` |
+| `2b39:0425` | клавиши power / Pg± — тот же потолок |
+| `30b8:08a1` | HUD «Maximum Power:» печатает `men*10` |
+
+Исполнение (компьютеры, после расстановки men=100, power=200):
+
+| case | men | inject | after clamp `2583:295b` |
+|---|---|---|---|
+| A | 100 | 5000 | **1000** |
+| B | 50 | 999 | **500** |
+| C | 100 | 200 | **200** (без изменений) |
+
+`all_ok: true` в `max_power_probe.json`. При men=100 легальный потолок = 1000.
+
+**Порог dirt** `thresh = 1000 − 2·men` (реальные men 0..100):
+
+| men | thresh | legal max | пролёт сквозь землю |
+|---|---|---|---|
+| 100 | 800 | 1000 | да, power ≥ 800 |
+| 50 | 900 | 500 | нет (весь легальный диапазон < thresh) |
+
+Тесты `test_dirt_fuse_men100_50`: men=100 power 700/900; men=50 power 500/950 — 4/4.
+
+**Имя:** `2583:140f` → `TW_LaserTurn` (оружие 5, множество `2583:2511`), не ExplosionDispatch.
+
+### Гипотезы (addendum 2)
+
+- DOC `100*MEN` — ошибка документации относительно бинаря 2.5 (или иная шкала в другой версии); в коде везде `*10`.
+
 ## Файлы
 
 - `docs/spec/ballistics.md`
 - `re/game/names_T02.csv`
 - `scripts/ref/ballistics.py`, `scripts/ref/wind.py`, `scripts/ref/fp_compare.py`
-- `scripts/probe/flight_trace.py`
+- `scripts/probe/flight_trace.py`, `scripts/probe/max_power_probe.py`
 - `tests/test_ballistics.py`, `tests/test_wind.py`
-- `work/T02/` (traces, wind_dist, fp_compare, pytest logs) — не обязательно в git
+- `work/T02/` (traces, wind_dist, fp_compare, max_power_probe, pytest logs) — не обязательно в git

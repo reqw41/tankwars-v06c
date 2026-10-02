@@ -63,7 +63,7 @@ class FlightInput:
     rebound: bool = False  # DS:8200
     weapon: int = 1  # DS player+0x3f13
     guided: int = 0  # DS player+0x3f15 (>0 enables seek/special)
-    men: int = 5  # DS player+0x3f10; hit thresh = 1000-2*men (see spec §5)
+    men: int = 5  # DS +0x3f10; game round-start=100; hit thresh=1000-2*men; max power=10*men
     max_steps: int = 20000
 
 
