@@ -246,6 +246,73 @@ def laser(v: bytearray, bg: bytes, players: list, shooter: int, rng, sound: bool
         py -= sn
 
 
+# Наведение в полёте, 2583:06cf, после интегрирования шага и до Trunc.
+# 1 Herb's (множество 0180): если |dy|<=2, vy=0 и vx *= ±1.01.
+# 2 Vick's (множество 01a0): если |dx|<=2, vx=0 и y += sign(dy)*0.5.
+# 3 — оба, сначала Vick's.
+_HERB = 1.0100000000002183
+_HALF = 0.5
+
+
+def guide_step(x, y, vx, vy, kind: int, target_x: int, target_y: int):
+    """Один шаг коррекции. x,y,vx,vy уже Real48-значения после физики."""
+    from ballistics import q
+    dx = q(q(float(target_x)) - x)
+    dy = q(q(float(target_y)) - y)
+    if kind in (2, 3) and abs(dx) <= 2.0:
+        vx = q(0.0)
+        y = q(y + _HALF) if dy > 0 else q(y - _HALF)
+    if kind in (1, 3) and abs(dy) <= 2.0:
+        vy = q(0.0)
+        prod = q(dx * vx)
+        # 2583:0876 jae → +1.01 (dx*vx >= 0, уже летим к цели), иначе −1.01
+        vx = q(vx * (_HERB if prod >= 0 else -_HERB))
+    return x, y, vx, vy
+
+
+def guided_positions(terrain_bytes: bytes, tank_x: int, tank_y: int, angle: int, power: int,
+                     facing: int, men: int, kind: int, target_x: int, target_y: int,
+                     wind: int = 0) -> list:
+    """Пиксели Trunc(x), Trunc(y) на 2583:0b91 — тот же интегратор, что scripts/ref/ballistics.py."""
+    from ballistics import (
+        BARREL, DIAMOND, GRAVITY, POWER_DIV, STEP_DIV, WIND_DIV, Y_KILL_HI, Y_KILL_LO,
+        _advance_substep, _hit_should_stop, _is_hit_color, deg_to_rad, q, trunc0,
+    )
+    import math
+    from real48 import float_to_real48
+    rad = deg_to_rad(angle)
+    c = q(math.cos(rad))
+    s = q(math.sin(rad))
+    x = q(q(float(tank_x)) + q(q(c * BARREL) * float(facing)))
+    y = q(q(float(tank_y)) - q(s * BARREL))
+    vx = q(q(q(float(power) / POWER_DIV) * c) * float(facing))
+    vy = q(q(float(power) / POWER_DIV) * s)
+    if float_to_real48(vy)[0] != 0:
+        vy = q(-vy)
+    step = STEP_DIV
+    fuse = 1000 - 2 * men
+    sub = 1
+    positions = []
+    for _ in range(4000):
+        sub = _advance_substep(sub, int(step))
+        x = q(x + q(vx / step))
+        y = q(y + q(vy / step))
+        vy = q(vy + q(GRAVITY / step))
+        vx = q(vx + q(q(float(wind) / WIND_DIV) / step))
+        x, y, vx, vy = guide_step(x, y, vx, vy, kind, target_x, target_y)
+        px, py = trunc0(x), trunc0(y)
+        positions.append([px, py])
+        in_band = (y < 189.0) and (x < 309.0) and (y > 33.0) and (x > 11.0)
+        if in_band:
+            for ddx, ddy in DIAMOND:
+                cpix = terrain_bytes[(py + ddy) * 320 + (px + ddx)] if 0 <= px + ddx < 320 and 0 <= py + ddy < 200 else 0
+                if _is_hit_color(cpix) and _hit_should_stop(power, fuse, cpix, sub, int(step)):
+                    return positions
+        if y < Y_KILL_LO or y > Y_KILL_HI:
+            return positions
+    return positions
+
+
 def _pix_set(v: bytearray, x: int, y: int, color: int) -> None:
     if 0 <= x < 320 and 0 <= y < 200:
         v[y * 320 + x] = color

@@ -5,7 +5,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts' / 'ref'))
-from weapons import sonic, cri, dirt_ball, explosive_dirt, laser  # noqa: E402
+from weapons import sonic, cri, dirt_ball, explosive_dirt, laser, guided_positions  # noqa: E402
 from tprandom import TPRandom  # noqa: E402
 
 FX = ROOT / 'tests' / 'fixtures' / 't04'
@@ -23,6 +23,7 @@ CRI = _cases('cri')
 DIRT = _cases('dirt')
 XDIRT = _cases('xdirt')
 LASER = _cases('laser')
+GUIDE = _cases('guide')
 
 
 def _load(kind, c):
@@ -95,3 +96,11 @@ def test_laser_matches_original(kind, c):
     assert rng.seed == c['post']['seed']
     bad = [i for i in range(64000) if v[i] != post[i]]
     assert not bad, f'{len(bad)} px, first {(bad[0]%320, bad[0]//320) if bad else None}'
+
+
+@pytest.mark.parametrize('kind,c', GUIDE, ids=[c['name'] for _, c in GUIDE])
+def test_guidance_matches_original(kind, c):
+    terr = zlib.decompress((FX / kind / f"{c['name']}.vram.z").read_bytes())
+    got = guided_positions(terr, c['x'], c['y'], c['angle'], c['power'], c['facing'], c['men'],
+                           c['kind'], c['target_x'], c['target_y'], c['wind'])
+    assert got == c['positions']
