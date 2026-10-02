@@ -12,10 +12,10 @@ import struct
 from typing import Tuple
 
 try:
-    from explosion import ellipse_points
+    from explosion import ellipse_points, ring
     from crumble import crumble
 except ImportError:  # pragma: no cover
-    from .explosion import ellipse_points
+    from .explosion import ellipse_points, ring
     from .crumble import crumble
 
 Viewport = Tuple[int, int, int, int]  # x1, y1, x2, y2
@@ -161,3 +161,20 @@ def cri(v: bytearray, bg: bytes, players: list, x: float, y: float, hit: int,
             pts[i] = pts[j]
         if dead == radius:
             return
+
+
+# Шары грязи 13..16 (318e:10e4). Circle 1827:11ea, радиусы как у зажигательных.
+# На r=7 пиксели Circle совпали с 1691-эллипсом (tests/fixtures/t03/circle_real.json).
+DIRT_RADIUS = {13: 10, 14: 15, 15: 30, 16: 60}
+_FIELD = (11, 31, 309, 189)
+
+
+def dirt_ball(v: bytearray, x: float, y: float, weapon: int, vp: Viewport = _FIELD) -> None:
+    """Диск земли цветом 2. ГСЧ не тратит, игроков не трогает. Координаты — во вьюпорте (минус 11, 31)."""
+    radius = DIRT_RADIUS[weapon]
+    lx, ly = x - vp[0], y - vp[1]
+    cy = math.trunc(ly)
+    centers = (math.trunc(lx + 1), math.trunc(lx - 1), math.trunc(lx))
+    for i in range(radius + 1):
+        for cx in centers:
+            ring(v, cx, cy, i, 2, vp)
