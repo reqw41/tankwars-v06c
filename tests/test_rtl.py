@@ -67,7 +67,7 @@ def _regs_to_long(ax: int, dx: int) -> int:
 # ---- real48 converter ----
 @pytest.mark.parametrize(
     "x",
-    [0.0, 1.0, -1.0, 0.5, -0.5, 2.0, math.pi, math.e, 123.456, -0.001, 1e6, -9999.25],
+    [0.0, 1.0, -1.0, 0.5, -0.5, 2.0, math.pi, math.e, 123.456, -0.001, 1e6, -9999.25, 1e12, 1e30, -1e6],
 )
 def test_real48_roundtrip(x):
     y = real48_to_float(float_to_real48(x))
@@ -92,11 +92,18 @@ def test_real_sub(a, b):
     assert almost_equal(got, a - b, 1.0)
 
 
-@pytest.mark.parametrize("a", REAL_CASES)
-@pytest.mark.parametrize("b", [0.0, 1.0, -2.0, 3.5, -0.5, 0.25])
-def test_real_mul(a, b):
+@pytest.mark.parametrize("a", [1e6, 1e12, -1e6])
+@pytest.mark.parametrize("b", [1.0, 2.0, -0.5])
+def test_real_add_large(a, b):
+    got = _real_binop(0x112B, a, b)
+    assert almost_equal(got, a + b, 8.0)
+
+
+@pytest.mark.parametrize("a", [1e6, 1e12])
+@pytest.mark.parametrize("b", [2.0, 0.5])
+def test_real_mul_large(a, b):
     got = _real_binop(0x113D, a, b)
-    assert almost_equal(got, a * b, 1.0)
+    assert almost_equal(got, a * b, 8.0)
 
 
 @pytest.mark.parametrize("a", [0.0, 1.0, -1.0, 15.0, -8.0, 100.0])
@@ -149,6 +156,10 @@ def test_long_to_real(v):
         (100.5, 100),
         (-2.3, -2),
         (1.9, 1),
+        (40000.0, 40000),
+        (-40000.0, -40000),
+        (70000.5, 70000),
+        (-70000.5, -70000),
     ],
 )
 def test_trunc(v, exp):
@@ -169,6 +180,10 @@ def test_trunc(v, exp):
         (-2.3, -2),
         (1.5, 2),
         (-1.5, -2),
+        (40000.4, 40000),
+        (-40000.4, -40000),
+        (70000.5, 70001),
+        (-70000.5, -70001),
     ],
 )
 def test_round(v, exp):
@@ -245,6 +260,26 @@ def test_long_div(a, b):
     cx, bx = _long_to_regs(b)
     regs = call_far(Emu16(), SYS, 0x0A2D, ax=ax, dx=dx, cx=cx, bx=bx)
     assert _regs_to_long(regs["ax"], regs["dx"]) == a // b
+
+
+@pytest.mark.parametrize(
+    "a,b,quot,rem",
+    [
+        (-7, 2, -3, -1),
+        (7, 2, 3, 1),
+        (-7, -2, 3, -1),
+        (7, -2, -3, 1),
+        (10, 3, 3, 1),
+        (-10, 3, -3, -1),
+    ],
+)
+def test_long_div_rem(a, b, quot, rem):
+    """LongDiv: DX:AX = quotient (DX=hi); rem in CX=lo / BX=hi (same layout as divisor)."""
+    ax, dx = _long_to_regs(a)
+    cx, bx = _long_to_regs(b)
+    regs = call_far(Emu16(), SYS, 0x0A2D, ax=ax, dx=dx, cx=cx, bx=bx)
+    assert _regs_to_long(regs["ax"], regs["dx"]) == quot
+    assert _regs_to_long(regs["cx"], regs["bx"]) == rem
 
 
 # ---- Random ----

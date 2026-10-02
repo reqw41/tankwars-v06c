@@ -57,8 +57,8 @@ analyzeHeadless re/ghidra bomb25 -import re/bomb25_flat.exe -overwrite \
 | seg | unit |
 |---|---|
 | 1c5b | System (Real48, LongInt, строки, файлы, Random) |
-| 1827 | Graph (BGI через `CALL FAR [DS:E642]`, команда в SI) |
-| 175e | обёртки Graph |
+| 1827 | Graph (BGI через `CALL FAR [DS:E642]`, команда в SI = смещение в таблице драйвера) |
+| 175e | GraphWrap / хелперы игры (Hypot, DegToRad/RadToDeg, мышь) — **не** тонкие обёртки Graph |
 | 17c5 | Crt-подобный (Sound/NoSound/KeyPressed/ReadKey/Delay) — **им пользуется игра** |
 | 1be7 | стандартный Crt (почти не вызывается) |
 | 17a3 | Mouse (INT 33h) |
@@ -66,10 +66,19 @@ analyzeHeadless re/ghidra bomb25 -import re/bomb25_flat.exe -overwrite \
 | 1651 | Overlay |
 | 1691, 166f, 1637 | прочие резидентные (INT 10h и др.), имена `U1691_*`… |
 
-Соглашение Real48: значение в регистрах **DX:BX:AX** (младшее слово AX = exp в младшем байте + младшие биты мантиссы). Бинарные операции: левый = DX:BX:AX, правый = DI:SI:CX, результат = DX:BX:AX. FAR-entry: `1c5b:112b` Add, `1131` Sub, `113d` Mul, `1143` Div, `114d` Cmp, `1151` LongToReal, `1155` Trunc, `115b` Round. RandSeed = `DS:3774` (LongInt).
+Соглашение Real48: значение в регистрах **DX:BX:AX** (младшее слово AX = exp в младшем байте + младшие биты мантиссы). Бинарные операции: левый = DX:BX:AX, правый = DI:SI:CX, результат = DX:BX:AX. FAR-entry: `1c5b:112b` Add, `1131` Sub, `113d` Mul, `1143` Div, `114d` Cmp, `1151` LongToReal, `1155` Trunc, `115b` Round. RandSeed = `DS:3774` (LongInt). LongDiv `0a2d`: частное DX:AX, остаток CX=lo/BX=hi, к нулю.
+
+### T01b — Graph по эффекту (unicorn + VGA256)
+
+Имена Graph/GraphWrap из T01 (по первому MOV SI) **отменены**. Переименованы по эффекту в `work/T01b/effects.json` / `docs/tasks/T01b-report.md`. Ключевые правки:
+- `1fcc` = GetPixel (не SetFillStyle); `1f12` = OutTextXY (SI=08+26); `1cce` = Bar; `10d2` = Rectangle (4×Line)
+- `13f2` = OutText; `1454` = SetTextJustify; `1131` = SetFillStyle; `0f93` = SetViewPort; `1042` = MoveTo
+- `1f9b` = TextWidth; `175e:0088` = Hypot; `00da`/`0124` = DegToRad/RadToDeg
+
+Эмуляция: `scripts/emu16.py` + `scripts/graph_env.py` (reloc вшитого VGA256, A000, INT10, BIOS-шрифт F000:FA6E).
 
 Имена: `re/rtl/rtl_names.csv`, скрипт `scripts/ApplyRtlNames.java`.
-Проверка: `pytest tests/test_rtl.py`, покрытие `scripts/rtl_coverage.py`.
+Проверка: `pytest tests/`, покрытие `scripts/rtl_coverage.py` (границы из `re/ovl_map.txt`).
 
 Пересборка с RTL:
 ```

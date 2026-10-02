@@ -1,11 +1,14 @@
-"""16-bit real-mode Unicorn harness for bomb25_flat.exe (Ghidra load base 0x1000)."""
+"""16-bit real-mode Unicorn harness for bomb25_flat.exe (Ghidra load base 0x1000).
+
+Supports VGA A000 video RAM and INT 10h/21h/1Ah hooks for Graph/BGI emulation.
+"""
 from __future__ import annotations
 
 import struct
 from pathlib import Path
-from typing import Callable, Dict, Iterable, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
-from unicorn import Uc, UcError, UC_ARCH_X86, UC_MODE_16
+from unicorn import Uc, UcError, UC_ARCH_X86, UC_MODE_16, UC_HOOK_CODE, UC_HOOK_INTR
 from unicorn.x86_const import (
     UC_X86_REG_AH,
     UC_X86_REG_AL,
@@ -35,11 +38,16 @@ ROOT = Path(__file__).resolve().parents[1]
 FLAT = ROOT / "re" / "bomb25_flat.exe"
 LOAD_SEG = 0x1000  # matches Ghidra
 DS_SEG = 0x1E0D
-# Physical memory: map paragraphs as linear = seg<<4
 MEM_BASE = 0
-MEM_SIZE = 0x200000  # 2 MiB covers image + stack + scratch
+MEM_SIZE = 0x200000  # 2 MiB
 STACK_SEG = 0x9000
 STACK_SP = 0xFFFE
+VGA_SEG = 0xA000
+VGA_SIZE = 0x10000
+
+# DOS heap for INT 21h AH=48h allocations (paragraphs)
+_HEAP_SEG = 0xB000
+_HEAP_NEXT = _HEAP_SEG
 
 
 def _load_relocated_image(path: Path = FLAT, load_seg: int = LOAD_SEG) -> bytes:
@@ -72,20 +80,140 @@ def ghidra_to_linear(seg: int, off: int) -> int:
 
 
 def file_image_offset(seg: int, off: int) -> int:
-    """Offset into relocated image (which starts at paragraph LOAD_SEG in Ghidra)."""
     return (seg - LOAD_SEG) * 16 + off
 
 
 class Emu16:
-    def __init__(self):
+    def __init__(self, hook_interrupts: bool = True):
+        global _HEAP_NEXT
+        _HEAP_NEXT = _HEAP_SEG
         self.uc = Uc(UC_ARCH_X86, UC_MODE_16)
         self.uc.mem_map(MEM_BASE, MEM_SIZE)
         img = relocated_image()
-        # Place image at linear LOAD_SEG<<4
-        base = LOAD_SEG << 4
-        self.uc.mem_write(base, img)
-        # Zero BSS-ish area after image for DS
+        self.uc.mem_write(LOAD_SEG << 4, img)
+        # VGA framebuffer
+        self.uc.mem_write(VGA_SEG << 4, bytes(VGA_SIZE))
+        # VGA256 OutText uses BIOS 8×8 font at F000:FA6E
+        self._install_bios_font()
+        self.int_log: List[str] = []
+        self.video_mode = 3
+        self.palette: Dict[int, Tuple[int, int, int]] = {}
+        self.mouse_x = 0
+        self.mouse_y = 0
+        self.mouse_buttons = 0
+        self._intr_hook = None
         self.reset_regs()
+        if hook_interrupts:
+            self.install_interrupt_hooks()
+
+    def _install_bios_font(self):
+        """Synthetic 8×8 font so BGI OutText can plot glyphs (full block for printable)."""
+        font = bytearray(256 * 8)
+        for ch in range(32, 127):
+            base = ch * 8
+            font[base : base + 8] = bytes(
+                [0x7E, 0x81, 0xA5, 0x81, 0xA5, 0x99, 0x81, 0x7E]
+            )  # recognizable glyph
+        self.uc.mem_write(ghidra_to_linear(0xF000, 0xFA6E), bytes(font))
+
+    def install_interrupt_hooks(self):
+        if self._intr_hook is not None:
+            return
+
+        def on_intr(uc, intno, data):
+            self._handle_interrupt(intno)
+
+        self._intr_hook = self.uc.hook_add(UC_HOOK_INTR, on_intr)
+
+    def _handle_interrupt(self, intno: int):
+        ah = self.uc.reg_read(UC_X86_REG_AH)
+        al = self.uc.reg_read(UC_X86_REG_AL)
+        ax = self.uc.reg_read(UC_X86_REG_AX)
+        bx = self.uc.reg_read(UC_X86_REG_BX)
+        cx = self.uc.reg_read(UC_X86_REG_CX)
+        dx = self.uc.reg_read(UC_X86_REG_DX)
+        flags = self.uc.reg_read(UC_X86_REG_FLAGS)
+
+        if intno == 0x10:
+            self.int_log.append(f"INT10 AH={ah:02X} AL={al:02X} BX={bx:04X} CX={cx:04X} DX={dx:04X}")
+            if ah == 0x00:  # set mode
+                self.video_mode = al
+                if al == 0x13:
+                    self.uc.mem_write(VGA_SEG << 4, bytes(VGA_SIZE))
+            elif ah == 0x0F:  # get mode
+                self.uc.reg_write(UC_X86_REG_AL, self.video_mode)
+                self.uc.reg_write(UC_X86_REG_AH, 80)  # cols
+            elif ah == 0x10:  # DAC/palette
+                if al == 0x10:  # set one DAC register
+                    self.palette[bx & 0xFF] = (
+                        self.uc.reg_read(UC_X86_REG_DH),
+                        self.uc.reg_read(UC_X86_REG_CH),
+                        self.uc.reg_read(UC_X86_REG_CL),
+                    )
+                elif al == 0x12:  # set block of DAC regs
+                    pass
+            # clear CF
+            self.uc.reg_write(UC_X86_REG_FLAGS, flags & ~1)
+            return
+
+        if intno == 0x21:
+            self.int_log.append(f"INT21 AH={ah:02X} BX={bx:04X} CX={cx:04X} DX={dx:04X}")
+            global _HEAP_NEXT
+            if ah == 0x48:  # allocate BX paragraphs
+                n = bx
+                seg = _HEAP_NEXT
+                _HEAP_NEXT = (_HEAP_NEXT + n + 1) & 0xFFFF
+                if ghidra_to_linear(_HEAP_NEXT, 0) >= MEM_SIZE:
+                    self.uc.reg_write(UC_X86_REG_FLAGS, flags | 1)
+                    self.uc.reg_write(UC_X86_REG_AX, 8)  # insufficient memory
+                else:
+                    self.uc.reg_write(UC_X86_REG_AX, seg)
+                    self.uc.reg_write(UC_X86_REG_FLAGS, flags & ~1)
+            elif ah == 0x49:  # free ES
+                self.uc.reg_write(UC_X86_REG_FLAGS, flags & ~1)
+            elif ah == 0x4A:  # resize
+                self.uc.reg_write(UC_X86_REG_FLAGS, flags & ~1)
+            elif ah == 0x30:  # get DOS version
+                self.uc.reg_write(UC_X86_REG_AX, 0x0006)  # DOS 6.00
+                self.uc.reg_write(UC_X86_REG_FLAGS, flags & ~1)
+            elif ah == 0x25:  # set vector
+                self.uc.reg_write(UC_X86_REG_FLAGS, flags & ~1)
+            elif ah == 0x35:  # get vector
+                self.uc.reg_write(UC_X86_REG_ES, 0)
+                self.uc.reg_write(UC_X86_REG_BX, 0)
+                self.uc.reg_write(UC_X86_REG_FLAGS, flags & ~1)
+            elif ah == 0x2C:  # get time
+                self.uc.reg_write(UC_X86_REG_CX, 0x1234)
+                self.uc.reg_write(UC_X86_REG_DX, 0x5678)
+                self.uc.reg_write(UC_X86_REG_FLAGS, flags & ~1)
+            elif ah == 0x4C:  # exit
+                self.uc.emu_stop()
+            else:
+                self.uc.reg_write(UC_X86_REG_FLAGS, flags & ~1)
+            return
+
+        if intno == 0x1A:
+            self.int_log.append(f"INT1A AH={ah:02X}")
+            if ah == 0x00:
+                self.uc.reg_write(UC_X86_REG_CX, 0)
+                self.uc.reg_write(UC_X86_REG_DX, 0x1234)
+            self.uc.reg_write(UC_X86_REG_FLAGS, flags & ~1)
+            return
+
+        if intno == 0x33:  # mouse
+            self.int_log.append(f"INT33 AX={ax:04X}")
+            if ax == 0:
+                self.uc.reg_write(UC_X86_REG_AX, 0xFFFF)
+                self.uc.reg_write(UC_X86_REG_BX, 3)
+            elif ax == 3:  # get position / button status
+                self.uc.reg_write(UC_X86_REG_BX, getattr(self, "mouse_buttons", 0))
+                self.uc.reg_write(UC_X86_REG_CX, getattr(self, "mouse_x", 0))
+                self.uc.reg_write(UC_X86_REG_DX, getattr(self, "mouse_y", 0))
+            self.uc.reg_write(UC_X86_REG_FLAGS, flags & ~1)
+            return
+
+        self.int_log.append(f"INT{intno:02X} AH={ah:02X}")
+        self.uc.reg_write(UC_X86_REG_FLAGS, flags & ~1)
 
     def reset_regs(self):
         uc = self.uc
@@ -112,38 +240,44 @@ class Emu16:
     def read_bytes(self, seg: int, off: int, n: int) -> bytes:
         return bytes(self.uc.mem_read(ghidra_to_linear(seg, off), n))
 
+    def read_u16(self, seg: int, off: int) -> int:
+        return struct.unpack("<H", self.read_bytes(seg, off, 2))[0]
+
+    def write_u16(self, seg: int, off: int, val: int):
+        self.write_bytes(seg, off, struct.pack("<H", val & 0xFFFF))
+
+    def vram(self) -> bytearray:
+        return bytearray(self.read_bytes(VGA_SEG, 0, VGA_SIZE))
+
+    def pixel(self, x: int, y: int) -> int:
+        return self.read_bytes(VGA_SEG, y * 320 + x, 1)[0]
+
+    def set_pixel(self, x: int, y: int, c: int):
+        self.write_bytes(VGA_SEG, y * 320 + x, bytes([c & 0xFF]))
+
     def push16(self, value: int):
         sp = (self.uc.reg_read(UC_X86_REG_SP) - 2) & 0xFFFF
         self.uc.reg_write(UC_X86_REG_SP, sp)
         ss = self.uc.reg_read(UC_X86_REG_SS)
         self.uc.mem_write(ghidra_to_linear(ss, sp), struct.pack("<H", value & 0xFFFF))
 
+    def push_far_ptr(self, seg: int, off: int):
+        """Push far pointer as used by TP (segment then offset? Actually push seg; push off → off at lower addr)."""
+        self.push16(seg)
+        self.push16(off)
+
     def set_regs(self, **kwargs):
         m = {
-            "ax": UC_X86_REG_AX,
-            "bx": UC_X86_REG_BX,
-            "cx": UC_X86_REG_CX,
-            "dx": UC_X86_REG_DX,
-            "si": UC_X86_REG_SI,
-            "di": UC_X86_REG_DI,
-            "bp": UC_X86_REG_BP,
-            "sp": UC_X86_REG_SP,
-            "cs": UC_X86_REG_CS,
-            "ds": UC_X86_REG_DS,
-            "es": UC_X86_REG_ES,
-            "ss": UC_X86_REG_SS,
+            "ax": UC_X86_REG_AX, "bx": UC_X86_REG_BX, "cx": UC_X86_REG_CX, "dx": UC_X86_REG_DX,
+            "si": UC_X86_REG_SI, "di": UC_X86_REG_DI, "bp": UC_X86_REG_BP, "sp": UC_X86_REG_SP,
+            "cs": UC_X86_REG_CS, "ds": UC_X86_REG_DS, "es": UC_X86_REG_ES, "ss": UC_X86_REG_SS,
             "flags": UC_X86_REG_FLAGS,
-            "al": UC_X86_REG_AL,
-            "ah": UC_X86_REG_AH,
-            "bl": UC_X86_REG_BL,
-            "bh": UC_X86_REG_BH,
-            "cl": UC_X86_REG_CL,
-            "ch": UC_X86_REG_CH,
-            "dl": UC_X86_REG_DL,
-            "dh": UC_X86_REG_DH,
+            "al": UC_X86_REG_AL, "ah": UC_X86_REG_AH, "bl": UC_X86_REG_BL, "bh": UC_X86_REG_BH,
+            "cl": UC_X86_REG_CL, "ch": UC_X86_REG_CH, "dl": UC_X86_REG_DL, "dh": UC_X86_REG_DH,
         }
         for k, v in kwargs.items():
-            self.uc.reg_write(m[k.lower()], v & 0xFFFF if k.lower() not in ("al","ah","bl","bh","cl","ch","dl","dh") else v & 0xFF)
+            kl = k.lower()
+            self.uc.reg_write(m[kl], v & 0xFF if kl in ("al","ah","bl","bh","cl","ch","dl","dh") else v & 0xFFFF)
 
     def get_regs(self) -> Dict[str, int]:
         return {
@@ -157,29 +291,30 @@ class Emu16:
             "sp": self.uc.reg_read(UC_X86_REG_SP),
             "cs": self.uc.reg_read(UC_X86_REG_CS),
             "ip": self.uc.reg_read(UC_X86_REG_IP),
+            "ds": self.uc.reg_read(UC_X86_REG_DS),
+            "es": self.uc.reg_read(UC_X86_REG_ES),
             "flags": self.uc.reg_read(UC_X86_REG_FLAGS),
         }
+
+    def snapshot_ds_graph(self) -> Dict[int, int]:
+        """Snapshot common Graph DS words."""
+        offs = [0xE63A, 0xE642, 0xE644, 0xE660, 0xE666, 0xE668, 0xE670,
+                0xE684, 0xE686, 0xE6B4, 0xE6B6, 0xE5E4, 0xE5E6, 0xE5D8]
+        return {o: self.read_u16(DS_SEG, o) for o in offs}
 
     def run(
         self,
         seg: int,
         off: int,
         *,
-        max_insns: int = 200000,
-        stop_on_retf: bool = True,
+        max_insns: int = 2_000_000,
         stop_addrs: Optional[Iterable[Tuple[int, int]]] = None,
         hook_code: Optional[Callable] = None,
     ) -> Dict[str, int]:
-        """Execute starting at seg:off until RET/RETF or stop address.
-
-        We plant a sentinel far-return target: push ret_off, ret_cs before call-style entry,
-        OR for near routines expect RETN. Caller should push return frame as needed.
-        """
         uc = self.uc
         stops = {(s << 4) + o for s, o in (stop_addrs or [])}
         sentinel = ghidra_to_linear(0xF000, 0x0000)
         stops.add(sentinel)
-        # Ensure sentinel page exists (already in MEM_SIZE); write HLT
         uc.mem_write(sentinel, b"\xF4")
 
         def _hook(uc_, address, size, *args):
@@ -188,20 +323,18 @@ class Emu16:
             if hook_code:
                 hook_code(uc_, address, size)
 
-        from unicorn import UC_HOOK_CODE
-
         h = uc.hook_add(UC_HOOK_CODE, _hook)
         try:
-            start = ghidra_to_linear(seg, off)
-            # Unicorn 16-bit: emu_start uses linear address; CS:IP must match
             uc.reg_write(UC_X86_REG_CS, seg)
             uc.reg_write(UC_X86_REG_IP, off)
             try:
-                uc.emu_start(start, 0, count=max_insns)
-            except UcError as e:
-                # HLT at sentinel raises; treat as success if IP at sentinel
+                uc.emu_start(ghidra_to_linear(seg, off), 0, count=max_insns)
+            except UcError:
                 regs = self.get_regs()
                 if ghidra_to_linear(regs["cs"], regs["ip"]) != sentinel:
+                    # HLT at sentinel is OK; other errors re-raise if not stopped cleanly
+                    if regs["cs"] == 0xF000:
+                        return regs
                     raise
             return self.get_regs()
         finally:
@@ -209,36 +342,37 @@ class Emu16:
 
 
 def call_near(emu: Emu16, seg: int, off: int, **regs) -> Dict[str, int]:
-    """Call a near routine: push near return to sentinel IP within same CS... 
-    Actually near RET pops IP only. We set CS=seg and push sentinel offset in a fake CS.
-    Simpler: push 0x0000 as return IP and put HLT at seg:0000? That may be code.
-    Use a scratch near-return stub in STACK_SEG.
-    """
     emu.reset_regs()
     emu.set_regs(cs=seg, ds=DS_SEG, es=DS_SEG, ss=STACK_SEG, sp=STACK_SP, **regs)
-    # Write near stub at STACK_SEG:0100 = HLT
-    stub_off = 0x0100
-    emu.write_bytes(STACK_SEG, stub_off, b"\xF4")
-    emu.push16(stub_off)
-    # When function RETs, IP=stub_off but CS still = seg — PROBLEM for near ret.
-    # Near RET only pops IP; CS unchanged. So stub must be in same segment as callee.
-    # Plant HLT at a high offset in the callee's segment if free, else use hook on RET.
     return _run_with_ret_detect(emu, seg, off, far=False)
 
 
 def call_far(emu: Emu16, seg: int, off: int, **regs) -> Dict[str, int]:
-    emu.reset_regs()
-    emu.set_regs(cs=seg, ds=DS_SEG, es=DS_SEG, ss=STACK_SEG, sp=STACK_SP, **regs)
-    # far return frame: IP, CS → sentinel
-    emu.push16(0xF000)  # CS
-    emu.push16(0x0000)  # IP
+    """Call far with optional stack_args (list of words, pushed first→last = left→right TP order).
+
+    Extra kw: stack_args: List[int]
+    """
+    stack_args = regs.pop("stack_args", None)
+    base = dict(
+        cs=seg, ds=DS_SEG, es=DS_SEG, ss=STACK_SEG, sp=STACK_SP,
+        ax=0, bx=0, cx=0, dx=0, si=0, di=0, bp=0, flags=0x0202,
+    )
+    base.update(regs)
+    emu.set_regs(**base)
+    if stack_args:
+        for w in stack_args:
+            emu.push16(w)
+    emu.push16(0xF000)
+    emu.push16(0x0000)
     return emu.run(seg, off, stop_addrs=[(0xF000, 0x0000)])
 
 
-def _run_with_ret_detect(emu: Emu16, seg: int, off: int, far: bool) -> Dict[str, int]:
-    """Hook RET/RETF opcodes to stop."""
-    from unicorn import UC_HOOK_CODE
+def call_far_fresh(emu: Emu16, seg: int, off: int, **regs) -> Dict[str, int]:
+    """Like original call_far: reset GP regs then call (keeps memory)."""
+    return call_far(emu, seg, off, **regs)
 
+
+def _run_with_ret_detect(emu: Emu16, seg: int, off: int, far: bool) -> Dict[str, int]:
     uc = emu.uc
     start_sp = uc.reg_read(UC_X86_REG_SP)
 
@@ -281,7 +415,7 @@ def _run_with_ret_detect(emu: Emu16, seg: int, off: int, far: bool) -> Dict[str,
         uc.reg_write(UC_X86_REG_CS, seg)
         uc.reg_write(UC_X86_REG_IP, off)
         try:
-            uc.emu_start(ghidra_to_linear(seg, off), 0, count=500000)
+            uc.emu_start(ghidra_to_linear(seg, off), 0, count=2_000_000)
         except UcError:
             pass
         return emu.get_regs()
@@ -290,7 +424,6 @@ def _run_with_ret_detect(emu: Emu16, seg: int, off: int, far: bool) -> Dict[str,
 
 
 def call_real_binop_regs(emu: Emu16, seg: int, off: int, a: float, b: float, far: bool = False):
-    """TP Real binop: left in DX:BX:AX, right in DI:SI:CX."""
     from real48 import float_to_regs
 
     ax, bx, dx = float_to_regs(a)
@@ -304,3 +437,30 @@ def result_real(regs: Dict[str, int]) -> float:
     from real48 import regs_to_float
 
     return regs_to_float(regs["ax"], regs["bx"], regs["dx"])
+
+
+def pascal_string(s: str) -> bytes:
+    b = s.encode("latin-1")
+    if len(b) > 255:
+        b = b[:255]
+    return bytes([len(b)]) + b
+
+
+def vram_diff(before: bytes, after: bytes):
+    """Yield (offset, old, new) for changed bytes."""
+    for i, (a, b) in enumerate(zip(before, after)):
+        if a != b:
+            yield i, a, b
+
+
+def diff_bbox(before: bytes, after: bytes):
+    """Bounding box of changed pixels in 320x200, or None."""
+    xs, ys = [], []
+    for off, _a, _b in vram_diff(before, after):
+        if off >= 320 * 200:
+            continue
+        xs.append(off % 320)
+        ys.append(off // 320)
+    if not xs:
+        return None
+    return min(xs), min(ys), max(xs), max(ys), len(xs)

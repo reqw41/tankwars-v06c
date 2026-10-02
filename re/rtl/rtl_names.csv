@@ -30,17 +30,17 @@ address;name;signature;unit;evidence;verified
 1691:0bfb;U1691_0bfb;void __far U1691_0bfb(void);Unit1691;helper;static
 1691:0c44;U1691_0c44;void __far U1691_0c44(void);Unit1691;hot (9);static
 1691:0c92;U1691_0c92;void __far U1691_0c92(void);Unit1691;called;static
-175e:0000;GRAPHW_Init;void __far GRAPHW_Init(void);GraphWrap;init wrapper;static
-175e:0026;GRAPHW_0026;void __far GRAPHW_0026(void);GraphWrap;graph wrapper;static
-175e:0057;GRAPHW_0057;void __far GRAPHW_0057(void);GraphWrap;graph wrapper;static
-175e:0088;GRAPHW_Rectangle;void __far GRAPHW_Rectangle(void);GraphWrap;Rectangle wrapper;static
-175e:00da;GRAPHW_PutPixel;void __far GRAPHW_PutPixel(void);GraphWrap;wrapper→PutPixel family;static
-175e:0124;GRAPHW_OutTextXY;void __far GRAPHW_OutTextXY(void);GraphWrap;text wrapper;static
-175e:0190;GRAPHW_Line;void __far GRAPHW_Line(void);GraphWrap;Line wrapper;static
-175e:01cc;GRAPHW_Bar;void __far GRAPHW_Bar(void);GraphWrap;Bar wrapper;static
-175e:0293;GRAPHW_SetColor;void __far GRAPHW_SetColor(void);GraphWrap;"wrapper→Graph; hot from game (58 calls)";static
-175e:02dc;GRAPHW_02dc;void __far GRAPHW_02dc(void);GraphWrap;graph wrapper;static
-175e:0393;GRAPHW_Close;void __far GRAPHW_Close(void);GraphWrap;close wrapper;static
+175e:0000;GRAPHW_InitView;void __far GRAPHW_InitView(void);GraphWrap;calls GetMaxX/GetMaxY/SetViewPort family;static
+175e:0026;GRAPHW_0026;void __far GRAPHW_0026(void);GraphWrap;ran, needs more callee analysis;static
+175e:0057;GRAPHW_0057;void __far GRAPHW_0057(void);GraphWrap;ran, needs more callee analysis;static
+175e:0088;GRAPHW_Hypot;void __far GRAPHW_Hypot(void);GraphWrap;sqrt(3²+4²)→5.0;yes
+175e:00da;GRAPHW_DegToRad;void __far GRAPHW_DegToRad(void);GraphWrap;DegToRad(180)→3.1415926535883045;yes
+175e:0124;GRAPHW_RadToDeg;void __far GRAPHW_RadToDeg(void);GraphWrap;RadToDeg(π)→180.0;yes
+175e:0190;GRAPHW_MouseX_div2;void __far GRAPHW_MouseX_div2(void);GraphWrap;mouse_x=160 → AX=80 (÷2), INT33;yes
+175e:01cc;GRAPHW_MouseGetY;void __far GRAPHW_MouseGetY(void);GraphWrap;mouse_y=123 → AX=123, INT33;yes
+175e:0293;GRAPHW_StrOrCopy;void __far GRAPHW_StrOrCopy(void);GraphWrap;calls System Str/copy (1790+adc), ran without crash;static
+175e:02dc;GRAPHW_02dc;void __far GRAPHW_02dc(void);GraphWrap;ran, needs more callee analysis;static
+175e:0393;GRAPHW_0393;void __far GRAPHW_0393(void);GraphWrap;ran, needs more callee analysis;static
 17a3:0000;MOUSE_InitUnit;void __far MOUSE_InitUnit(void);Mouse;unit init;static
 17a3:002e;MOUSE_SetPresent;void __far MOUSE_SetPresent(uchar v);Mouse;store DS:E3CC;static
 17a3:003b;MOUSE_Init;bool __far MOUSE_Init(void);Mouse;"INT 33h AX=0; store present flag DS:E3CC";static
@@ -64,73 +64,73 @@ address;name;signature;unit;evidence;verified
 17c5:02f4;CRT_NoSound;void __far CRT_NoSound(void);CrtExt;"IN 61h; AND AL,FCh; OUT 61h";static
 17c5:02fb;CRT_KeyPressed;bool __far CRT_KeyPressed(void);CrtExt;"INT 16h AH=01; AL=1 if key";static
 17c5:030d;CRT_ReadKey;uchar __far CRT_ReadKey(void);CrtExt;"INT 16h AH=00; buffered via DS:E4E1";static
-1827:027e;GRAPH_InitGraph;void __far GRAPH_InitGraph(void);Graph;"large init; registers BGI VGA256 driver";static
-1827:04f3;GRAPH_GraphResult;int __far GRAPH_GraphResult(void);Graph;read/clear GraphResult;static
-1827:05d3;GRAPH_DetectGraph2;void __far GRAPH_DetectGraph2(void);Graph;detect helper;static
-1827:06ca;GRAPH_SetGraphMode;void __far GRAPH_SetGraphMode(void);Graph;mode set;static
-1827:0bae;GRAPH_RegisterBGIdriver2;void __far GRAPH_RegisterBGIdriver2(void);Graph;driver register variant;static
-1827:0eb5;GRAPH_RestoreCrtMode;void __far GRAPH_RestoreCrtMode(void);Graph;restore text mode;static
-1827:0f80;GRAPH_SetActivePage;void __far GRAPH_SetActivePage(void);Graph;active page;static
-1827:0f93;GRAPH_SetRGBPalette;void __far GRAPH_SetRGBPalette(void);Graph;RGB palette entry;static
-1827:1028;GRAPH_DetectGraph;void __far GRAPH_DetectGraph(void);Graph;DetectGraph path AX=9;static
-1827:1042;GRAPH_SetViewPort;void __far GRAPH_SetViewPort(void);Graph;stores viewport DS:E666/E668;static
-1827:105f;GRAPH_GetMaxX;int __far GRAPH_GetMaxX(void);Graph;read maxX from DS:E666;static
-1827:1072;GRAPH_GetMaxY;int __far GRAPH_GetMaxY(void);Graph;read maxY DS:E5E4;static
-1827:1085;GRAPH_GetMaxColor;int __far GRAPH_GetMaxColor(void);Graph;read max color;static
-1827:10d2;GRAPH_CloseGraph;void __far GRAPH_CloseGraph(void);Graph;shutdown graphics;static
-1827:1119;GRAPH_GetViewSettings;void __far GRAPH_GetViewSettings(void);Graph;copy viewport settings;static
-1827:1131;GRAPH_GraphResult_set;void __far GRAPH_GraphResult_set(void);Graph;stores GraphResult DS:E63A;static
-1827:11ea;GRAPH_SetVisualPage;void __far GRAPH_SetVisualPage(void);Graph;page flip helper;static
-1827:1241;GRAPH_GetColor;uchar __far GRAPH_GetColor(void);Graph;read DS:E660 current color;static
-1827:131d;GRAPH_GetImageSize_path;void __far GRAPH_GetImageSize_path(void);Graph;"image size / getimage helper; 4 game calls";static
-1827:13d8;GRAPH_InstallUserDriver;void __far GRAPH_InstallUserDriver(void);Graph;AX=0Ah install path;static
-1827:13f2;GRAPH_RegisterBGIdriver;void __far GRAPH_RegisterBGIdriver(void);Graph;hot path registering/calling embedded VGA256;static
-1827:1454;GRAPH_RegisterBGIfont;void __far GRAPH_RegisterBGIfont(void);Graph;font registration wrapper;static
-1827:1496;GRAPH_SetPalette;void __far GRAPH_SetPalette(void);Graph;palette load path;static
-1827:16e3;GRAPH_GetPaletteSize;void __far GRAPH_GetPaletteSize(void);Graph;palette size query;static
-1827:192b;GRAPH_SetAspectRatio;void __far GRAPH_SetAspectRatio(void);Graph;store aspect DS:E66C/E66E;static
-1827:193e;GRAPH_InitGraph2;void __far GRAPH_InitGraph2(void);Graph;secondary init path;static
+1827:027e;GRAPH_GraphErrorMsg;void __far GRAPH_GraphErrorMsg(void);Graph;code0 → len=8 'No error';yes
+1827:04f3;GRAPH_GraphResult;void __far GRAPH_GraphResult(void);Graph;AX=1234 E63A→0;yes
+1827:05d3;GRAPH_RegisterBGIdriver;void __far GRAPH_RegisterBGIdriver(void);Graph;reloc path used by make_graph_emu (0569+SI=2);yes
+1827:06ca;GRAPH_RegisterBGIfont;void __far GRAPH_RegisterBGIfont(void);Graph;font register, E63A error codes on bad input;static
+1827:0bae;GRAPH_InitGraph;void __far GRAPH_InitGraph(void);Graph;E642 driver=0000:11bb;yes
+1827:0eb5;GRAPH_CloseGraph;void __far GRAPH_CloseGraph(void);Graph;E670=0 ints=['INT10 AH=00 AL=13 BX=0000 CX=013F DX=00C7'];yes
+1827:0f80;GRAPH_ClearDevice_MoveTo0;void __far GRAPH_ClearDevice_MoveTo0(void);Graph;E666/E668=0/0;yes
+1827:0f93;GRAPH_SetViewPort;void __far GRAPH_SetViewPort(void);Graph;vp=[10, 20, 250, 150] clip=1 E63A=0000;yes
+1827:1028;GRAPH_1028;void __far GRAPH_1028(void);Graph;AX=9;static
+1827:1042;GRAPH_MoveTo;void __far GRAPH_MoveTo(void);Graph;E666/E668=123/45;yes
+1827:105f;GRAPH_GetX;void __far GRAPH_GetX(void);Graph;AX=77 from E666;yes
+1827:1072;GRAPH_GetMaxX;void __far GRAPH_GetMaxX(void);Graph;AX=319 from E5E4;yes
+1827:1085;GRAPH_GetMaxY;void __far GRAPH_GetMaxY(void);Graph;AX=199 from E5E6;yes
+1827:10d2;GRAPH_Rectangle;void __far GRAPH_Rectangle(void);Graph;4×Line Rectangle bbox=(30, 20, 90, 60, 200) corner=3 mid=0;yes
+1827:1119;GRAPH_GetFillSettings;void __far GRAPH_GetFillSettings(void);Graph;writes E684/E686 → far buf: 2,9;yes
+1827:1131;GRAPH_SetFillStyle;void __far GRAPH_SetFillStyle(void);Graph;E684/E686=3/7;yes
+1827:11ea;GRAPH_11ea_SectorOrArc;void __far GRAPH_11ea_SectorOrArc(void);Graph;3 args→11b7+1d20, bbox=None;static
+1827:1241;GRAPH_GetColor;void __far GRAPH_GetColor(void);Graph;AX=11;yes
+1827:131d;GRAPH_131d_ViewAdjust;void __far GRAPH_131d_ViewAdjust(void);Graph;adjusts far struct vs viewport, ran;static
+1827:13d8;GRAPH_13d8;void __far GRAPH_13d8(void);Graph;AX=10;static
+1827:13f2;GRAPH_OutText;void __far GRAPH_OutText(void);Graph;OutText at CP via OutTextXY, bbox=(50, 40, 65, 47, 60);yes
+1827:1454;GRAPH_SetTextJustify;void __far GRAPH_SetTextJustify(void);Graph;E6B4/E6B6=2/1;yes
+1827:1496;GRAPH_1496_LoadMode;void __far GRAPH_1496_LoadMode(void);Graph;INT21 file I/O, E63A=0000 ints=['INT10 AH=00 AL=13 BX=0000 CX=013F DX=00C7'];static
+1827:16e3;GRAPH_16e3_FillRect;void __far GRAPH_16e3_FillRect(void);Graph;validates vs maxXY, calls 1f7e SI=24, bbox=None E6B2=0;static
+1827:192b;GRAPH_SetAspectRatio;void __far GRAPH_SetAspectRatio(void);Graph;E66C/E66E=0200/0100;yes
+1827:193e;GRAPH_InitUnit;void __far GRAPH_InitUnit(void);Graph;unit init (make_graph_emu calls it);yes
 1827:19ea;GRAPH_GetModeRange;void __far GRAPH_GetModeRange(void);Graph;"MOV SI,0; retf 4";static
-1827:1a25;GRAPH_ImageSize;uint __far GRAPH_ImageSize(int x1,int y1,int x2,int y2);Graph;"MOV SI,38h; retf 0Ah";static
+1827:1a25;GRAPH_ImageSize;void __far GRAPH_ImageSize(void);Graph;"MOV SI,38h; retf 0Ah";static
 1827:1a48;GRAPH_ClearDevice;void __far GRAPH_ClearDevice(void);Graph;"MOV SI,02h; ClearDevice";static
-1827:1aa7;GRAPH_GetPixel;uchar __far GRAPH_GetPixel(int x,int y);Graph;MOV SI,32h;static
-1827:1ac1;GRAPH_GetPixel2;uchar __far GRAPH_GetPixel2(void);Graph;MOV SI,32h;static
-1827:1ade;GRAPH_GetPixel3;uchar __far GRAPH_GetPixel3(void);Graph;MOV SI,32h;static
+1827:1aa7;GRAPH_unk_1aa7;void __far GRAPH_unk_1aa7(void);Graph;MOV SI,32h;static
+1827:1ac1;GRAPH_unk_1ac1;void __far GRAPH_unk_1ac1(void);Graph;MOV SI,32h;static
+1827:1ade;GRAPH_unk_1ade;void __far GRAPH_unk_1ade(void);Graph;MOV SI,32h;static
 1827:1af8;GRAPH_SetBkColor;void __far GRAPH_SetBkColor(void);Graph;"MOV SI,1Eh; retf 6 bk variant";static
-1827:1b22;GRAPH_TextWidth;uint __far GRAPH_TextWidth(char *s);Graph;"MOV SI,2Ah; retf 4";static
-1827:1b36;GRAPH_GetImage;void __far GRAPH_GetImage(void);Graph;"MOV SI,32h large / image path; also 1ffb SI=34 GetImage";static
+1827:1b22;GRAPH_unk_1b22;void __far GRAPH_unk_1b22(void);Graph;"MOV SI,2Ah; retf 4";static
+1827:1b36;GRAPH_unk_1b36;void __far GRAPH_unk_1b36(void);Graph;"MOV SI,32h large / image path; also 1ffb SI=34 GetImage";static
 1827:1c36;GRAPH_ClearViewPort;void __far GRAPH_ClearViewPort(void);Graph;"MOV SI,02h; retf 4 variant";static
 1827:1c5e;GRAPH_Bar2;void __far GRAPH_Bar2(void);Graph;"MOV SI,08h; retf 4";static
 1827:1c72;GRAPH_DrawPoly;void __far GRAPH_DrawPoly(void);Graph;"MOV SI,0Ah; retf 4";static
-1827:1c86;GRAPH_Line;void __far GRAPH_Line(int x1,int y1,int x2,int y2);Graph;"MOV SI,0Ch; 4 word args; retf 8";static
-1827:1ca0;GRAPH_LineTo;void __far GRAPH_LineTo(int x,int y);Graph;"MOV SI,0Eh; retf 6";static
-1827:1cb7;GRAPH_MoveTo;void __far GRAPH_MoveTo(int x,int y);Graph;"MOV SI,0Eh twin / MoveTo family; retf 6";static
-1827:1cce;GRAPH_Rectangle;void __far GRAPH_Rectangle(int x1,int y1,int x2,int y2);Graph;"MOV SI,12h; retf 8";static
+1827:1c86;GRAPH_Line;void __far GRAPH_Line(void);Graph;Line(20,10,80,50) bbox=(20, 10, 80, 50, 61);yes
+1827:1ca0;GRAPH_LineTo;void __far GRAPH_LineTo(void);Graph;"MOV SI,0Eh; retf 6";static
+1827:1cb7;GRAPH_MoveTo_1827_1cb7;void __far GRAPH_MoveTo_1827_1cb7(void);Graph;"MOV SI,0Eh twin / MoveTo family; retf 6";static
+1827:1cce;GRAPH_Bar;void __far GRAPH_Bar(void);Graph;SetFillStyle+Bar(10,10,50,40) bbox=(10, 10, 50, 40, 1271) pix=14;yes
 1827:1ce8;GRAPH_FloodFill;void __far GRAPH_FloodFill(void);Graph;"MOV SI,08h; retf 0Ch";static
 1827:1d20;GRAPH_FillPoly;void __far GRAPH_FillPoly(void);Graph;"MOV SI,08h; retf 0Ch";static
 1827:1d47;GRAPH_FillEllipse;void __far GRAPH_FillEllipse(void);Graph;"MOV SI,08h; retf 8";static
 1827:1d7b;GRAPH_PieSlice;void __far GRAPH_PieSlice(void);Graph;"MOV SI,08h; retf 0Ch";static
-1827:1da2;GRAPH_Circle;void __far GRAPH_Circle(int x,int y,int r);Graph;"MOV SI,14h; retf 4 (radius path)";static
-1827:1dc2;GRAPH_SetColor;void __far GRAPH_SetColor(uchar color);Graph;"MOV SI,1Eh; CALL FAR [DS:E642]; store color to DS:E660; retf 2";static
+1827:1da2;GRAPH_Circle;void __far GRAPH_Circle(void);Graph;"MOV SI,14h; retf 4 (radius path)";static
+1827:1dc2;GRAPH_SetColor;void __far GRAPH_SetColor(void);Graph;E660=9;yes
 1827:1dda;GRAPH_SetWriteMode;void __far GRAPH_SetWriteMode(void);Graph;MOV SI,3Ah;static
 1827:1dea;GRAPH_SetWriteMode2;void __far GRAPH_SetWriteMode2(void);Graph;MOV SI,3Ah;static
 1827:1dfa;GRAPH_SetWriteMode3;void __far GRAPH_SetWriteMode3(void);Graph;MOV SI,3Ah;static
 1827:1e0c;GRAPH_GetDriverName;void __far GRAPH_GetDriverName(void);Graph;"MOV SI,0; retf 2";static
 1827:1e34;GRAPH_SetLineStyle2;void __far GRAPH_SetLineStyle2(void);Graph;"MOV SI,1Ah; retf 2";static
-1827:1e4a;GRAPH_SetLineStyle;void __far GRAPH_SetLineStyle(void);Graph;"MOV SI,1Ah; retf 8";static
+1827:1e4a;GRAPH_SetLineStyle;void __far GRAPH_SetLineStyle(void);Graph;SI=1Ah retf 8, ran;yes
 1827:1e67;GRAPH_GetLineSettings;void __far GRAPH_GetLineSettings(void);Graph;"MOV SI,1Ah; retf 4";static
 1827:1e7d;GRAPH_SetFillPattern;void __far GRAPH_SetFillPattern(void);Graph;"MOV SI,1Ch; retf 4";static
 1827:1e8f;GRAPH_SetTextStyle;void __far GRAPH_SetTextStyle(void);Graph;"MOV SI,22h; retf 6";static
-1827:1eaf;GRAPH_SetTextJustify;void __far GRAPH_SetTextJustify(void);Graph;"MOV SI,2Ch; retf 6";static
+1827:1eaf;GRAPH_SetTextJustify_1827_1eaf;void __far GRAPH_SetTextJustify_1827_1eaf(void);Graph;"MOV SI,2Ch; retf 6";static
 1827:1eeb;GRAPH_SetColor2;void __far GRAPH_SetColor2(void);Graph;"MOV SI,1Eh; retf 4";static
-1827:1f12;GRAPH_Bar;void __far GRAPH_Bar(int x1,int y1,int x2,int y2);Graph;"MOV SI,08h; retf 8; filled rectangle";static
-1827:1f36;GRAPH_OutTextXY;void __far GRAPH_OutTextXY(int x,int y,char *s);Graph;"MOV SI,24h; retf 6/8";static
+1827:1f12;GRAPH_OutTextXY;void __far GRAPH_OutTextXY(void);Graph;OutTextXY(100,50,'Hi') SI=08+26 bbox=(100, 50, 115, 57, 60);yes
+1827:1f36;GRAPH_OutTextXY_1827_1f36;void __far GRAPH_OutTextXY_1827_1f36(void);Graph;"MOV SI,24h; retf 6/8";static
 1827:1f7e;GRAPH_OutTextXY2;void __far GRAPH_OutTextXY2(void);Graph;"MOV SI,24h; retf 8";static
-1827:1f9b;GRAPH_OutText;void __far GRAPH_OutText(char *s);Graph;"MOV SI,28h; LES string; retf 4";static
-1827:1fcc;GRAPH_SetFillStyle;void __far GRAPH_SetFillStyle(int pattern, int color);Graph;"MOV SI,2Eh; retf 4";static
-1827:1fe4;GRAPH_PutPixel;void __far GRAPH_PutPixel(int x, int y, uchar c);Graph;"MOV SI,30h; CALL FAR [DS:E642]; retf 6";static
-1827:1ffb;GRAPH_GetImage;void __far GRAPH_GetImage(int x1,int y1,int x2,int y2,void *buf);Graph;"MOV SI,34h; retf 0Ch";static
-1827:202f;GRAPH_PutImage;void __far GRAPH_PutImage(int x,int y,void *buf,int op);Graph;"MOV SI,36h; retf 0Ah";static
+1827:1f9b;GRAPH_TextWidth;void __far GRAPH_TextWidth(void);Graph;TextWidth('Hello')→40 (5×8);yes
+1827:1fcc;GRAPH_GetPixel;void __far GRAPH_GetPixel(void);Graph;GetPixel(15,25)→9;yes
+1827:1fe4;GRAPH_PutPixel;void __far GRAPH_PutPixel(void);Graph;PutPixel(10,20,5) pixel=5 bbox=(10, 20, 10, 20, 1);yes
+1827:1ffb;GRAPH_GetImage;void __far GRAPH_GetImage(void);Graph;stored 11x11;yes
+1827:202f;GRAPH_PutImage;void __far GRAPH_PutImage(void);Graph;"MOV SI,36h; retf 0Ah";static
 1be7:0000;CRT_AssignCrt;void __far CRT_AssignCrt(void);Crt;Assign(Output/Input) CRT device;static
 1be7:0012;CRT_InitCrt;void __far CRT_InitCrt(void);Crt;Crt unit startup INT21;static
 1be7:01a3;CRT_AssignFile;void __far CRT_AssignFile(void);Crt;Crt file assign helper;static
@@ -154,7 +154,7 @@ address;name;signature;unit;evidence;verified
 1c5b:09ad;SYSTEM_BlockRead;void __far SYSTEM_BlockRead(void);System;BlockRead file I/O;static
 1c5b:09f6;SYSTEM_Move;void __far SYSTEM_Move(void *src, void *dst, uint n);System;"REP MOVSB; RETF 0Ah";static
 1c5b:0a12;SYSTEM_LongMul;long __far SYSTEM_LongMul(void);System;"DX:AX * BX:CX → DX:AX; unicorn 12345*67=827115";yes
-1c5b:0a2d;SYSTEM_LongDiv;long __far SYSTEM_LongDiv(void);System;"DX:AX / BX:CX → DX:AX; unicorn ±100/±5";yes
+1c5b:0a2d;SYSTEM_LongDiv;"long __far SYSTEM_LongDiv(void); /* rem CX:BX */";System;"DX:AX quot (DX=hi); rem CX=lo BX=hi; trunc toward 0; unicorn -7/2 → quot=-3 rem=-1";yes
 1c5b:0ab3;SYSTEM_LongShl;void __far SYSTEM_LongShl(void);System;near LongInt shift helper stub-sized;static
 1c5b:0ac2;SYSTEM_StrAsg;void __far SYSTEM_StrAsg(char *src, char *dst);System;"length-prefixed string copy src→dst; LODSB/STOSB loop";static
 1c5b:0adc;SYSTEM_StrAsgLim;void __far SYSTEM_StrAsgLim(uchar maxlen, char *dst, char *src);System;string assign capped by maxlen;static

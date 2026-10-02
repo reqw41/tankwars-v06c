@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Coverage: share of game→library far-call sites whose targets are named in rtl_names.csv."""
+"""Coverage: share of game→library far-call sites whose targets are named in rtl_names.csv.
+
+Game segment bounds come from re/ovl_map.txt (overlay code sizes) plus full
+resident ranges 1000→1035 and 1062→1632 (not truncated to last FUN_ end).
+"""
 from __future__ import annotations
 
 import argparse
@@ -13,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FLAT = ROOT / "re" / "bomb25_flat.exe"
 FUNCS = ROOT / "re" / "export" / "functions.txt"
 CSV = ROOT / "re" / "rtl" / "rtl_names.csv"
+OVL_MAP = ROOT / "re" / "ovl_map.txt"
 
 LOAD = 0x1000
 LIB_SEGS = {
@@ -27,21 +32,6 @@ LIB_SEGS = {
     0x1827,
     0x1BE7,
     0x1C5B,
-}
-GAME_SEGS = {
-    0x1000,
-    0x1062,
-    0x2185,
-    0x21EE,
-    0x224B,
-    0x2583,
-    0x285C,
-    0x2B39,
-    0x2CAB,
-    0x2EEF,
-    0x30B8,
-    0x318E,
-    0x32EC,
 }
 
 
@@ -60,22 +50,26 @@ def load_image():
     return bytes(img)
 
 
-def g2i(seg, off):
-    return (seg - LOAD) * 16 + off
-
-
-def seg_ends():
-    ends = collections.defaultdict(int)
-    for line in FUNCS.read_text().splitlines():
-        addr, sz, name = line.split("\t")
-        s, o = (int(x, 16) for x in addr.split(":"))
-        ends[s] = max(ends[s], o + int(sz))
-        # also track names currently exported
-    return ends
+def game_ranges():
+    """List of (ghidra_seg_start, ghidra_seg_end_exclusive) for game code."""
+    ranges = [(0x1000, 0x1035), (0x1062, 0x1632)]
+    for line in OVL_MAP.read_text().splitlines():
+        if not line.startswith("ovl stub"):
+            continue
+        parts = line.split()
+        # ovl stub XXXX ovr@... code NNNN -> seg SSSS
+        size = int(parts[5])
+        seg = int(parts[-1], 16)
+        gseg = seg + LOAD
+        paras = (size + 15) // 16
+        ranges.append((gseg, gseg + paras))
+    return ranges
 
 
 def export_names():
     names = {}
+    if not FUNCS.exists():
+        return names
     for line in FUNCS.read_text().splitlines():
         addr, sz, name = line.split("\t")
         names[addr.lower()] = name
@@ -96,27 +90,25 @@ def main():
     args = ap.parse_args()
 
     img = load_image()
-    ends = seg_ends()
+    ranges = game_ranges()
     exp = export_names()
     csvn = csv_names()
 
-    # A target is "named" if CSV has it OR export name does not look like FUN_/thunk_FUN_
     def is_named(seg, off):
         key = f"{seg:04x}:{off:04x}"
         if key in csvn:
             return True
         n = exp.get(key, "")
         if not n:
-            # also accept if any function starts at this addr with non-FUN name in export
             return False
         if n.startswith("FUN_") or n.startswith("thunk_FUN_"):
             return False
         return True
 
-    calls = collections.Counter()  # (seg,off) -> count
-    for gs in sorted(GAME_SEGS):
-        start = g2i(gs, 0)
-        end = start + ends.get(gs, 0x1000)
+    calls = collections.Counter()
+    for a, b in ranges:
+        start = (a - LOAD) * 16
+        end = (b - LOAD) * 16
         i = start
         while i < min(end, len(img)) - 5:
             if img[i] == 0x9A:
@@ -139,6 +131,7 @@ def main():
     unnamed.sort(reverse=True)
     pct = 100.0 * named_n / total if total else 0.0
 
+    print(f"game ranges: {len(ranges)} (from ovl_map + resident)")
     print(f"game→lib far calls: {total}")
     print(f"named call-sites:   {named_n}")
     print(f"coverage:           {pct:.2f}%")
@@ -167,5 +160,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(ROOT / "scripts"))
     raise SystemExit(main())
