@@ -242,7 +242,9 @@ SCENARIOS: List[Dict[str, Any]] = [
     # angles at 0 / 90 / 180 family
     dict(label="a0_p200", angle=0, power=200, facing=1, tank_x=40, tank_y=150),
     dict(label="a90_p200", angle=90, power=200, facing=1, tank_x=160, tank_y=160),
-    dict(label="a180_p200", angle=0, power=200, facing=-1, tank_x=280, tank_y=150),
+    # angle is always 0..90; facing ±1 covers the other half (not literal 180°)
+    dict(label="a0_facem1_p200", angle=0, power=200, facing=-1, tank_x=280, tank_y=150),
+    dict(label="a90_facem1_p200", angle=90, power=200, facing=-1, tank_x=160, tank_y=160),
     dict(label="a45_p200", angle=45, power=200, facing=1, tank_x=50, tank_y=150),
     dict(label="a30_p150", angle=30, power=150, facing=1, tank_x=60, tank_y=155),
     dict(label="a60_p250", angle=60, power=250, facing=1, tank_x=70, tank_y=150),
@@ -255,8 +257,11 @@ SCENARIOS: List[Dict[str, Any]] = [
     dict(label="wind0", angle=50, power=220, facing=1, tank_x=50, tank_y=150, wind=0),
     dict(label="wind_pos", angle=50, power=220, facing=1, tank_x=50, tank_y=150, wind=2000),
     dict(label="wind_neg", angle=50, power=220, facing=1, tank_x=50, tank_y=150, wind=-2000),
-    dict(label="wind_gale_pos", angle=40, power=300, facing=1, tank_x=40, tank_y=150, wind=8000),
-    dict(label="wind_gale_neg", angle=40, power=300, facing=-1, tank_x=280, tank_y=150, wind=-8000),
+    # Gale extremes from work/T02/wind_dist.json (n=1000): min=-29184 max=28960
+    dict(label="wind_gale_pos", angle=40, power=300, facing=1, tank_x=40, tank_y=150, wind=28960),
+    dict(label="wind_gale_neg", angle=40, power=300, facing=-1, tank_x=280, tank_y=150, wind=-29184),
+    dict(label="wind_gale_max", angle=50, power=220, facing=1, tank_x=100, tank_y=150, wind=28960),
+    dict(label="wind_gale_min", angle=50, power=220, facing=1, tank_x=100, tank_y=150, wind=-29184),
     # terrain / tank hits
     dict(label="hit_ground", angle=35, power=180, facing=1, tank_x=50, tank_y=150),
     dict(

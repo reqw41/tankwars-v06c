@@ -49,12 +49,25 @@ def _load_or_trace(label: str, scenarios: dict) -> dict:
     if label in _TRACE_CACHE:
         return _TRACE_CACHE[label]
     path = TRACES / f"{label}.json"
+    sc = dict(scenarios[label])
+    sc.pop("label")
+    terr = sc.pop("terrain", None)
+    need = True
     if path.exists():
         tr = json.loads(path.read_text())
-    else:
-        sc = dict(scenarios[label])
-        sc.pop("label")
-        terr = sc.pop("terrain", None)
+        # invalidate stale cache when scenario knobs change
+        if (
+            tr.get("angle") == sc.get("angle")
+            and tr.get("power") == sc.get("power")
+            and tr.get("facing", 1) == sc.get("facing", 1)
+            and tr.get("tank_x") == sc.get("tank_x")
+            and tr.get("tank_y") == sc.get("tank_y")
+            and tr.get("wind", 0) == sc.get("wind", 0)
+            and tr.get("rebound", False) == sc.get("rebound", False)
+            and tr.get("men", 5) == sc.get("men", 5)
+        ):
+            need = False
+    if need:
         tr = ft.trace_flight(label=label, terrain=terr, **sc)
         TRACES.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(tr))
@@ -86,11 +99,13 @@ def test_required_coverage(scenarios):
     labels = set(scenarios)
     assert "a0_p200" in labels
     assert "a90_p200" in labels
-    assert "a180_p200" in labels
+    assert "a0_facem1_p200" in labels
+    assert "a90_facem1_p200" in labels
     assert "a45_p1" in labels
     assert "a20_p1000" in labels or "a45_p500" in labels
     assert "wind0" in labels
     assert "wind_gale_pos" in labels and "wind_gale_neg" in labels
+    assert "wind_gale_max" in labels and "wind_gale_min" in labels
     assert "hit_ground" in labels
     assert "hit_tank" in labels
     assert "wall_norebound" in labels

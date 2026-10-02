@@ -38,14 +38,61 @@
 ## Гипотезы
 
 - Точные пороги «collision band» (`y>33` vs `y>4` в соседних проверках отрисовки) выведены из Real48-компараторов; краевые пиксели у UI-рамок могут отличаться от «игрового поля» в доке.
-- Генерация ветра None/Norm/High/Gale (`3eae` + RandomWord/`×4`) — по декомпилу меню; в полёте используется только готовый `3ede`.
 - Отрисовка ствола (`1062:059f`) множит Cos/Sin на **8**, а выстрел — на **10** (смещение дула vs спрайта).
 - Поведение Laser/Sonic/наведения детально не разбиралось (только адреса ветвлений / post-hit `1054:0020`).
+
+## Addendum 1
+
+Скрипты: `scripts/ref/wind.py`, `scripts/ref/fp_compare.py`, `tests/test_wind.py`.  
+`pytest tests/`: `387 passed in 7.68s` (`work/T02/pytest_all_addendum1.txt`).
+
+### Доказано
+
+**Ветер** — оригинальный код `2583:2567..2675` внутри `FUN_2583_2531`, исполнен в unicorn (`generate_wind_emu`).  
+Режимы `DS:81f6`: 0 None / 1 Low(20) / 2 Norm(100) / 3 High(300) / 4 Gale(4000) / 5 RND→`RandomWord(5)`.  
+`wind = span/2 − RandomWord(span)`; до 4× `×4` если `RandomReal() < {0.1,0.1,0.05,0.05}`; clamp ±30000.
+
+Распределения n=1000 (`work/T02/wind_dist.json`):
+
+| mode | min | max |
+|---|---|---|
+| None | 0 | 0 |
+| Low | -320 | 320 |
+| Norm | -752 | 2880 |
+| High | -2352 | 2880 |
+| Gale | -29184 | 28960 |
+
+Модель `generate_wind_model` совпадает с emu на тех же RandSeed (`tests/test_wind.py`).  
+Сценарии `wind_gale_{pos,neg,max,min}` используют крайние Gale ±28960/−29184.
+
+**Порог остановки** (`2583:01ce`, `0d2d`, `0d6c`): сравнивается именно **power** (`+0x3f0a`) с локальным `thresh = 1000 − 2*Men` (`Men` at `+0x3f10`).  
+Также `done` при `3eac==3eb0` или цвете танка; отмена при `power==thresh && color==2`.  
+Не ветка Balls-o-Dirt: общий код для всех оружий в `TW_FireShot`. При Men≤9 любой легальный power < thresh → dirt всегда останавливает.
+
+**Угол:** UI = **0..90 + facing ±1**; метка `a180_p200` заменена на `a0_facem1_p200` (+ `a90_facem1_p200`).
+
+**Fixed-point** (`scripts/ref/fp_compare.py` → `work/T02/fp_compare.txt`):
+
+| формат | impact match | max pixel-dev | mean max-dev |
+|---|---|---|---|
+| 16.16 | 26/28 | 1 | 0.8214285714285714 |
+| pos16.8+vel8.8 | 4/28 | 231 | 61.17857142857143 |
+| pos24.8+vel8.16 | 12/28 | 6 | 2.642857142857143 |
+
+Источники ошибки (из скрипта): `1/5000` в 8.8 → 0; накопление `0.01` (1619 шагов: true 16.19 vs 8.8→18.97).  
+Cycle Delay: `CRT_Delay(3)` → ≥333.3 step/s; 1619 steps ≈4.86 s; бюджет 8080@3 МГц ≈9000 цикл/шаг.  
+**Рекомендация:** 16.16 (цитата из `fp_compare.json`).
+
+### Гипотезы (addendum)
+
+- Именование Low/Norm в меню vs DOC «None/Norm/High/Gale» — Low есть в бинаре (`None/Low/Norm/High/Gale/RND`); DOC сокращён.
+- Оценка циклов 8080 — порядковая, не замеры на железе.
 
 ## Файлы
 
 - `docs/spec/ballistics.md`
 - `re/game/names_T02.csv`
-- `scripts/ref/ballistics.py`, `scripts/probe/flight_trace.py`
-- `tests/test_ballistics.py`
-- `work/T02/` (asm export, traces, pytest logs) — не обязательно в git
+- `scripts/ref/ballistics.py`, `scripts/ref/wind.py`, `scripts/ref/fp_compare.py`
+- `scripts/probe/flight_trace.py`
+- `tests/test_ballistics.py`, `tests/test_wind.py`
+- `work/T02/` (traces, wind_dist, fp_compare, pytest logs) — не обязательно в git

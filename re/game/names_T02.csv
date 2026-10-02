@@ -1,6 +1,11 @@
 address;name;signature;unit;evidence;verified
 2583:01c0;TW_FireShot;void __far TW_FireShot(int player);Game2583;unicorn flight_trace + asm Real48 init/loop;yes
+2583:2531;TW_StartRound;void __far TW_StartRound(void);Game2583;includes wind gen @2567;yes
+2583:2567;TW_GenWind;void TW_GenWind(void);Game2583;inline in StartRound; RandomWord/Real → 3ede;yes
 2583:140f;TW_ExplosionDispatch;void __far TW_ExplosionDispatch(void);Game2583;alias 2000:6c3f same linear; called after shot via other paths;static
+1e0d:81f6;TW_WindMode;int16 TW_WindMode;DS;0..5 None/Low/Norm/High/Gale/RND;yes
+1e0d:81f8;TW_WindModeEff;int16 TW_WindModeEff;DS;effective mode this round;yes
+1e0d:3eae;TW_WindSpan;int16 TW_WindSpan;DS;span for RandomWord before signed wind;yes
 1062:059f;TW_DrawBarrel;void __far TW_DrawBarrel(int player);Game1062;Cos/Sin*8*facing barrel tip draw;static
 1062:06b7;TW_DrawBarrelTip;void __far TW_DrawBarrelTip(int player);Game1062;Cos/Sin*8 tip sprite;static
 1062:0213;TW_EraseBall;void __far TW_EraseBall(void);Game1062;called from flight when ball visible;static

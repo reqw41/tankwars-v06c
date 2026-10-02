@@ -63,7 +63,7 @@ class FlightInput:
     rebound: bool = False  # DS:8200
     weapon: int = 1  # DS player+0x3f13
     guided: int = 0  # DS player+0x3f15 (>0 enables seek/special)
-    men: int = 5  # DS player+0x3f10; fuse = 1000-2*men
+    men: int = 5  # DS player+0x3f10; hit thresh = 1000-2*men (see spec §5)
     max_steps: int = 20000
 
 
@@ -221,10 +221,10 @@ def _simulate_real48(inp: FlightInput, terrain: Terrain) -> FlightResult:
                 cpix = terrain.get(px + dx, py + dy)
                 if _is_hit_color(cpix):
                     hit_color = cpix
-                    # done if power < fuse OR tank color
+                    # done if power < thresh OR tank (palette wrap handled in original via 3eac==3eb0)
                     is_tank = TANK_COLOR_LO <= cpix <= TANK_COLOR_HI
                     if inp.power < fuse or is_tank:
-                        # special: power==fuse and dirt → cancel (dirt-ball fuse)
+                        # power==thresh and dirt → cancel stop (2583:0d6c)
                         if inp.power == fuse and cpix == DIRT_COLOR:
                             pass
                         else:

@@ -90,6 +90,9 @@ analyzeHeadless re/ghidra bomb25 -import re/bomb25_flat.exe -overwrite \
 ветер `3ede/5000/10` на vx. Trunc→пиксель. Hit: цвет 2 или 20..29, ромб ±1 через `1691:0b0a`.
 Стены `8200`. В flat-образе `DS:81xx` пересекается с кодом `2583` — для unicorn зеркалить DS (напр. `0x5000`).
 
+Ветер раунда: `2583:2567` в `FUN_2583_2531`; режимы None/Low/Norm/High/Gale/RND (`81f6`);
+модель `scripts/ref/wind.py`. Угол UI = 0..90 + facing ±1. FP сравнение: `scripts/ref/fp_compare.py`.
+
 Пересборка с RTL:
 ```
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
