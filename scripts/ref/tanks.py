@@ -75,14 +75,20 @@ def erase_tank(v: bytearray, bg: bytes, x: int, y: int):
         poke(v, o, peek(bg, o))
 
 
-def line(v: bytearray, x1: int, y1: int, x2: int, y2: int, c: int):
-    """Побитная копия 1691:08ef."""
+def line(v: bytearray, x1: int, y1: int, x2: int, y2: int, c: int, bg: bytes | None = None):
+    """Побитная копия 1691:08ef; с bg — 1691:09cb (тот же обход, пиксель из буфера фона)."""
+    if bg is None:
+        put = poke
+    else:
+        def put(v, o, c):
+            if o < len(v):
+                v[o] = bg[o] if o < len(bg) else 0
     cx = x2 - x1
     if cx == 0:                                    # вертикаль
         ya, yb = sorted((y1, y2))
         o = _off(x1, ya)
         for _ in range(yb - ya + 1):
-            poke(v, o, c)
+            put(v, o, c)
             o = (o + W) & 0xFFFF
         return
     if cx < 0:
@@ -92,7 +98,7 @@ def line(v: bytearray, x1: int, y1: int, x2: int, y2: int, c: int):
     if bx == 0:                                    # горизонталь
         o = _off(x1, y1)
         for _ in range(cx + 1):
-            poke(v, o, c)
+            put(v, o, c)
             o = (o + 1) & 0xFFFF
         return
     step = W
@@ -106,7 +112,7 @@ def line(v: bytearray, x1: int, y1: int, x2: int, y2: int, c: int):
     d22 = d2 - 2 * cx
     o = _off(x1, y1)
     for _ in range(cx + 1):
-        poke(v, o, c)
+        put(v, o, c)
         o = (o + 1) & 0xFFFF
         if not ymajor:
             if err < 0:

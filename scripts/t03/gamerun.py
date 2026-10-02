@@ -546,3 +546,27 @@ def text_screen(g: 'Game') -> str:
     raw = bytes(g.uc.mem_read(0xB8000, 4000))
     lines = [''.join(chr(raw[(r * 80 + c) * 2]) for c in range(80)).rstrip() for r in range(25)]
     return '\n'.join(l for l in lines if l.strip())
+
+
+def call_in_game(g: 'Game', gseg: int, off: int, args, max_insns: int = 50_000_000):
+    """Вызвать far-процедуру Ghidra gseg:off внутри работающей игры (Pascal: args слева направо),
+    вернуть регистры. Состояние CPU игры сохраняется и восстанавливается; память — нет."""
+    regs = {r: g.uc.reg_read(r) for r in (UC_X86_REG_AX, UC_X86_REG_BX, UC_X86_REG_CX, UC_X86_REG_DX,
+                                           UC_X86_REG_SI, UC_X86_REG_DI, UC_X86_REG_BP, UC_X86_REG_SP,
+                                           UC_X86_REG_SS, UC_X86_REG_DS, UC_X86_REG_ES, UC_X86_REG_CS,
+                                           UC_X86_REG_IP, UC_X86_REG_FLAGS)}
+    ss, sp = regs[UC_X86_REG_SS], regs[UC_X86_REG_SP] - 0x40
+    words = list(args) + [0xFF00, 0xF000]          # аргументы, затем адрес возврата F000:FF00
+    words = list(args) + [0xF000, 0xFF00]
+    for w in words:
+        sp -= 2
+        g.uc.mem_write(ss * 16 + sp, struct.pack('<H', w & 0xFFFF))
+    g.uc.reg_write(UC_X86_REG_SP, sp)
+    g.uc.reg_write(UC_X86_REG_DS, g.ds)
+    g.uc.reg_write(UC_X86_REG_CS, g.ghidra_abs(gseg))
+    g.uc.reg_write(UC_X86_REG_IP, off)
+    r = g.run(max_insns, until=(0xF000, 0xFF00))
+    out = {'ax': g.uc.reg_read(UC_X86_REG_AX), 'dx': g.uc.reg_read(UC_X86_REG_DX), 'result': r}
+    for k, v in regs.items():
+        g.uc.reg_write(k, v)
+    return out
