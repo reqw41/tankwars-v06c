@@ -2,3 +2,5 @@ re/ghidra/
 *.rep/
 *.lock*
 .venv/
+__pycache__/
+work/
