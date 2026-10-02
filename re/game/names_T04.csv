@@ -1,0 +1,28 @@
+address;name;signature;unit;evidence;verified
+318e:00e0;TW_Explosion;;Game;диспетчер: множества 0000/0020/0080/00a0/00c0;yes
+318e:08ba;TW_NotStandard;;Game;оружие вне {1,2,3,4,11};yes
+318e:08d6;TW_CriDirect;;Game;CRI и цвет 20..29: урон Random(weapon*6)+1;yes
+318e:0a17;TW_CriChain;;Game;CRI по земле (цвет 2), черви 1..R;yes
+318e:0c6b;TW_CriFluent;;Game;множество {6,8,10} — диагонали;yes
+318e:0f6f;TW_Sonic;;Game;оружие 12: палитра, дыра, 1062:027e;yes
+318e:10d5;TW_DirtBall;;Game;оружие 13..16: Circle цветом 2;yes
+318e:1296;TW_ExplosiveDirt;;Game;оружие 17: частицы и порог осыпания;yes
+318e:0000;TW_SetStandard;;Game;set {1,2,3,4,11};yes
+318e:0020;TW_SetCri;;Game;set {5,6,7,8,9,10};yes
+318e:0040;TW_SetTankColor;;Game;set {20..29};yes
+318e:0060;TW_SetCriD;;Game;set {6,8,10};yes
+318e:0080;TW_SetSonic;;Game;set {12};yes
+318e:00a0;TW_SetDirt;;Game;set {13,14,15,16};yes
+318e:00c0;TW_SetXDirt;;Game;set {17};yes
+2583:140f;TW_Laser;void __far TW_Laser(int player);Game;оружие 5, множество 2583:2511;yes
+2583:2511;TW_SetLaser;;Game;set {5};yes
+2583:24f1;TW_SetFlight;;Game;всё оружие кроме 5 — TW_FireShot;yes
+2583:06cf;TW_GuideStep;;Game;Herb's / Vick's внутри шага полёта;yes
+2583:0180;TW_SetHerb;;Game;set {1,3};yes
+2583:01a0;TW_SetVick;;Game;set {2,3};yes
+1691:0b2b;U1691_SetRGB;;Unit1691;INT 10h AX=1010 или порты 3C8/3C9;yes
+1691:0ae3;U1691_RestorePixel;;Unit1691;один пиксель из фона в VRAM;yes
+1062:0379;TW_ReplaceColorRange;;Game;пиксели цвета lo..hi заменить фоном;yes
+1e0d:2f8c;TW_GuidePrice;;Game;LongInt 20000,20000;yes
+1e0d:3398;TW_ShieldPrice;;Game;LongInt 20000,10000;yes
+1e0d:3f27;TW_LaserEnergy;;Game;слово энергии, запись игрока +0x2B;yes
