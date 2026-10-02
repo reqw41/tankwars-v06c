@@ -1,0 +1,31 @@
+address;name;signature;unit;evidence;verified
+2eef:0909;TW_RoundSetup;void __far TW_RoundSetup(void);Game;"рельеф+танки; вызов из 2583:2556 через 104e:0020";yes
+2eef:10dd;TW_DrawWeaponBar;void __far TW_DrawWeaponBar(void);Game;PutPixel/Line значков оружия (2583:277e);static
+2eef:0000;TW_TitleScreen;void __far TW_TitleScreen(void);Game;палитра, BOMB1/2.RAW;static
+2583:2531;TW_RoundLoop;void __far TW_RoundLoop(void);Game;"вызывает всё; стаб 103e:0020";static
+2b39:0386;TW_DrawFrame;void __far TW_DrawFrame(void);Game;рамка 13 + линия земли y=189 без стен;yes
+2b39:03da;TW_CrumbleMaybe;void __far TW_CrumbleMaybe(void);Game;Random*100 <= DS:3EE6 -> 1062:027e;yes
+2b39:0020;TW_TanksFall;void __far TW_TanksFall(void);Game;tests/test_crumble.py (fall*);yes
+2b39:0425;TW_PlayerTurn;void __far TW_PlayerTurn(int player);Game;ход: ввод или ИИ (из 2583:2963);static
+2b39:0f78;TW_ReadTurnKeys;;Game;таблица клавиш DS:3B90 (свой INT 9);static
+1062:027e;TW_Crumble;;Game;"(void far *list, void far *bg); tests/test_crumble.py (crumble*)";yes
+1062:03d2;TW_DrawTank;void __far TW_DrawTank(int x,int y,byte color);Game;спрайт 33 пикселя;yes
+1062:046a;TW_EraseTank;;Game;"(int x,int y,void far *bg); те же пиксели из фона";yes
+1062:059f;TW_DrawTankBarrel;void __far TW_DrawTankBarrel(int player);Game;танк + ствол по scripts/ref/data/barrel.json;yes
+1062:07a9;TW_TankBrightness;void __far TW_TankBrightness(int player);Game;DAC = 63*men/100 div делитель игрока;static
+1691:0006;U1691_SyncViewport;void __far U1691_SyncViewport(void);Unit1691;GetViewSettings (1827:1028) в DS:E3AC;static
+1691:0015;U1691_PixelOffset;;Unit1691;BX = y*320+x, ES = DS:E3B6;static
+1691:0025;U1691_Mul32x16;;Unit1691;DX:AX * CX mod 2^32;static
+1691:0031;U1691_Rect;void __far U1691_Rect(int x1,int y1,int x2,int y2,byte c);Unit1691;4 линии 1691:08ef;yes
+1691:025c;U1691_Ellipse;void __far U1691_Ellipse(int x,int y,int rx,int ry,byte c);Unit1691;средняя точка, вьюпорт DS:E3AC;yes
+1691:0592;U1691_EllipseRestore;;Unit1691;"(int x,int y,int rx,int ry,void far *bg); те же точки из фона";yes
+1691:08ef;U1691_Line;void __far U1691_Line(int x1,int y1,int x2,int y2,byte c);Unit1691;Брезенхем без отсечения;yes
+1691:09cb;U1691_LineRestore;;Unit1691;"(int x1,int y1,int x2,int y2,void far *bg); та же линия из фона";yes
+1691:0ba5;U1691_SetDACBlock;;Unit1691;палитра огня 130..;static
+318e:00e0;TW_Explosion;;Game;"(int shooter, real x, real y, int hitcolor); tests/test_explosion.py";yes
+1e0d:3eda;TW_ExplRadius;;Game;R обычного взрыва;yes
+1e0d:3ee6;TW_CrumblePercent;;Game;Crumble %;yes
+1e0d:8866;TW_TanksFallOn;;Game;Tanks Fall;yes
+1e0d:e0b0;TW_BgBuffer;;Game;far ptr буфера фона 64000 байт;yes
+1e0d:823a;TW_CrumbleList;;Game;far ptr списка 9999 слов;yes
+1e0d:3b90;TW_KeyDown;;Game;таблица «клавиша нажата» по скан-коду;static

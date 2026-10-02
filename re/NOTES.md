@@ -114,3 +114,13 @@ $G/support/analyzeHeadless re/ghidra bomb25 \
 - **ГСЧ для порта.** `Random(N)` TP6 = LCG (`1c5b:1639`, RandSeed `DS:3774`) + остаток от деления (DIV), а не
   старшее слово произведения. Видно на ветре: сид 182 даёт базу 45 и в Norm (50−5), и в High (150−105).
   В порте воспроизводить точно, если нужна совместимость раундов по сиду. Описать в спеке при T04/порте.
+
+## T03 — поле, взрывы, осыпание (итог, 03.10)
+- **Полный запуск игры:** `scripts/t03/gamerun.py` (+ `scripts/probe/t03_common.py`: `boot_to_round`, `run_to`,
+  `computer_keys`). Адреса Ghidra ↔ запуск: `Game.ghidra_abs(seg)`, `Game.to_ghidra(abs)`. ~20 млн инстр/с.
+- Спеки: `docs/spec/terrain.md`, `docs/spec/explosions.md`; отчёт `docs/tasks/T03-report.md`; имена `re/game/names_T03.csv`.
+- Номера оружия с 0 (0 Lead Ball … 17 Explosive Dirt). Поля игрока (+смещение от DS:3EFC+0x61*i): x 0, y 2, score 4 (L),
+  power 0E, angle 10, facing 12, men 14, alive 16, weapon 17, Energy Shield 45 (L), Inertia Dampener 49 (L).
+- **Открытый вопрос EMULATE закрыт:** Circle в настоящей игре рисует (ядро Graph эмулирует); стенд T01b — нет.
+- `1827:1028` = GetViewSettings. Здоровье в начале раунда = 100 (см. поправку для T02 в отчёте T03).
+- Клавиатура во время хода — свой INT 9, таблица DS:3B90[скан-код].
