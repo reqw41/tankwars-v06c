@@ -41,7 +41,7 @@ def test_crumble_column_falls_until_support():
     v = bytearray(64000); bg = bytes([40]) * 64000
     for y in range(100, 105):
         v[y * 320 + 50] = 2              # висящий столбик земли
-    v[150 * 320 + 50] = 2                # опора
+    v[150 * 320 + 50] = 13               # опора: рамка (цвет 13 не «проваливается»)
     crumble(v, bg)
     col = [y for y in range(200) if v[y * 320 + 50] == 2]
-    assert col == list(range(145, 151))
+    assert col == list(range(145, 150))
