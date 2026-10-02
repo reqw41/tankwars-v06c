@@ -2,4 +2,5 @@
 
 | id | задача | статус |
 |---|---|---|
-| T01 | Опознание RTL Turbo Pascal 6 (System/Graph/Crt) и переименование в Ghidra | сдана |
+| T01 | Опознание RTL TP6 | принято частично: System да, Graph нет |
+| T01b | Graph — проверка исполнением, исправления (docs/tasks/T01b-graph-verify.md) | выдана |

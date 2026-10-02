@@ -4,3 +4,7 @@ re/ghidra/
 .venv/
 __pycache__/
 work/
+work/*/gh/
+work/*/export/
+work/*/*.log
+__pycache__/
