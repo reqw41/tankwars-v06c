@@ -126,6 +126,23 @@ def with_tank(
     return bytes(v)
 
 
+def with_dirt_wall(
+    ground_y: int = 180,
+    x0: int = 80,
+    x1: int = 100,
+    y0: int = 80,
+    y1: int = 160,
+    color: int = 2,
+) -> bytes:
+    """Vertical dirt slab for fuse/substep tests (Addendum 3)."""
+    v = bytearray(flat_ground(ground_y))
+    for y in range(y0, y1 + 1):
+        for x in range(x0, x1 + 1):
+            if 0 <= x < 320 and 0 <= y < 200:
+                v[y * 320 + x] = color
+    return bytes(v)
+
+
 def trace_flight(
     *,
     angle: int,
@@ -309,6 +326,108 @@ SCENARIOS: List[Dict[str, Any]] = [
     dict(label="a15_p80", angle=15, power=80, facing=1, tank_x=55, tank_y=150),
     dict(label="a88_p120", angle=88, power=120, facing=1, tank_x=160, tank_y=160),
     dict(label="a5_p50", angle=5, power=50, facing=-1, tank_x=200, tank_y=150),
+    # Addendum 3: dirt fuse vs original (wall so high power does not skip past y=193).
+    # Angles vary so power>thresh hits enter the wall on different 3eac substeps.
+    dict(
+        label="fuse_m100_p700",
+        angle=35,
+        power=700,
+        facing=1,
+        tank_x=50,
+        tank_y=150,
+        men=100,
+        terrain=with_dirt_wall(),
+    ),
+    dict(
+        label="fuse_m100_p799",
+        angle=40,
+        power=799,
+        facing=1,
+        tank_x=50,
+        tank_y=150,
+        men=100,
+        terrain=with_dirt_wall(),
+    ),
+    dict(
+        label="fuse_m100_p800",
+        angle=35,
+        power=800,
+        facing=1,
+        tank_x=50,
+        tank_y=150,
+        men=100,
+        terrain=with_dirt_wall(),
+    ),
+    dict(
+        label="fuse_m100_p801",
+        angle=45,
+        power=801,
+        facing=1,
+        tank_x=50,
+        tank_y=150,
+        men=100,
+        terrain=with_dirt_wall(),
+    ),
+    dict(
+        label="fuse_m100_p900",
+        angle=35,
+        power=900,
+        facing=1,
+        tank_x=50,
+        tank_y=150,
+        men=100,
+        terrain=with_dirt_wall(),
+    ),
+    dict(
+        label="fuse_m100_p1000",
+        angle=20,
+        power=1000,
+        facing=1,
+        tank_x=50,
+        tank_y=150,
+        men=100,
+        terrain=with_dirt_wall(),
+    ),
+    dict(
+        label="fuse_m50_p500",
+        angle=35,
+        power=500,
+        facing=1,
+        tank_x=50,
+        tank_y=150,
+        men=50,
+        terrain=with_dirt_wall(),
+    ),
+    dict(
+        label="fuse_m50_p899",
+        angle=30,
+        power=899,
+        facing=1,
+        tank_x=50,
+        tank_y=150,
+        men=50,
+        terrain=with_dirt_wall(),
+    ),
+    dict(
+        label="fuse_m50_p900",
+        angle=35,
+        power=900,
+        facing=1,
+        tank_x=50,
+        tank_y=150,
+        men=50,
+        terrain=with_dirt_wall(),
+    ),
+    dict(
+        label="fuse_m50_p901",
+        angle=55,
+        power=901,
+        facing=1,
+        tank_x=50,
+        tank_y=150,
+        men=50,
+        terrain=with_dirt_wall(),
+    ),
 ]
 
 

@@ -104,28 +104,36 @@ Else → wall logic.
 Hit if color `== 2` (dirt) or `20..29` (tanks). Then (`2583:0cfd..0d6c`):
 
 Local at shot entry (`2583:01ce`):  
-`thresh = 1000 − 2*Men`  (`Men` = word at player+`0x3f10`; stored `[bp-2]`).  
-This is **power vs Men-derived threshold**, not a misnamed ammo counter and not a Balls-o-Dirt-only opcode — it runs for every weapon in `TW_FireShot`.
+`thresh = 1000 − 2*Men`  (`Men` = word at player+`0x3f10`; stored `[bp-2]`).
+
+`DS:3eac` — subframe counter in the flight loop (`2583:05c8..05d7`): each physics step does
+`3eac++`; if `3eac > 3eb0` (10) then `3eac ← 0`. After palette with `3edc=1`, starts at 1
+(so first step uses 3eac=2; values cycle `…,10,0,1,…`).
 
 ```
-# проверяется только когда под ромбом ±1 найден цвет попадания (2 или 20..29), см. ballistics.py
-if hit_color found:
-    stop = (power < thresh) OR (3eac == 3eb0) OR (color in 20..29)
-    if power == thresh AND color == 2:
-        stop = false      # cancel dirt stop at exact threshold
+# when diamond finds color 2 or 20..29:
+stop = (color in 20..29) OR (3eac == 3eb0) OR (power < thresh)
+if color == 2 AND power == thresh:
+    stop = false   # only exact threshold flies through dirt
 ```
+
+Consequences:
+
+- `power < thresh`: stop on first dirt contact.
+- `power > thresh`: keep integrating **inside dirt until subframe 3eac==10**, then stop
+  (finishes the current 10-step “frame”, does not tunnel forever).
+- `power == thresh` + dirt: never stop on dirt (full pass-through until y-bounds / tank).
 
 Then weapons **12..16** on tank colors: `vy ← −vy * 1.2`, clear guided, continue (no explode).
 
 **Semantics for real men (0..100):** `thresh = 1000 − 2·men`.
 
-| men | thresh | legal max power `10×men` | dirt pass-through? |
+| men | thresh | legal max `10×men` | dirt behaviour |
 |---|---|---|---|
-| 100 (full) | 800 | 1000 | yes, when power ∈ [800, 1000] (exact 800 cancels dirt stop) |
-| 50 | 900 | 500 | **no** — every legal power < 900 |
-| ≤ 9 (old T02 scen.) | ≥ 982 | ≤ 90 | no |
+| 100 | 800 | 1000 | `<800` immediate stop; `>800` stop at subframe 10; `==800` pass-through |
+| 50 | 900 | 500 | all legal powers `<900` → immediate stop |
 
-Tests: `tests/test_ballistics.py` (`test_dirt_fuse_men100_50`) — men=100/50, power above and below thresh.
+Traces: `fuse_m100_p*` / `fuse_m50_p*` in `flight_trace.SCENARIOS` (dirt wall, pixel-matched).
 
 **Walls** (`DS:8200`):
 
@@ -150,7 +158,8 @@ Palette animation via `1057:0000`; sound gated by `81ff`.
 |---|---|---|
 | Guided `3f15>0` | `2583:06cf` | Steer vx/vy toward target player `3f17` |
 | Weapons 12..16 | `2583:0d71` | Bounce on tank colors ×1.2 |
-| High power ≥ thresh | `2583:0d2d` / `0d6c` | dirt pass-through (`thresh=1000−2·men`) |
+| High power vs thresh | `2583:0d2d` / `0d6c` + `3eac` | dirt: stop at subframe 10 if power>thresh; pass only if power==thresh |
+
 | Laser (weapon 5) | `2583:140f` (`TW_LaserTurn`) | **Outside T02 flight** — set `2583:2511` |
 | Sonic / CRI / dirt balls | other overlays / post-hit | **Outside T02** |
 
@@ -178,7 +187,7 @@ See `fp_compare` output for per-scenario `max_pixel_dev` and impact `(dx,dy)`.
 **8080 timing:** `CRT_Delay(3)` ⇒ ≥ ~333 steps/s; longest trace 1619 steps ≈ 4.9 s.  
 At 3 MHz ≈ 9000 cycles/step budget; 16.16 software mul/div ~OK; 8.8 cheaper.
 
-**Recommendation:** prefer full **16.16** (impact 26/28, max path pixel-dev 1). Fallback: pos24.8+vel8.16 (12/28, max-dev 6). Avoid pos16.8+vel8.8 (1/5000→0; impact 4/28). Numbers from `fp_compare` — see `T02-report.md` Addendum 1.
+**Recommendation:** prefer full **16.16** (impact 30/38 after Addendum 3 scenarios). Large max path-dev comes from fuse cases where missing subframe 10 tunnels the shot — Real48 remains the accuracy reference. Avoid pos16.8+vel8.8. Numbers from `fp_compare` — see `T02-report.md` Addendum 3.
 
 ## Pseudocode
 
@@ -187,14 +196,19 @@ fire(player):
   thresh = 1000 - 2*Men
   (x,y,vx,vy) = muzzle_and_velocity(player)
   step = 10; done = 0
+  # 3eac left at 1 after palette when 3edc=1
   while not done:
+    3eac++; if 3eac > step: 3eac = 0
     x += vx/step; y += vy/step
     vy += 0.1/step; vx += wind/(5000*step)
     px,py = Trunc(x), Trunc(y)
     if in_band(x,y):
       for (dx,dy) in diamond:
         c = GetPixel(px+dx, py+dy)
-        if hit(c): handle_hit(thresh, ...); break
+        if hit(c):
+          done = (c in 20..29) or (3eac == step) or (power < thresh)
+          if c == 2 and power == thresh: done = 0
+          ...
     else:
       apply_walls_or_wind_snap(...)
     if y < -5000 or y > 193: done = 1

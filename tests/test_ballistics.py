@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "scripts" / "ref"))
 sys.path.insert(0, str(ROOT / "scripts" / "probe"))
 
-from ballistics import FlightInput, Terrain, StopReason, simulate  # noqa: E402
+from ballistics import FlightInput, Terrain, simulate  # noqa: E402
 import flight_trace as ft  # noqa: E402
 
 TRACES = ROOT / "work" / "T02" / "traces"
@@ -111,6 +111,20 @@ def test_required_coverage(scenarios):
     assert "wall_norebound" in labels
     assert "wall_rebound" in labels
     assert "high_arc" in labels
+    # Addendum 3 dirt-fuse cases (pixel-matched via test_trajectory_pixel_match)
+    for lab in (
+        "fuse_m100_p700",
+        "fuse_m100_p799",
+        "fuse_m100_p800",
+        "fuse_m100_p801",
+        "fuse_m100_p900",
+        "fuse_m100_p1000",
+        "fuse_m50_p500",
+        "fuse_m50_p899",
+        "fuse_m50_p900",
+        "fuse_m50_p901",
+    ):
+        assert lab in labels
 
 
 def test_hit_tank_color(scenarios):
@@ -132,46 +146,6 @@ def test_fixed_point_impact_rate(scenarios):
     out = ROOT / "work" / "T02"
     out.mkdir(parents=True, exist_ok=True)
     (out / "fp_impact_matches.txt").write_text(f"{matches}/{len(scenarios)}\n")
-
-
-@pytest.mark.parametrize(
-    "men,power,expect_terrain_stop",
-    [
-        (100, 700, True),   # thresh=800; below → stop on dirt
-        (100, 900, False),  # above → pass through dirt
-        (50, 500, True),    # thresh=900; legal max=500 < thresh → always stop
-        (50, 950, False),   # above thresh (above legal max) → pass through
-    ],
-)
-def test_dirt_fuse_men100_50(men, power, expect_terrain_stop):
-    """Dirt fuse thresh = 1000−2·men for real health values (Addendum 2).
-
-    Flat ground alone is too thin for high power (step jumps past y=193).
-    Use a dirt wall in the flight path so the fuse branch is exercised.
-    """
-    from ballistics import DIRT_COLOR
-
-    terr = Terrain.flat_ground(180)
-    for y in range(80, 161):
-        for x in range(80, 101):
-            terr.pixels[y * 320 + x] = DIRT_COLOR
-    res = simulate(
-        FlightInput(
-            angle=35,
-            power=power,
-            facing=1,
-            tank_x=50,
-            tank_y=150,
-            men=men,
-        ),
-        terr,
-    )
-    if expect_terrain_stop:
-        assert res.stop == StopReason.TERRAIN
-        assert res.hit_color == 2
-    else:
-        assert res.stop != StopReason.TERRAIN
-        assert res.stop == StopReason.Y_BOUNDS
 
 
 @pytest.mark.parametrize(

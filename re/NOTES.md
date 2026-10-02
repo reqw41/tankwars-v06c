@@ -95,6 +95,7 @@ analyzeHeadless re/ghidra bomb25 -import re/bomb25_flat.exe -overwrite \
 
 Макс. мощность = **10×men** (`2583:2925` clamp; DOC `100*MEN` неверен). Men раунда = 100.
 `2583:140f` = `TW_LaserTurn` (оружие 5), не ExplosionDispatch. Проба: `scripts/probe/max_power_probe.py`.
+Остановка в земле: `power<thresh` сразу; `power>thresh` — до `3eac==3eb0` (10); сквозь только `power==thresh`.
 
 Пересборка с RTL:
 ```

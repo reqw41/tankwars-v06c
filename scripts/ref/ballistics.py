@@ -160,6 +160,23 @@ def _is_hit_color(c: int) -> bool:
     return c == DIRT_COLOR or (TANK_COLOR_LO <= c <= TANK_COLOR_HI)
 
 
+def _advance_substep(sub: int, period: int = STEP_DIV) -> int:
+    """DS:3eac after each physics tick (2583:05c8): ++ ; if > 3eb0 → 0."""
+    sub += 1
+    if sub > period:
+        return 0
+    return sub
+
+
+def _hit_should_stop(power: int, fuse: int, color: int, sub: int, period: int = STEP_DIV) -> bool:
+    """2583:0cfd..0d6c — tank OR subframe==period OR power<fuse; cancel if dirt & power==fuse."""
+    is_tank = TANK_COLOR_LO <= color <= TANK_COLOR_HI
+    stop = is_tank or (sub == period) or (power < fuse)
+    if color == DIRT_COLOR and power == fuse:
+        stop = False
+    return stop
+
+
 def simulate(
     inp: FlightInput,
     terrain: Optional[Terrain] = None,
@@ -187,6 +204,8 @@ def _simulate_real48(inp: FlightInput, terrain: Terrain) -> FlightResult:
 
     step = STEP_DIV
     fuse = 1000 - 2 * inp.men
+    # After palette init with DS:3edc==1 (flight_trace), 3eac=1; loop does ++ first.
+    sub = 1
     positions: List[Tuple[int, int]] = []
     xs: List[float] = []
     ys: List[float] = []
@@ -198,6 +217,7 @@ def _simulate_real48(inp: FlightInput, terrain: Terrain) -> FlightResult:
     mn_vy = mx_vy = vy
 
     for i in range(inp.max_steps):
+        sub = _advance_substep(sub, step)
         # x += vx/step; y += vy/step; vy += 0.1/step; vx += wind/5000/step
         x = q(x + q(vx / step))
         y = q(y + q(vy / step))
@@ -221,19 +241,13 @@ def _simulate_real48(inp: FlightInput, terrain: Terrain) -> FlightResult:
                 cpix = terrain.get(px + dx, py + dy)
                 if _is_hit_color(cpix):
                     hit_color = cpix
-                    # done if power < thresh OR tank (palette wrap handled in original via 3eac==3eb0)
                     is_tank = TANK_COLOR_LO <= cpix <= TANK_COLOR_HI
-                    if inp.power < fuse or is_tank:
-                        # power==thresh and dirt → cancel stop (2583:0d6c)
-                        if inp.power == fuse and cpix == DIRT_COLOR:
-                            pass
+                    if _hit_should_stop(inp.power, fuse, cpix, sub, step):
+                        if is_tank and 12 <= inp.weapon <= 16:
+                            vy = q(-vy * BOUNCE_SCALE)
                         else:
-                            # weapons 12..16 bounce on tank colors
-                            if is_tank and 12 <= inp.weapon <= 16:
-                                vy = q(-vy * BOUNCE_SCALE)
-                            else:
-                                stop = StopReason.TANK if is_tank else StopReason.TERRAIN
-                                break
+                            stop = StopReason.TANK if is_tank else StopReason.TERRAIN
+                            break
             if stop != StopReason.MAX_STEPS:
                 break
         else:
@@ -296,11 +310,13 @@ def _simulate_fp(inp: FlightInput, terrain: Terrain) -> FlightResult:
     g_step = fp_div(to_fp(GRAVITY), step)
     w_step = fp_div(fp_div(to_fp(float(inp.wind)), to_fp(WIND_DIV)), step)
     fuse = 1000 - 2 * inp.men
+    sub = 1
     positions: List[Tuple[int, int]] = []
     hit_color = 0
     stop = StopReason.MAX_STEPS
 
     for _ in range(inp.max_steps):
+        sub = _advance_substep(sub, STEP_DIV)
         x += fp_div(vx, step)
         y += fp_div(vy, step)
         vy += g_step
@@ -321,10 +337,8 @@ def _simulate_fp(inp: FlightInput, terrain: Terrain) -> FlightResult:
                 if _is_hit_color(cpix):
                     hit_color = cpix
                     is_tank = TANK_COLOR_LO <= cpix <= TANK_COLOR_HI
-                    if inp.power < fuse or is_tank:
-                        if inp.power == fuse and cpix == DIRT_COLOR:
-                            pass
-                        elif is_tank and 12 <= inp.weapon <= 16:
+                    if _hit_should_stop(inp.power, fuse, cpix, sub, STEP_DIV):
+                        if is_tank and 12 <= inp.weapon <= 16:
                             vy = -fp_mul(vy, to_fp(BOUNCE_SCALE))
                         else:
                             stop = StopReason.TANK if is_tank else StopReason.TERRAIN
