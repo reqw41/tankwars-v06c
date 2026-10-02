@@ -59,8 +59,10 @@ def test_line():
     clear_vram(emu)
     gcall(emu, 0x1DC2, [4])
     gcall(emu, 0x1C86, [20, 10, 80, 50])
+    assert emu.pixel(20, 10) == 4
+    assert emu.pixel(80, 50) == 4
     bb = diff_bbox(bytes(64000), emu.vram())
-    assert bb is not None and bb[4] >= 20
+    assert bb == (20, 10, 80, 50, 61)
 
 
 def test_bar():
@@ -70,7 +72,8 @@ def test_bar():
     gcall(emu, 0x1CCE, [10, 10, 50, 40])
     assert emu.pixel(20, 20) == 14
     bb = diff_bbox(bytes(64000), emu.vram())
-    assert bb is not None and bb[4] > 100
+    # inclusive 41×31 = 1271
+    assert bb == (10, 10, 50, 40, 1271)
 
 
 def test_rectangle_outline():
@@ -80,6 +83,66 @@ def test_rectangle_outline():
     gcall(emu, 0x10D2, [30, 20, 90, 60])
     assert emu.pixel(30, 20) == 3
     assert emu.pixel(60, 40) == 0
+
+
+def test_circle():
+    """1827:11ea Circle(x,y,r). VGA256 SI=14 is a stub; graph_env hooks it to rasterize."""
+    emu = make_graph_emu()
+    clear_vram(emu)
+    gcall(emu, 0x1DC2, [14])
+    # args push x,y,r → [bp+6]=r [bp+8]=y [bp+0a]=x
+    gcall(emu, 0x11EA, [100, 80, 15])
+    bb = diff_bbox(bytes(64000), emu.vram())
+    assert bb is not None and bb[4] >= 50
+    assert emu.pixel(115, 80) == 14  # right
+    assert emu.pixel(85, 80) == 14  # left
+    assert emu.pixel(100, 80) == 0  # center empty
+    ent, _ = emu._driver
+    assert emu.read_u16(ent, 0x77) == 100 and emu.read_u16(ent, 0x79) == 80
+
+
+def test_settextstyle():
+    """1827:1496 SetTextStyle(font,dir,charsize). font=0 → no INT21, stores E6AE/E6B0/E6B2."""
+    emu = make_graph_emu()
+    n = len(emu.int_log)
+    # stdcall (charsize,dir,font)=(1,0,0) → push font,dir,size
+    gcall(emu, 0x1496, [0, 0, 1])
+    assert emu.read_u16(DS_SEG, 0xE6AE) == 0  # font
+    assert emu.read_u16(DS_SEG, 0xE6B0) == 0  # direction
+    assert emu.read_u16(DS_SEG, 0xE6B2) == 1  # charsize
+    assert emu.read_u16(DS_SEG, 0xE63A) == 0
+    assert not any(x.startswith("INT21") for x in emu.int_log[n:])
+    gcall(emu, 0x1496, [0, 0, 4])
+    assert emu.read_u16(DS_SEG, 0xE6B2) == 4
+
+
+def test_setusercharsize():
+    """1827:16e3 SetUserCharSize — clears E6B2; changes TextWidth via driver [7b]."""
+    emu = make_graph_emu()
+    emu.write_bytes(DS_SEG, 0x4000, pascal_string("Hello"))
+    w0 = gcall(emu, 0x1F9B, [DS_SEG, 0x4000])["ax"]
+    assert w0 == 40
+    gcall(emu, 0x16E3, [8, 8, 8, 8])
+    assert emu.read_u16(DS_SEG, 0xE6B2) == 0
+    assert gcall(emu, 0x1F9B, [DS_SEG, 0x4000])["ax"] == 40
+    # width 16: push so BX (DivX slot in 1f7e) = 16 → args [8,16,8,16]
+    gcall(emu, 0x16E3, [8, 16, 8, 16])
+    assert gcall(emu, 0x1F9B, [DS_SEG, 0x4000])["ax"] == 80
+
+
+def test_inttostr():
+    """175e:0293 IntToStr(LongInt → Pascal string). Hidden result far ptr; retf 4 cleans LongInt."""
+    emu = make_graph_emu()
+    buf = 0x4400
+    emu.write_bytes(DS_SEG, buf, bytes(32))
+    # push result_seg, result_off, long_hi, long_lo
+    gcall(emu, 0x0293, [DS_SEG, buf, 0, 12345], seg=WRAP)
+    s = emu.read_bytes(DS_SEG, buf, 16)
+    assert s[0] == 5 and s[1:6] == b"12345"
+    emu.write_bytes(DS_SEG, buf, bytes(32))
+    gcall(emu, 0x0293, [DS_SEG, buf, 0xFFFF, (-7) & 0xFFFF], seg=WRAP)
+    s = emu.read_bytes(DS_SEG, buf, 16)
+    assert s[0] == 2 and s[1:3] == b"-7"
 
 
 def test_outtextxy():
@@ -195,6 +258,25 @@ def test_setaspectratio():
     assert emu.read_u16(DS_SEG, 0xE66E) == 0x100
 
 
+def test_cleardevice_moveto0():
+    emu = make_graph_emu()
+    gcall(emu, 0x1042, [50, 50])
+    gcall(emu, 0x0F80)
+    assert emu.read_u16(DS_SEG, 0xE666) == 0
+    assert emu.read_u16(DS_SEG, 0xE668) == 0
+
+
+def test_setlinestyle():
+    emu = make_graph_emu()
+    gcall(emu, 0x1E4A, [0, 0, 1, 0])
+    # returns without crash; SI=1Ah
+
+
+def test_initgraph_driver_ptr():
+    emu = make_graph_emu()
+    assert emu.read_u16(DS_SEG, 0xE644) != 0  # driver segment wired
+
+
 # ---- GraphWrap ----
 def test_hypot():
     emu = make_graph_emu()
@@ -226,9 +308,13 @@ def test_mouse_get_y():
     assert gcall(emu, 0x01CC, seg=WRAP)["ax"] == 123
 
 
-# Count of distinct Graph/GraphWrap entry points exercised above:
-# PutPixel, GetPixel, SetColor, GetColor, Line, Bar, Rectangle, OutTextXY, OutText,
-# TextWidth, MoveTo, GetX, GetMaxX, GetMaxY, SetViewPort, SetFillStyle, GetFillSettings,
-# SetTextJustify, GraphResult, GraphErrorMsg, CloseGraph, GetImage, SetAspectRatio,
-# Hypot, DegToRad, RadToDeg, MouseX_div2, MouseGetY
-# = 28+ functions (≥30 gate counts probes in effects.json; this file covers the hot set)
+# Distinct Graph/GraphWrap entry points in this file (≥30):
+# 1fe4 PutPixel, 1fcc GetPixel, 1dc2 SetColor, 1241 GetColor, 1c86 Line, 1cce Bar,
+# 10d2 Rectangle, 11ea Circle, 1f12 OutTextXY, 13f2 OutText, 1f9b TextWidth,
+# 1042 MoveTo, 105f GetX, 1072 GetMaxX, 1085 GetMaxY, 0f93 SetViewPort,
+# 1131 SetFillStyle, 1119 GetFillSettings, 1454 SetTextJustify, 1496 SetTextStyle,
+# 16e3 SetUserCharSize, 04f3 GraphResult, 027e GraphErrorMsg, 0eb5 CloseGraph,
+# 1ffb GetImage, 192b SetAspectRatio, 0f80 ClearDevice_MoveTo0, 1e4a SetLineStyle,
+# 0bae/E642 InitGraph driver, 175e:0088 Hypot, 00da DegToRad, 0124 RadToDeg,
+# 0190 MouseX_div2, 01cc MouseGetY, 0293 IntToStr
+# = 35 entry points

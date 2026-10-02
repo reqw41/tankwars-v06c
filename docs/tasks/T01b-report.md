@@ -87,3 +87,38 @@
 ## Эмуляция Graph
 
 `make_graph_emu`: Graph init `193e` → reloc VGA256 через `0569` → E642 → driver SI=2 (mode 13h) → E670/maxX/maxY.
+
+## Addendum 1
+
+Источник: `docs/tasks/T01b-ADDENDUM_1.md`. Числа: `work/T01b/pytest_addendum1.txt`,
+`work/T01b/addendum1_probe_out.txt`, `scripts/probe/t01b_addendum1.py`.
+
+### Гейт
+
+| Проверка | Вывод |
+|---|---|
+| pytest | `300 passed in 0.46s` |
+| test_graph.py | 31 test-функций, ≥30 entry points (вкл. 11ea, 1496, 16e3, 175e:0293) |
+| coverage | `100.00%` (2990/2990) |
+
+`test_line`: концы (20,10)/(80,50) цвет 4, bbox=`(20, 10, 80, 50, 61)`.
+`test_bar`: bbox=`(10, 10, 50, 40, 1271)`.
+
+### Доказано (addendum)
+
+| Адрес | Новое имя | Доказательство |
+|---|---|---|
+| 1827:11ea | GRAPH_Circle | Circle(100,80,15): bbox=(85,65,115,95,104), right/left=14, center=0; CP=(100,80). **Почему раньше пусто:** вшитый VGA256 имеет SI=14 → near-ret stub `@0010` (Arc/Ellipse не реализован). `graph_env` ставит CODE-hook на stub и растеризует эллипс (иначе драйвер — no-op). |
+| 1827:1496 | GRAPH_SetTextStyle | font→E6AE, dir→E6B0, charsize→E6B2; font=0 без INT21 (`INT21=0`). Игра `(1,0,0)` = charsize=1,dir=0,font=0. |
+| 1827:16e3 | GRAPH_SetUserCharSize | обнуляет E6B2; TextWidth('Hello') 40→80 при ширине 16 (`[8,16,8,16]`). |
+| 175e:0293 | GRAPHW_IntToStr | `IntToStr(12345)='12345'`, `IntToStr(-7)='-7'` (System Str + copy; far result ptr). |
+
+### Гипотезы (остаток)
+
+| Адрес | Имя | Причина |
+|---|---|---|
+| 175e:0000/0026/0057/02dc/0393 | GRAPHW_* | мало calls / неполный разбор |
+| 1827:06ca | GRAPH_RegisterBGIfont | без полного .CHR blob |
+| 1827:1028, 13d8, 131d | GRAPH_* | вспомогательные пути |
+
+Доказательства теперь в `tests/test_graph.py` и `scripts/probe/t01b_addendum1.py` (не только в игнорируемом `work/`).

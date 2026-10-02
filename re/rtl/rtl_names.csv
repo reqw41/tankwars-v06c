@@ -38,7 +38,7 @@ address;name;signature;unit;evidence;verified
 175e:0124;GRAPHW_RadToDeg;void __far GRAPHW_RadToDeg(void);GraphWrap;RadToDeg(π)→180.0;yes
 175e:0190;GRAPHW_MouseX_div2;void __far GRAPHW_MouseX_div2(void);GraphWrap;mouse_x=160 → AX=80 (÷2), INT33;yes
 175e:01cc;GRAPHW_MouseGetY;void __far GRAPHW_MouseGetY(void);GraphWrap;mouse_y=123 → AX=123, INT33;yes
-175e:0293;GRAPHW_StrOrCopy;void __far GRAPHW_StrOrCopy(void);GraphWrap;calls System Str/copy (1790+adc), ran without crash;static
+175e:0293;GRAPHW_IntToStr;void __far GRAPHW_IntToStr(void);GraphWrap;IntToStr(12345)→'12345' IntToStr(-7)→'-7' via System Str;yes
 175e:02dc;GRAPHW_02dc;void __far GRAPHW_02dc(void);GraphWrap;ran, needs more callee analysis;static
 175e:0393;GRAPHW_0393;void __far GRAPHW_0393(void);GraphWrap;ran, needs more callee analysis;static
 17a3:0000;MOUSE_InitUnit;void __far MOUSE_InitUnit(void);Mouse;unit init;static
@@ -80,14 +80,14 @@ address;name;signature;unit;evidence;verified
 1827:10d2;GRAPH_Rectangle;void __far GRAPH_Rectangle(void);Graph;4×Line Rectangle bbox=(30, 20, 90, 60, 200) corner=3 mid=0;yes
 1827:1119;GRAPH_GetFillSettings;void __far GRAPH_GetFillSettings(void);Graph;writes E684/E686 → far buf: 2,9;yes
 1827:1131;GRAPH_SetFillStyle;void __far GRAPH_SetFillStyle(void);Graph;E684/E686=3/7;yes
-1827:11ea;GRAPH_11ea_SectorOrArc;void __far GRAPH_11ea_SectorOrArc(void);Graph;3 args→11b7+1d20, bbox=None;static
+1827:11ea;GRAPH_Circle;void __far GRAPH_Circle(void);Graph;"Circle(x,y,r)→MoveTo+Arc SI=14; VGA256 stub hooked; bbox+(115,80)=color";yes
 1827:1241;GRAPH_GetColor;void __far GRAPH_GetColor(void);Graph;AX=11;yes
 1827:131d;GRAPH_131d_ViewAdjust;void __far GRAPH_131d_ViewAdjust(void);Graph;adjusts far struct vs viewport, ran;static
 1827:13d8;GRAPH_13d8;void __far GRAPH_13d8(void);Graph;AX=10;static
 1827:13f2;GRAPH_OutText;void __far GRAPH_OutText(void);Graph;OutText at CP via OutTextXY, bbox=(50, 40, 65, 47, 60);yes
 1827:1454;GRAPH_SetTextJustify;void __far GRAPH_SetTextJustify(void);Graph;E6B4/E6B6=2/1;yes
-1827:1496;GRAPH_1496_LoadMode;void __far GRAPH_1496_LoadMode(void);Graph;INT21 file I/O, E63A=0000 ints=['INT10 AH=00 AL=13 BX=0000 CX=013F DX=00C7'];static
-1827:16e3;GRAPH_16e3_FillRect;void __far GRAPH_16e3_FillRect(void);Graph;validates vs maxXY, calls 1f7e SI=24, bbox=None E6B2=0;static
+1827:1496;GRAPH_SetTextStyle;void __far GRAPH_SetTextStyle(void);Graph;"SetTextStyle font→E6AE dir→E6B0 size→E6B2; font0 no INT21";yes
+1827:16e3;GRAPH_SetUserCharSize;void __far GRAPH_SetUserCharSize(void);Graph;"clears E6B2; TextWidth Hello 40→80 with width 16";yes
 1827:192b;GRAPH_SetAspectRatio;void __far GRAPH_SetAspectRatio(void);Graph;E66C/E66E=0200/0100;yes
 1827:193e;GRAPH_InitUnit;void __far GRAPH_InitUnit(void);Graph;unit init (make_graph_emu calls it);yes
 1827:19ea;GRAPH_GetModeRange;void __far GRAPH_GetModeRange(void);Graph;"MOV SI,0; retf 4";static
@@ -110,7 +110,7 @@ address;name;signature;unit;evidence;verified
 1827:1d20;GRAPH_FillPoly;void __far GRAPH_FillPoly(void);Graph;"MOV SI,08h; retf 0Ch";static
 1827:1d47;GRAPH_FillEllipse;void __far GRAPH_FillEllipse(void);Graph;"MOV SI,08h; retf 8";static
 1827:1d7b;GRAPH_PieSlice;void __far GRAPH_PieSlice(void);Graph;"MOV SI,08h; retf 0Ch";static
-1827:1da2;GRAPH_Circle;void __far GRAPH_Circle(void);Graph;"MOV SI,14h; retf 4 (radius path)";static
+1827:1da2;GRAPH_unk_1827_1da2;void __far GRAPH_Circle(void);Graph;"MOV SI,14h; retf 4 (radius path)";static
 1827:1dc2;GRAPH_SetColor;void __far GRAPH_SetColor(void);Graph;E660=9;yes
 1827:1dda;GRAPH_SetWriteMode;void __far GRAPH_SetWriteMode(void);Graph;MOV SI,3Ah;static
 1827:1dea;GRAPH_SetWriteMode2;void __far GRAPH_SetWriteMode2(void);Graph;MOV SI,3Ah;static
@@ -120,7 +120,7 @@ address;name;signature;unit;evidence;verified
 1827:1e4a;GRAPH_SetLineStyle;void __far GRAPH_SetLineStyle(void);Graph;SI=1Ah retf 8, ran;yes
 1827:1e67;GRAPH_GetLineSettings;void __far GRAPH_GetLineSettings(void);Graph;"MOV SI,1Ah; retf 4";static
 1827:1e7d;GRAPH_SetFillPattern;void __far GRAPH_SetFillPattern(void);Graph;"MOV SI,1Ch; retf 4";static
-1827:1e8f;GRAPH_SetTextStyle;void __far GRAPH_SetTextStyle(void);Graph;"MOV SI,22h; retf 6";static
+1827:1e8f;GRAPH_unk_1827_1e8f;void __far GRAPH_SetTextStyle(void);Graph;"MOV SI,22h; retf 6";static
 1827:1eaf;GRAPH_SetTextJustify_1827_1eaf;void __far GRAPH_SetTextJustify_1827_1eaf(void);Graph;"MOV SI,2Ch; retf 6";static
 1827:1eeb;GRAPH_SetColor2;void __far GRAPH_SetColor2(void);Graph;"MOV SI,1Eh; retf 4";static
 1827:1f12;GRAPH_OutTextXY;void __far GRAPH_OutTextXY(void);Graph;OutTextXY(100,50,'Hi') SI=08+26 bbox=(100, 50, 115, 57, 60);yes

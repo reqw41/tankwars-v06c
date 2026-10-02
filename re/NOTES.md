@@ -74,6 +74,7 @@ analyzeHeadless re/ghidra bomb25 -import re/bomb25_flat.exe -overwrite \
 - `1fcc` = GetPixel (не SetFillStyle); `1f12` = OutTextXY (SI=08+26); `1cce` = Bar; `10d2` = Rectangle (4×Line)
 - `13f2` = OutText; `1454` = SetTextJustify; `1131` = SetFillStyle; `0f93` = SetViewPort; `1042` = MoveTo
 - `1f9b` = TextWidth; `175e:0088` = Hypot; `00da`/`0124` = DegToRad/RadToDeg
+- **Addendum 1:** `11ea` = Circle (VGA256 SI=14 stub → hook в `graph_env`); `1496` = SetTextStyle; `16e3` = SetUserCharSize; `175e:0293` = IntToStr. Тесты ≥30 entry points в `tests/test_graph.py`.
 
 Эмуляция: `scripts/emu16.py` + `scripts/graph_env.py` (reloc вшитого VGA256, A000, INT10, BIOS-шрифт F000:FA6E).
 
