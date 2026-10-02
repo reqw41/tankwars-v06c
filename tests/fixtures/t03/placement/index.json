@@ -1,0 +1,308 @@
+[
+ {
+  "name": "p2_c66aca7c",
+  "seed": 3328887420,
+  "players": 2,
+  "rebound": 1,
+  "tanks": [
+   {
+    "x": 27,
+    "y": 58,
+    "power": 200,
+    "angle": 75,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 278,
+    "y": 79,
+    "power": 200,
+    "angle": 75,
+    "facing": -1,
+    "men": 100,
+    "alive": 1
+   }
+  ],
+  "vram_sha1": "75bcfb81edcd0362f55534950909b7c4e300d653"
+ },
+ {
+  "name": "p3_157098f9",
+  "seed": 359700729,
+  "players": 3,
+  "rebound": 1,
+  "tanks": [
+   {
+    "x": 35,
+    "y": 76,
+    "power": 200,
+    "angle": 75,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 170,
+    "y": 87,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 305,
+    "y": 175,
+    "power": 200,
+    "angle": 75,
+    "facing": -1,
+    "men": 100,
+    "alive": 1
+   }
+  ],
+  "vram_sha1": "c5c0572697cbb26b8661d9cd1b68dd481a5981a7"
+ },
+ {
+  "name": "p4_b4b6b1e6",
+  "seed": 3031871974,
+  "players": 4,
+  "rebound": 0,
+  "tanks": [
+   {
+    "x": 22,
+    "y": 84,
+    "power": 200,
+    "angle": 75,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 109,
+    "y": 81,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 196,
+    "y": 74,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 283,
+    "y": 140,
+    "power": 200,
+    "angle": 75,
+    "facing": -1,
+    "men": 100,
+    "alive": 1
+   }
+  ],
+  "vram_sha1": "937f740abc735c3f07ce601996ca15c9087b7860"
+ },
+ {
+  "name": "p5_91f09cd4",
+  "seed": 2448465108,
+  "players": 5,
+  "rebound": 1,
+  "tanks": [
+   {
+    "x": 33,
+    "y": 87,
+    "power": 200,
+    "angle": 75,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 95,
+    "y": 71,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 157,
+    "y": 43,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 219,
+    "y": 75,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 282,
+    "y": 125,
+    "power": 200,
+    "angle": 75,
+    "facing": -1,
+    "men": 100,
+    "alive": 1
+   }
+  ],
+  "vram_sha1": "3bbf17ba04fde6ccf88bb94f80b371203aefcaf6"
+ },
+ {
+  "name": "p6_b8caeacf",
+  "seed": 3100306127,
+  "players": 6,
+  "rebound": 1,
+  "tanks": [
+   {
+    "x": 27,
+    "y": 41,
+    "power": 200,
+    "angle": 75,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 80,
+    "y": 61,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 133,
+    "y": 92,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 186,
+    "y": 132,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 239,
+    "y": 157,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 294,
+    "y": 113,
+    "power": 200,
+    "angle": 75,
+    "facing": -1,
+    "men": 100,
+    "alive": 1
+   }
+  ],
+  "vram_sha1": "89d69ecd430bd29d8032cc9f367ff63a4e71f995"
+ },
+ {
+  "name": "p8_24812b8b",
+  "seed": 612445067,
+  "players": 8,
+  "rebound": 1,
+  "tanks": [
+   {
+    "x": 31,
+    "y": 113,
+    "power": 200,
+    "angle": 75,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 66,
+    "y": 116,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 101,
+    "y": 118,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 136,
+    "y": 136,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 171,
+    "y": 167,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 206,
+    "y": 187,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 241,
+    "y": 173,
+    "power": 200,
+    "angle": 90,
+    "facing": 1,
+    "men": 100,
+    "alive": 1
+   },
+   {
+    "x": 280,
+    "y": 147,
+    "power": 200,
+    "angle": 75,
+    "facing": -1,
+    "men": 100,
+    "alive": 1
+   }
+  ],
+  "vram_sha1": "aa7fb6871673b16d8da1d0ab13ae08e48e08ed02"
+ }
+]
