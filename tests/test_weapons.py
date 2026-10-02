@@ -5,7 +5,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts' / 'ref'))
-from weapons import sonic  # noqa: E402
+from weapons import sonic, cri  # noqa: E402
 from tprandom import TPRandom  # noqa: E402
 
 FX = ROOT / 'tests' / 'fixtures' / 't04'
@@ -19,6 +19,7 @@ def _cases(kind):
 
 
 SONIC = _cases('sonic')
+CRI = _cases('cri')
 
 
 def _load(kind, c):
@@ -44,3 +45,15 @@ def test_sonic_matches_original(kind, c):
     assert rng.seed == c['post']['seed']
     bad = [i for i in range(64000) if v[i] != post[i]]
     assert not bad, f'{len(bad)} px, first {bad[:8]}'
+
+
+@pytest.mark.parametrize('kind,c', CRI, ids=[c['name'] for _, c in CRI])
+def test_cri_matches_original(kind, c):
+    v, bg, post = _load(kind, c)
+    players = [bytearray.fromhex(h) for h in c['pre']['players']]
+    rng = TPRandom(c['pre']['seed'])
+    cri(v, bg, players, c['x'], c['y'], c['hit_color'], c['shooter'], c['weapon'], rng, c['sound'])
+    assert [bytes(p).hex() for p in players] == c['post']['players']
+    assert rng.seed == c['post']['seed']
+    bad = [i for i in range(64000) if v[i] != post[i]]
+    assert not bad, f'{len(bad)} px, first {(bad[0]%320, bad[0]//320) if bad else None}'
