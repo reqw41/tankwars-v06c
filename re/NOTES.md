@@ -101,3 +101,10 @@ $G/support/analyzeHeadless re/ghidra bomb25 \
   -postScript ApplyRtlNames.java $PWD/re/rtl/rtl_names.csv \
   -postScript ExportAll.java $PWD/re/export
 ```
+
+## Открытые вопросы (архитектор, 02.10)
+- **Circle/Arc (`1827:11ea`) в настоящей игре.** Вшитый VGA256 на SI=14h указывает на заглушку EMULATE
+  по смещению 0x10 (`C3 00 00 00 00` = ret + место под far-указатель). Обычно BGI-ядро при InitGraph
+  превращает её в переход на свою программную эмуляцию. `graph_env.make_graph_emu` обходит InitGraph,
+  поэтому эллипс в тестах рисует хук стенда, а не код игры. Выяснить при разборе взрывов (T03):
+  пройти настоящий путь InitGraph и посмотреть, чем станет driver+0x10 и что реально рисуется.
