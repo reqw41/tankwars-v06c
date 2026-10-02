@@ -441,18 +441,33 @@ class Game:
         self.need_key = False
         cs, ip = self._reg(UC_X86_REG_CS), self._reg(UC_X86_REG_IP)
         start = cs * 16 + ip
+        # until в emu_start ненадёжен (уже транслированные блоки не проверяют адрес) — останов хуком
         stop = until[0] * 16 + until[1] if until else 0xFFFFF
+        hook = None
+        self._hit_until = False
+        if until and start == stop:   # уже стоим на цели — сделать шаг, чтобы ловить следующее попадание
+            self.uc.emu_start(start, 0xFFFFF, count=1)
+            cs, ip = self._reg(UC_X86_REG_CS), self._reg(UC_X86_REG_IP)
+            start = cs * 16 + ip
+        if until and start != stop:
+            def _stop(uc, address, size, data):
+                self._hit_until = True
+                uc.emu_stop()
+            hook = self.uc.hook_add(UC_HOOK_CODE, _stop, None, stop, stop)
         try:
-            self.uc.emu_start(start, stop, count=max_insns)
+            self.uc.emu_start(start, 0xFFFFF, count=max_insns)
         except Exception as e:  # noqa: BLE001
             cs, ip = self._reg(UC_X86_REG_CS), self._reg(UC_X86_REG_IP)
             return f'error {e} at {cs:04x}:{ip:04x}'
+        finally:
+            if hook is not None:
+                self.uc.hook_del(hook)
         if self.exit_code is not None:
             return 'exit'
         if self.need_key:
             return 'key'
         cs, ip = self._reg(UC_X86_REG_CS), self._reg(UC_X86_REG_IP)
-        if until and (cs * 16 + ip) == stop:
+        if until and self._hit_until and (cs * 16 + ip) == stop:
             return 'until'
         return 'limit'
 

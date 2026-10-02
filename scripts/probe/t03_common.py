@@ -8,6 +8,18 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 from gamerun import Game, key, KEY_DOWN  # noqa: E402
 
 
+def computer_keys(players: int, ai: int = 2):
+    """Клавиши экрана игроков: всех сделать компьютерами типа ai (0 Random, 1 Mr. Stupid, 2 Lobber,
+    3 Rifleman, 4 Lob & Shoot, 5 Windless Wit, 6 Twanger)."""
+    from gamerun import KEY_RIGHT
+    ks = []
+    for i in range(players):
+        ks += [key('C')] + [KEY_DOWN] * ai + [key('\r')]
+        if i < players - 1:
+            ks.append(KEY_RIGHT)
+    return ks
+
+
 def run_to(g: Game, gseg: int, off: int, budget: int = 2_000_000_000) -> None:
     """Исполнять до адреса Ghidra gseg:off (резидентный или оверлейный сегмент)."""
     target = (g.ghidra_abs(gseg), off)
