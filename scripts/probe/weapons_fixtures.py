@@ -21,7 +21,7 @@ def players_raw(g, n):
     return [g.rd(BASE + STRIDE * i, STRIDE).hex() for i in range(1, n + 1)]
 
 
-def capture(weapons, out: Path, players=3, dos_time=(0x0D2F, 0x1A44)):
+def capture(weapons, out: Path, players=3, dos_time=(0x0D2F, 0x1A44), crumble_override=None):
     """На каждое оружие три события: земля без звука, земля со звуком, прямое попадание со звуком."""
     out.mkdir(parents=True, exist_ok=True)
     g = boot_to_round(dos_time, players=players, players_keys=computer_keys(players, 2))
@@ -37,6 +37,8 @@ def capture(weapons, out: Path, players=3, dos_time=(0x0D2F, 0x1A44)):
             hitc, y0, y1, y2, x0, x1, x2, shooter = struct.unpack('<8H', st[4:20])
             g.ww(BASE + STRIDE * shooter + 0x17, weapon)
             g.uc.mem_write(g.ds * 16 + 0x81FF, bytes([1 if sound else 0]))
+            if crumble_override is not None:
+                g.ww(0x3EE6, crumble_override)
             if mode == 'direct':
                 alive = [i for i in range(1, players + 1) if g.rd(BASE + STRIDE * i + 0x16, 1)[0]]
                 victims = [i for i in alive if i != shooter] or alive
@@ -46,12 +48,13 @@ def capture(weapons, out: Path, players=3, dos_time=(0x0D2F, 0x1A44)):
                     g.uc.mem_write(g.ds * 16 + BASE + STRIDE * i + 0x45,
                                    struct.pack('<i', [0, 50, 150, 400][(k + i) % 4]))
             vp = g.rd(0xE3AC, 10).hex()
+            crumble_pct = g.rw(0x3EE6)
             pre = {'seed': struct.unpack('<I', g.rd(0x3774, 4))[0], 'players': players_raw(g, players)}
             v0, bg = g.vram(), bg_buffer(g)
             run_to(g, g.to_ghidra(ret_seg), ret_off)
             post = {'seed': struct.unpack('<I', g.rd(0x3774, 4))[0], 'players': players_raw(g, players)}
             v1 = g.vram()
-            name = f'w{weapon:02d}_{mode}'
+            name = f'w{weapon:02d}_{mode}' if crumble_override is None else f'w{weapon:02d}_{mode}_c{crumble_override}_{k}'
             (out / f'{name}.pre.z').write_bytes(zlib.compress(v0, 9))
             (out / f'{name}.bg.z').write_bytes(zlib.compress(bg, 9))
             (out / f'{name}.post.z').write_bytes(zlib.compress(v1, 9))
@@ -62,9 +65,10 @@ def capture(weapons, out: Path, players=3, dos_time=(0x0D2F, 0x1A44)):
                    'sound': sound, 'mode': mode, 'viewport': vp,
                    'x_raw': struct.pack('<3H', x0, x1, x2).hex(),
                    'y_raw': struct.pack('<3H', y0, y1, y2).hex(),
-                   'x': x, 'y': y, 'pre': pre, 'post': post, 'ndiff': nd}
+                   'x': x, 'y': y, 'pre': pre, 'post': post, 'ndiff': nd,
+                   'crumble': crumble_pct}
             idx.append(rec)
-            print(name, f'x={x:.2f} y={y:.2f} hit={hitc} snd={sound} px={nd} vp={vp} seed {pre["seed"]:08x}->{post["seed"]:08x}',
+            print(name, f'x={x:.2f} y={y:.2f} hit={hitc} snd={sound} px={nd} cr={crumble_pct} vp={vp} seed {pre["seed"]:08x}->{post["seed"]:08x}',
                   flush=True)
             k += 1
     (out / 'index.json').write_text(json.dumps(idx, indent=1))
@@ -73,5 +77,10 @@ def capture(weapons, out: Path, players=3, dos_time=(0x0D2F, 0x1A44)):
 
 if __name__ == '__main__':
     out = Path(sys.argv[1])
-    weapons = [int(a) for a in sys.argv[2:]]
-    capture(weapons, out)
+    weapons, crumble_override = [], None
+    for a in sys.argv[2:]:
+        if a.startswith('c='):
+            crumble_override = int(a[2:])
+        else:
+            weapons.append(int(a))
+    capture(weapons, out, crumble_override=crumble_override)

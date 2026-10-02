@@ -169,6 +169,38 @@ DIRT_RADIUS = {13: 10, 14: 15, 15: 30, 16: 60}
 _FIELD = (11, 31, 309, 189)
 
 
+def explosive_dirt(v: bytearray, bg: bytes, x: float, y: float, rng, sound: bool,
+                   percent: int, vp: Viewport = _FIELD) -> None:
+    """Оружие 17 (318e:12a5). Грязь вверх, затем осыпание, если Random*100 < 2*Crumble%.
+
+    Сравнение 318e:15b6 — jae: правый операнд Real(Crumble%*2), левый Random*100.
+    Цвет попадания не читается. PutPixel отсекается вьюпортом включительно.
+    """
+    n = rng.word(100) + 300
+    rows = rng.word(8) + 3
+    tx, ty = math.trunc(x - vp[0]), math.trunc(y - vp[1])
+    pts = []
+    for row in range(1, rows + 1):
+        for _col in range(n):
+            span = rng.word(row * 10)
+            jitter = math.trunc(rng.word(span + 1) - span / 2.0)
+            pts.append((tx + jitter, ty - span + 2, row))
+    x1, y1, x2, y2 = vp
+    for px, py, row in pts:
+        if x1 <= px + x1 <= x2 and y1 <= py + y1 <= y2:
+            _pix_set(v, px + x1, py + y1, 2)
+        if sound:
+            rng.word(200)
+    # 318e:15a1 Random; 15b6 jae — осыпать, когда Random*100 < percent*2
+    if rng.real() * 100.0 < percent * 2:
+        crumble(v, bg)
+
+
+def _pix_set(v: bytearray, x: int, y: int, color: int) -> None:
+    if 0 <= x < 320 and 0 <= y < 200:
+        v[y * 320 + x] = color
+
+
 def dirt_ball(v: bytearray, x: float, y: float, weapon: int, vp: Viewport = _FIELD) -> None:
     """Диск земли цветом 2. ГСЧ не тратит, игроков не трогает. Координаты — во вьюпорте (минус 11, 31)."""
     radius = DIRT_RADIUS[weapon]
