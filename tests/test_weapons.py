@@ -5,7 +5,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts' / 'ref'))
-from weapons import sonic, cri, dirt_ball, explosive_dirt  # noqa: E402
+from weapons import sonic, cri, dirt_ball, explosive_dirt, laser  # noqa: E402
 from tprandom import TPRandom  # noqa: E402
 
 FX = ROOT / 'tests' / 'fixtures' / 't04'
@@ -22,6 +22,7 @@ SONIC = _cases('sonic')
 CRI = _cases('cri')
 DIRT = _cases('dirt')
 XDIRT = _cases('xdirt')
+LASER = _cases('laser')
 
 
 def _load(kind, c):
@@ -79,6 +80,18 @@ def test_explosive_dirt_matches_original(kind, c):
     rng = TPRandom(c['pre']['seed'])
     explosive_dirt(v, bg, c['x'], c['y'], rng, c['sound'], c['crumble'], vp)
     assert c['pre']['players'] == c['post']['players']
+    assert rng.seed == c['post']['seed']
+    bad = [i for i in range(64000) if v[i] != post[i]]
+    assert not bad, f'{len(bad)} px, first {(bad[0]%320, bad[0]//320) if bad else None}'
+
+
+@pytest.mark.parametrize('kind,c', LASER, ids=[c['name'] for _, c in LASER])
+def test_laser_matches_original(kind, c):
+    v, bg, post = _load(kind, c)
+    players = [bytearray.fromhex(h) for h in c['pre']['players']]
+    rng = TPRandom(c['pre']['seed'])
+    laser(v, bg, players, c['player'], rng, c['sound'])
+    assert [bytes(p).hex() for p in players] == c['post']['players']
     assert rng.seed == c['post']['seed']
     bad = [i for i in range(64000) if v[i] != post[i]]
     assert not bad, f'{len(bad)} px, first {(bad[0]%320, bad[0]//320) if bad else None}'

@@ -14,9 +14,11 @@ from typing import Tuple
 try:
     from explosion import ellipse_points, ring
     from crumble import crumble
+    from tanks import BARREL, SPRITE, line, W
 except ImportError:  # pragma: no cover
     from .explosion import ellipse_points, ring
     from .crumble import crumble
+    from .tanks import BARREL, SPRITE, line, W
 
 Viewport = Tuple[int, int, int, int]  # x1, y1, x2, y2
 
@@ -194,6 +196,54 @@ def explosive_dirt(v: bytearray, bg: bytes, x: float, y: float, rng, sound: bool
     # 318e:15a1 Random; 15b6 jae — осыпать, когда Random*100 < percent*2
     if rng.real() * 100.0 < percent * 2:
         crumble(v, bg)
+
+
+# Лазер, оружие 5, 2583:140f. Ствол — длина 8 (как 1062:059f). Луч идёт от дула шагом
+# (facing*cos, -sin), пока 10<x<310 и 30<y<190. В конце все пиксели цвета 0xFE
+# заменяются фоном (1062:0379): снаружи спрайта это стирает ствол и клетки луча.
+_LASER_P = 0.20000000000004547   # Real48 7e cd cc cc cc 4c, 2583:1988
+
+
+def laser(v: bytearray, bg: bytes, players: list, shooter: int, rng, sound: bool) -> None:
+    """Энергия — слово +0x2B. power урезается до энергии. С вероятностью 0.2 men -= 1.
+
+    При звуке на каждом шаге луча Random(12 * остаток), остаток = power*10, -10 за шаг.
+    Попадание в землю (цвет 2, россыпь 15 точек) в этих эталонах не случалось.
+    """
+    rec = players[shooter - 1]
+    power = _i16(rec, 0x0E)
+    energy = _i16(rec, 0x2B)
+    if power == 0:
+        return
+    if power > energy:
+        power = energy
+        _set16(rec, 0x0E, power)
+    _set16(rec, 0x2B, energy - power)
+    x, y = _i16(rec, 0), _i16(rec, 2)
+    ang, facing = _i16(rec, 0x10), _i16(rec, 0x12)
+    if rng.real() < _LASER_P:
+        _set16(rec, 0x14, _i16(rec, 0x14) - 1)
+    bdx, bdy = BARREL[ang]
+    x2, y2 = x + bdx * facing, y - bdy
+    buf = bytearray(W * 200)
+    line(buf, x, y, x2, y2, 1)
+    body = {(x + dx, y + dy) for dx, dy in SPRITE}
+    for i in range(W * 200):
+        if buf[i] and ((i % W, i // W) not in body):
+            _pix(v, bg, i % W, i // W)
+    # луч от дула. cos/sin — double; на эталонах Trunc совпал с Real48.
+    a = math.radians(ang)
+    cs, sn = math.cos(a), math.sin(a)
+    px, py = x + facing * cs * 8.0, y - sn * 8.0
+    counter = power * 10
+    while counter > 0 and 10 < px < 310 and 30 < py < 190:
+        counter -= 10
+        if sound:
+            rng.word((12 * counter) & 0xFFFF)
+        ix, iy = math.trunc(px), math.trunc(py)
+        _pix(v, bg, ix, iy)
+        px += facing * cs
+        py -= sn
 
 
 def _pix_set(v: bytearray, x: int, y: int, color: int) -> None:
