@@ -1,0 +1,41 @@
+ovl stub 0035 ovr@000008 code 1672 -> seg 1185
+stub 0035:0020 -> 1185:0024
+ovl stub 0038 ovr@000738 code 1484 -> seg 11ee
+stub 0038:0020 -> 11ee:0223
+ovl stub 003b ovr@000d90 code 13182 -> seg 124b
+stub 003b:0020 -> 124b:327c
+stub 003b:0025 -> 124b:2f99
+ovl stub 003e ovr@00438a code 11654 -> seg 1583
+stub 003e:0020 -> 1583:2531
+stub 003e:0025 -> 1583:0000
+ovl stub 0041 ovr@0074a4 code 11715 -> seg 185c
+stub 0041:0020 -> 185c:0020
+stub 0041:0025 -> 185c:0f61
+stub 0041:002a -> 185c:1da5
+stub 0041:002f -> 185c:28d9
+stub 0041:0034 -> 185c:2b76
+stub 0041:0039 -> 185c:2c29
+ovl stub 0045 ovr@00a531 code 5909 -> seg 1b39
+stub 0045:0020 -> 1b39:0020
+stub 0045:0025 -> 1b39:0386
+stub 0045:002a -> 1b39:03da
+stub 0045:002f -> 1b39:0425
+ovl stub 0049 ovr@00bdc4 code 9268 -> seg 1cab
+stub 0049:0020 -> 1cab:000d
+ovl stub 004e ovr@00e3d0 code 7311 -> seg 1eef
+stub 004e:0020 -> 1eef:0909
+stub 004e:0025 -> 1eef:10dd
+ovl stub 0051 ovr@010263 code 3417 -> seg 20b8
+stub 0051:0020 -> 20b8:08a1
+stub 0051:0025 -> 20b8:0040
+ovl stub 0054 ovr@0110d8 code 5592 -> seg 218e
+stub 0054:0020 -> 218e:00e0
+ovl stub 0632 ovr@012808 code 19307 -> seg 22ec
+stub 0632:0020 -> 22ec:0507
+stub 0632:0025 -> 22ec:053c
+stub 0632:002a -> 22ec:2359
+stub 0632:002f -> 22ec:4265
+stub 0632:0034 -> 22ec:0007
+stub 0632:0039 -> 22ec:0083
+stub 0632:003e -> 22ec:0d72
+stub 0632:0043 -> 22ec:0cf1

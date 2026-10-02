@@ -1,0 +1,251 @@
+1000:0030	Copyright 1990 by Kenneth Morse
+1000:0050	All Rights Reserved
+1000:0064	Error registering driver: 
+1000:007f	Error registering Efont: 
+1000:0099	Error registering Sfont: 
+1000:00b3	Error registering Tfont: 
+1049:0030	Birdy Bonker
+1062:0913	! WARNING !
+1062:091f	! MASS KILL SELECTED !
+1062:0936	ARE YOU SURE (Y/N)
+1062:0adf	  Game Aborted......
+1062:0b30	ARE YOU SURE YOU
+1062:0b41	WISH TO QUIT (Y/N)
+1062:0cd8	Game Status
+1062:0ce4	Sound: 
+1062:0cec	Effect (
+1062:0d01	Ground: 
+1062:0d0a	Crumbles (
+1062:0d17	The Walls: 
+1062:0d23	Rebound (
+1062:0d2d	This Round (
+1062:0d3a	The Shot: 
+1062:0d45	Invisible (
+1062:0d51	Trail (
+1062:0d59	Game: 
+1062:0d60	Number (
+1062:0d70	Tanks: 
+1062:0d78	Fall (
+1062:0d7f	Flame: 
+1062:0d87	Kills (
+1062:0d8f	Computers: 
+1062:0d9b	Buy Weapons (
+1062:0da9	Screen: 
+1062:0db2	Backgound (
+1062:0dbe	The Wind: 
+1062:0dc9	Control (
+1062:14fb	BGI Devi
+1062:1506	Driver (VGA256) 2.00 - Mar 21 19
+1062:152a	Copyright 
+1062:1582	VGA256
+1062:1635	320x200 VGA/MCGA MODE 13H
+1062:21d4	BGI Stro
+1062:21f9	Copyright 
+1062:35df	BGI Stro
+1062:3605	Copyright 
+1062:56f2	BGI V1.1
+1062:570e	Copyright 
+1651:0000	bomb.ovr
+1651:0009	Critical Overlay Error -1
+1651:0023	Overlay file 
+1651:0031	bomb.ovr not found
+1651:0044	Input compleate path to BOMB.OVR:
+175e:01e9	Graphics Error:
+175e:01f9	Aborting..
+175e:036e	vga256
+175e:0375	EURO
+175e:037a	LCOM
+175e:037f	SCRI
+175e:0384	SIMP
+175e:0389	TSCR
+175e:038e	TINY
+17af:0000	LPT1
+17c5:03bd	tDI<
+1827:0036	BGI Error: Graphics not initialized (use InitGraph)
+1827:006a	BGI Error:  Not in graphics mode
+1827:00d9	No error
+1827:00e2	(BGI) graphics not installed
+1827:00ff	Graphics hardware not detected
+1827:011e	Device driver file not found (
+1827:013f	Invalid device driver file (
+1827:015c	Not enough memory to load driver
+1827:017d	Out of memory in scan fill
+1827:0198	Out of memory in flood fill
+1827:01b4	Font file not found (
+1827:01ca	Not enough memory to load font
+1827:01e9	Invalid graphics mode for selected driver
+1827:0213	Graphics error
+1827:0222	Graphics I/O error
+1827:0235	Invalid font file (
+1827:0249	Invalid font number
+1827:025d	Invalid version
+1827:026d	Graphics error (
+1827:0976	.BGI
+1827:1491	.CHR
+1c5b:01f0	!#$456789:;<=>?uRuntime err
+1c5b:1b40	Random
+1c5b:1c40	Mr. Stupid
+1c5b:1d40	Lobber
+1c5b:1e40	Rifleman
+1c5b:1f40	Lob & Shoot
+1c5b:2040	Windless Wit
+1c5b:2140	Twanger
+1c5b:2240	Lead Ball
+1c5b:2340	Incinerator
+1c5b:2440	Mark II Incinerator
+1c5b:2540	20 Kiloton Nuke
+1c5b:2640	5 Megaton Nuke
+1c5b:2740	Laser Blaster
+1c5b:2840	Chain Reaction Inducer 4/D
+1c5b:2940	Chain Reaction Inducer 8/ND
+1c5b:2a40	Chain Reaction Inducer 8/D
+1c5b:2b40	Chain Reaction Inducer 20/ND
+1c5b:2c40	Chain Reaction Inducer 20/D
+1c5b:2d40	Hand Grenade
+1c5b:2e40	Sonic Blaster
+1c5b:2f40	Ball o Dirt
+1c5b:3040	Ball o Dirt Mark II
+1c5b:3140	Ball o Compresed Dirt
+1c5b:3240	Ball o Super-Compressed Dirt
+1c5b:3340	Explosive Dirt
+1c5b:3440	Lead Ball
+1c5b:3540	Incinerator
+1c5b:3640	Mark II Incin.
+1c5b:3740	20 Kilo Nuke
+1c5b:3840	5 Meg Nuke
+1c5b:3940	Laser
+1c5b:3a40	CRI 4/D
+2000:00f0	CRI 8/ND
+2000:01f0	CRI 8/D
+2000:02f0	CRI 20/ND
+2000:03f0	CRI 20/D
+2000:04f0	Hand Grenade
+2000:05f0	Sonic Blaster
+2000:06f0	Ball 'O' Dirt
+2000:07f0	Mark II Dirt
+2000:08f0	Pressured Dirt
+2000:09f0	High Pres. Dirt
+2000:0af0	Xplosive Dirt
+2000:0c5c	Herb's Guidance System
+2000:0d5c	Vick's Guidance System
+2000:0e5c	Herb's Guide
+2000:0f5c	Vick's Guide
+2000:1068	Energy Absorbtion Shield
+2000:1168	Inertia Dampener
+2000:1268	Energy Shield
+2000:1368	Inertia Damp.
+2000:15c8	EGAVGA
+2000:15d1	EGAVGA
+2000:15e2	IBM8514
+2000:15eb	IBM851
+2000:15fc	HERC
+2000:1605	HERC
+2000:16d6	TRIP
+2000:16e5	LITT
+2000:16f4	SANS
+2000:1703	GOTH
+2000:1712	SCRI
+2000:1721	SIMP
+2000:1730	TSCR
+2000:173f	LCOM
+2000:174e	EURO
+2185:0010	bomb1.raw
+2185:001a	bomb2.raw
+21ee:0001	  EMS being used for overlays.
+21ee:0020	  EMS not being used beacuse 
+21ee:003e	there was a Critical Overlay Error.
+21ee:0062	there was a Overlay IO Error.
+21ee:0080	I could find no EMS driver.
+21ee:009c	there is not enough EMS for overlay.
+21ee:00c1	   Memory usage Summary:
+21ee:00da	       Availiable on startup:
+21ee:00f8	    -  Needed for VGA256    :
+21ee:0116	    -  Needed for Sbuff     :
+21ee:0134	    -  Needed for Tbuff     :
+21ee:0152	    -  Needed for Cmat      :
+21ee:019d	       Left for OVR         :
+21ee:01bb	       Needed for OVR       :
+21ee:01f3	  :+              THIS IS NOT GO
+224b:0112	 FOR 
+224b:0d70	Purchase
+224b:0d79	Done
+224b:0d7e	YOU HAVE UNALLOCATED:
+224b:0d94	 DOLLARS
+224b:0d9d	YOU CURRENTLY HAVE:
+224b:2604	 Games 
+224b:260c	 Game 
+224b:2613	Played out of 
+224b:2622	Player
+224b:262d	Score
+224b:2633	Wins
+224b:2638	Continue
+224b:2f01	 Games 
+224b:2f09	 Game 
+224b:2f10	Played
+224b:2f17	   And just in case you missed them:
+224b:2f53	   Name            Score   Wins
+2583:24c8	Angle:
+2583:24cf	Power:
+2583:24d6	Direction( )
+2583:24e3	Men:
+2583:24e8	Wind: 
+2b39:1720	Birdy Bonker
+30b8:0000	Men:
+30b8:0009	Wins:
+30b8:000f	Maximum Power:
+30b8:001e	Score:
+30b8:0025	Cash:
+30b8:002b	Accesories:
+30b8:0849	: Guidance Type 
+30b8:085a	Current Target:
+30b8:088a	Please click on target
+32ec:02b1	Player 
+32ec:04d9	  Checking for Microsoft Compatible Mouse....
+32ec:0550	TANK WARS  
+32ec:0653	START
+32ec:079e	Main Menu
+32ec:0814	Effect: 
+32ec:081d	Flying: 
+32ec:0ce8	None
+32ec:0d56	None
+32ec:0d5f	Norm
+32ec:0d64	High
+32ec:0d69	Gale
+32ec:0e17	Crumble Percent:
+32ec:0e28	Rebounding Walls:
+32ec:0e3a	Trail Visible:
+32ec:0e49	Ball Visible:
+32ec:0e57	Tanks Fall:
+32ec:0e63	Explotions Kill:
+32ec:0e74	Computer Can Buy:
+32ec:0e86	Background:
+32ec:0e92	Cycle Delay:
+32ec:0e9f	Wind Force:
+32ec:1b2f	Sound Options
+32ec:1b3d	Game Options
+32ec:1b4a	Players: 
+32ec:1b54	Games: 
+32ec:1b5c	START
+32ec:272f	NAME:
+32ec:2be3	Random (  
+32ec:2c1a	     tupid
+32ec:2c2c	 obber
+32ec:2c3c	 ifleman
+32ec:2c45	Lob & Shoot (  
+32ec:2c82	 indless Wit
+32ec:2c97	 wanger
+32ec:355f	KEYBOARD
+32ec:3568	MOUSE
+32ec:356e	COMPUTER
+32ec:37b1	Random
+32ec:40e8	BOMB.CFG
+32ec:40f1	BADx
+32ec:40f6	An invalid BOMB.CFG has been found.
+32ec:411a	Please run BOMBCFG to correct the situation.
+32ec:4147	A valid BOMB.CFG file was not found in the default directory.
+32ec:4185	Please run BOMBCFG.EXE to create this file.
+32ec:423e	SPEED
+32ec:4244	FALLDELAY
+32ec:4252	SKIP
+32ec:4257	CRUDE
+32ec:425d	NOCRUDE
