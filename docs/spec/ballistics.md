@@ -98,9 +98,11 @@ Local at shot entry (`2583:01ce`):
 This is **power vs Men-derived threshold**, not a misnamed ammo counter and not a Balls-o-Dirt-only opcode — it runs for every weapon in `TW_FireShot`.
 
 ```
-stop = (power < thresh) OR (3eac == 3eb0) OR (color in 20..29)
-if power == thresh AND color == 2:
-    stop = false          # cancel dirt stop at exact threshold
+# проверяется только когда под ромбом ±1 найден цвет попадания (2 или 20..29), см. ballistics.py
+if hit_color found:
+    stop = (power < thresh) OR (3eac == 3eb0) OR (color in 20..29)
+    if power == thresh AND color == 2:
+        stop = false      # cancel dirt stop at exact threshold
 ```
 
 Then weapons **12..16** on tank colors: `vy ← −vy * 1.2`, clear guided, continue (no explode).
