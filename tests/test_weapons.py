@@ -22,7 +22,7 @@ SONIC = _cases('sonic')
 CRI = _cases('cri')
 DIRT = _cases('dirt')
 XDIRT = _cases('xdirt')
-LASER = _cases('laser')
+LASER = _cases('laser') + _cases('laser2')
 GUIDE = _cases('guide')
 
 
@@ -91,7 +91,7 @@ def test_laser_matches_original(kind, c):
     v, bg, post = _load(kind, c)
     players = [bytearray.fromhex(h) for h in c['pre']['players']]
     rng = TPRandom(c['pre']['seed'])
-    laser(v, bg, players, c['player'], rng, c['sound'])
+    laser(v, bg, players, c['player'], rng, c['sound'], c.get('rebound', False))
     assert [bytes(p).hex() for p in players] == c['post']['players']
     assert rng.seed == c['post']['seed']
     bad = [i for i in range(64000) if v[i] != post[i]]
@@ -104,3 +104,10 @@ def test_guidance_matches_original(kind, c):
     got = guided_positions(terr, c['x'], c['y'], c['angle'], c['power'], c['facing'], c['men'],
                            c['kind'], c['target_x'], c['target_y'], c['wind'])
     assert got == c['positions']
+
+
+def test_laser_fixtures_cover_ground_and_tank():
+    """laser2: луч жжёт землю (Random(20)) и танк без щита/со щитом (Random(40), щит -3), стены с отражением."""
+    names = {c['name'] for _, c in LASER}
+    assert {'g_p150_snd', 'g_p300_reb', 'g_p500_reb_snd', 't_shield', 't_shield_over'} <= names
+    assert any(c.get('rebound') for _, c in LASER) and any(c['sound'] for _, c in LASER)

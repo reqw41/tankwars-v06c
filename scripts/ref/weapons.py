@@ -14,11 +14,11 @@ from typing import Tuple
 try:
     from explosion import ellipse_points, ring
     from crumble import crumble
-    from tanks import BARREL, SPRITE, line, W
+    from tanks import BARREL, SPRITE, line, W, draw_tank
 except ImportError:  # pragma: no cover
     from .explosion import ellipse_points, ring
     from .crumble import crumble
-    from .tanks import BARREL, SPRITE, line, W
+    from .tanks import BARREL, SPRITE, line, W, draw_tank
 
 Viewport = Tuple[int, int, int, int]  # x1, y1, x2, y2
 
@@ -204,46 +204,153 @@ def explosive_dirt(v: bytearray, bg: bytes, x: float, y: float, rng, sound: bool
 _LASER_P = 0.20000000000004547   # Real48 7e cd cc cc cc 4c, 2583:1988
 
 
-def laser(v: bytearray, bg: bytes, players: list, shooter: int, rng, sound: bool) -> None:
-    """Энергия — слово +0x2B. power урезается до энергии. С вероятностью 0.2 men -= 1.
+def _trig(a: int):
+    """Cos/Sin(DegToRad(a)) ровно как RTL TP6 (data/trig.json, снято исполнением)."""
+    global _TRIG
+    if _TRIG is None:
+        import json
+        from pathlib import Path
+        from real48 import real48_to_float
+        raw = json.loads((Path(__file__).parent / 'data' / 'trig.json').read_text())
+        _TRIG = {int(k): (real48_to_float(bytes.fromhex(c)), real48_to_float(bytes.fromhex(s)))
+                 for k, (c, s) in raw.items()}
+    return _TRIG[a % 360 if a not in _TRIG else a]
 
-    При звуке на каждом шаге луча Random(12 * остаток), остаток = power*10, -10 за шаг.
-    Попадание в землю (цвет 2, россыпь 15 точек) в этих эталонах не случалось.
+
+_TRIG = None
+_K53, _R7, _R10, _R20 = 53.0, 7.0, 10.0, 20.0
+_LX1, _LX2, _LY1, _LY2 = 11.0, 309.0, 31.0, 189.0      # стены луча 2583:21e9..2305
+BEAM = 0xFE
+
+
+def _voff(x: int, y: int) -> int:
+    return (y * 320 + x) & 0xFFFF                       # 1691:0ac1/0b0a: y*256+y*64+x, 16 бит
+
+
+def _vget(v, x, y) -> int:
+    o = _voff(x, y)
+    return v[o] if o < len(v) else 0
+
+
+def _vput(v, x, y, c) -> None:
+    o = _voff(x, y)
+    if o < len(v):
+        v[o] = c
+
+
+def _in_field(x: int, y: int) -> bool:
+    return 11 <= x <= 309 and 31 <= y <= 189
+
+
+def _i32(b: bytes, o: int) -> int:
+    return struct.unpack_from('<i', b, o)[0]
+
+
+def laser(v: bytearray, bg: bytes, players: list, shooter: int, rng, sound: bool, rebound: bool = False) -> None:
+    """Ход лазера 2583:140f..24c5 (оружие 5). players — записи игроков (bytearray 0x61), меняются на месте.
+
+    Энергия +0x2B (слово) урезает power и уменьшается на power. Random < 0.2 -> men-1.
+    Луч: старт (x + 7cos·facing, y − 7sin), шаг (cos e, −sin e), e = угол (facing>0) или 180−угол;
+    счётчик 10·power, −10 за шаг. Земля (цвет 2): 15 «прожогов» Random(20) позади луча.
+    Живой танк (20..29, men>0): ещё −10 счётчика; без щита — 15 искр Random(40) цветом жертвы и их стирание;
+    щит −3 (перелив — со здоровья); луч откатывается на шаг. Стены: отражение (DS:8200) или конец.
+    Пиксели луча — 0xFE; в конце все 0xFE по экрану (смещения 1..64000) заменяются фоном (1062:0379).
     """
+    from ballistics import q
     rec = players[shooter - 1]
     power = _i16(rec, 0x0E)
-    energy = _i16(rec, 0x2B)
     if power == 0:
         return
+    energy = _i16(rec, 0x2B)
     if power > energy:
         power = energy
         _set16(rec, 0x0E, power)
     _set16(rec, 0x2B, energy - power)
-    x, y = _i16(rec, 0), _i16(rec, 2)
+    x0, y0 = _i16(rec, 0), _i16(rec, 2)
     ang, facing = _i16(rec, 0x10), _i16(rec, 0x12)
+    bdx, bdy = BARREL[ang]
+    line(v, x0, y0, x0 + bdx * facing, y0 - bdy, BEAM)                 # 157a: ствол цветом 0xFE
+    draw_tank(v, x0, y0, shooter + 19)                                   # 159b
+    counter = 10 * power
+    eff = ang if facing > 0 else 180 - ang
     if rng.real() < _LASER_P:
         _set16(rec, 0x14, _i16(rec, 0x14) - 1)
-    bdx, bdy = BARREL[ang]
-    x2, y2 = x + bdx * facing, y - bdy
-    buf = bytearray(W * 200)
-    line(buf, x, y, x2, y2, 1)
-    body = {(x + dx, y + dy) for dx, dy in SPRITE}
-    for i in range(W * 200):
-        if buf[i] and ((i % W, i // W) not in body):
-            _pix(v, bg, i % W, i // W)
-    # луч от дула. cos/sin — double; на эталонах Trunc совпал с Real48.
-    a = math.radians(ang)
-    cs, sn = math.cos(a), math.sin(a)
-    px, py = x + facing * cs * 8.0, y - sn * 8.0
-    counter = power * 10
-    while counter > 0 and 10 < px < 310 and 30 < py < 190:
+    ca, sa = _trig(ang)
+    X = q(float(x0) + q(q(ca * _R7) * float(facing)))
+    Y = q(float(y0) - q(sa * _R7))
+    dx, dy = _trig(eff)
+    dy = -dy if dy != 0.0 else dy
+    done = False
+    while True:
+        X = q(X + dx)
+        Y = q(Y + dy)
         counter -= 10
+        ix, iy = math.trunc(X), math.trunc(Y)
+        c = _vget(v, ix, iy)
+        if c == 2:
+            for kk in range(1, 16):
+                gx = math.trunc(q(X - q(float(rng.word(20)) * dx)))
+                gy = math.trunc(q(Y - q(float(rng.word(20)) * dy)))
+                if sound:
+                    rng.word((500 * kk) & 0xFFFF)
+                gc = _vget(v, gx, gy) if 0 <= gx < 320 and 0 <= gy < 200 else 0
+                if _in_field(gx, gy) and not (20 <= gc <= 29) and gc != BEAM:
+                    _vput(v, gx, gy, bg[_voff(gx, gy)])
+        if 19 < c < 30 and _i16(players[c - 20], 0x14) > 0:
+            counter -= 10
+            vrec = players[c - 20]
+            if _i32(vrec, 0x45) <= 0:
+                pts = []
+                for kk in range(1, 16):
+                    while True:
+                        sx = math.trunc(q(q(X - float(rng.word(40))) + _R20))
+                        sy = math.trunc(q(q(Y - float(rng.word(40))) + _R20))
+                        gc = _vget(v, sx, sy) if 0 <= sx < 320 and 0 <= sy < 200 else 0
+                        if gc == c or gc < 20 or (gc != BEAM and gc > 29):
+                            break
+                    pts.append((sx, sy))
+                    if sound:
+                        rng.word((500 * kk) & 0xFFFF)
+                    if _in_field(sx, sy):
+                        _vput(v, sx, sy, c)
+                for kk, (sx, sy) in enumerate(pts, 1):
+                    if sound:
+                        rng.word((500 * kk) & 0xFFFF)
+                    if _in_field(sx, sy):
+                        _vput(v, sx, sy, bg[_voff(sx, sy)])
+            sh = _i32(vrec, 0x45) - 3
+            if sh < 0:
+                _set16(vrec, 0x14, _i16(vrec, 0x14) + sh)
+                sh = 0
+            struct.pack_into('<i', vrec, 0x45, sh)
+            X = q(X - dx)
+            Y = q(Y - dy)
         if sound:
             rng.word((12 * counter) & 0xFFFF)
-        ix, iy = math.trunc(px), math.trunc(py)
-        _pix(v, bg, ix, iy)
-        px += facing * cs
-        py -= sn
+        if counter <= 0:
+            done = True
+        conds = [(dx < 0 and X <= _LX1), (dx > 0 and X >= _LX2)]
+        if rebound:
+            if dx < 0 and X <= _LX1 and dx != 0.0:
+                dx = -dx
+            if dx > 0 and X >= _LX2 and dx != 0.0:
+                dx = -dx
+            if dy < 0 and Y <= _LY1 and dy != 0.0:
+                dy = -dy
+            if dy > 0 and Y >= _LY2 and dy != 0.0:
+                dy = -dy
+        else:
+            if any(conds) or (dy < 0 and Y <= _LY1) or (dy > 0 and Y >= _LY2):
+                done = True
+        if not done:
+            _vput(v, math.trunc(X), math.trunc(Y), BEAM)
+        if counter <= 0:
+            done = True
+        if done:
+            break
+    for o in range(64000, 0, -1):
+        if o < len(v) and v[o] == BEAM:
+            v[o] = bg[o]
 
 
 # Наведение в полёте, 2583:06cf, после интегрирования шага и до Trunc.
