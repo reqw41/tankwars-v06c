@@ -81,6 +81,15 @@ analyzeHeadless re/ghidra bomb25 -import re/bomb25_flat.exe -overwrite \
 Имена: `re/rtl/rtl_names.csv`, скрипт `scripts/ApplyRtlNames.java`.
 Проверка: `pytest tests/`, покрытие `scripts/rtl_coverage.py` (границы из `re/ovl_map.txt`).
 
+## T02 — баллистика (`2583:01c0`)
+
+Выстрел: `TW_FireShot` = `2583:01c0`. Спека `docs/spec/ballistics.md`, имена `re/game/names_T02.csv`,
+модель `scripts/ref/ballistics.py`, эталон `scripts/probe/flight_trace.py`.
+
+Физика (Real48): muzzle `Cos/Sin*10*facing`; `v = power/50`; шаг `/10`; `g = +0.1/10` на vy;
+ветер `3ede/5000/10` на vx. Trunc→пиксель. Hit: цвет 2 или 20..29, ромб ±1 через `1691:0b0a`.
+Стены `8200`. В flat-образе `DS:81xx` пересекается с кодом `2583` — для unicorn зеркалить DS (напр. `0x5000`).
+
 Пересборка с RTL:
 ```
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home

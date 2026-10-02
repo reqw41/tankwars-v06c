@@ -1,0 +1,25 @@
+address;name;signature;unit;evidence;verified
+2583:01c0;TW_FireShot;void __far TW_FireShot(int player);Game2583;unicorn flight_trace + asm Real48 init/loop;yes
+2583:140f;TW_ExplosionDispatch;void __far TW_ExplosionDispatch(void);Game2583;alias 2000:6c3f same linear; called after shot via other paths;static
+1062:059f;TW_DrawBarrel;void __far TW_DrawBarrel(int player);Game1062;Cos/Sin*8*facing barrel tip draw;static
+1062:06b7;TW_DrawBarrelTip;void __far TW_DrawBarrelTip(int player);Game1062;Cos/Sin*8 tip sprite;static
+1062:0213;TW_EraseBall;void __far TW_EraseBall(void);Game1062;called from flight when ball visible;static
+1062:0352;TW_DrawTrail;void __far TW_DrawTrail(void);Game1062;trail put when DS:8202!=0;static
+1062:01e3;TW_DrawBall;void __far TW_DrawBall(void);Game1062;ball put when DS:8201==0;static
+1691:0b0a;TW_GetPixelVGA;uint8 __far TW_GetPixelVGA(int y,int x);Unit1691;Mode13h y*320+x; flight collision;yes
+1691:0ac1;TW_PutPixelVGA;void __far TW_PutPixelVGA(uint8 c,int y,int x);Unit1691;Mode13h store;static
+1e0d:4332;TW_ShotX;Real48 TW_ShotX;DS;flight position X;yes
+1e0d:4338;TW_ShotY;Real48 TW_ShotY;DS;flight position Y;yes
+1e0d:433e;TW_ShotVX;Real48 TW_ShotVX;DS;flight velocity X;yes
+1e0d:4344;TW_ShotVY;Real48 TW_ShotVY;DS;flight velocity Y;yes
+1e0d:4326;TW_ShotPrevX;Real48 TW_ShotPrevX;DS;previous X for erase;yes
+1e0d:432c;TW_ShotPrevY;Real48 TW_ShotPrevY;DS;previous Y for erase;yes
+1e0d:3ede;TW_Wind;int16 TW_Wind;DS;signed wind force this round;yes
+1e0d:3eb0;TW_StepDiv;int16 TW_StepDiv;DS;forced=10 at shot start; integration divisor;yes
+1e0d:3ee4;TW_HitColor;int16 TW_HitColor;DS;GetPixel color that stopped shot;yes
+1e0d:81fd;TW_ShotDone;uint8 TW_ShotDone;DS;1=flight ended;yes
+1e0d:8200;TW_ReboundWalls;uint8 TW_ReboundWalls;DS;1=bounce on walls;yes
+1e0d:8201;TW_BallInvisible;uint8 TW_BallInvisible;DS;1=skip ball draw (Ball Visible off);yes
+1e0d:8202;TW_TrailOn;uint8 TW_TrailOn;DS;1=draw trail;yes
+1e0d:81ff;TW_SoundOn;uint8 TW_SoundOn;DS;sound enable;static
+1e0d:3efc;TW_PlayerBase;PlayerRec TW_Players[];DS;stride 0x61; +0x3efc x,+0x3efe y,+0x3f0a power,+0x3f0c angle,+0x3f0e facing,+0x3f10 men,+0x3f13 weapon,+0x3f15 guided;yes
