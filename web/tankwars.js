@@ -14,7 +14,7 @@ export const PROFILE_DOS = { name: 'dos', W: 320, H: 200, X0: 11, Y0: 31, X1: 30
   isTmp: (c, lo, hi) => c >= lo && c <= hi,
   sky: (c) => c, trail: (shooter) => (100 - shooter) & 0xff,
   terrain: { init: 150, lo: 20, hi: 140, min: 3, max: 155, margin: (n) => 60 - 7 * (n - 2) },
-  place: { rnd: 28, off: 5 }, bgKinds: 6 };
+  place: { rnd: 28, off: 5 }, bgKinds: 6, sparkM: 390, fountainN: 400 };
 // Вектор-06Ц: 3 плоскости (24 КБ экрана, 40 КБ под программу), 8 цветов, до 4 игроков. Поле 250×226 (x 3..252, y 27..252).
 // Цвета: 0 фон, 1 земля, 2 рамка и текст, 3 временный (мяч, огонь, луч, искры), 4..7 танки игроков 1..4.
 // Буфера фона нет: фон всегда чёрный (noBg), следа и звёзд нет; ИИ считает землю на луче, не рисуя (aiNoDraw);
@@ -27,7 +27,8 @@ export const PROFILE_V06C = { name: 'v06c', W: 256, H: 256, X0: 3, Y0: 27, X1: 2
   sky: () => 0, trail: null, noBg: true, aiNoDraw: true, stream: true, fixed: true, clip: true, disc: true,
   playerColors: [[1, X, X], [1, 1, X], [X, 1, 1], [1, X, 1]],          // красный, жёлтый, голубой, пурпурный
   terrain: { init: 200, lo: 20, hi: 185, min: 3, max: 205, margin: (n) => 50 - 6 * (n - 2) },
-  place: { rnd: 24, off: 5 }, bgKinds: 1 };
+  place: { rnd: 24, off: 5 }, bgKinds: 1,
+  sparkM: 48, fountainN: 50 };       // гибель: искр и комьев земли в 8 раз меньше, чем в оригинале (скорость 8080)
 let P = PROFILE_DOS;
 export let W = 320, H = 200, SCREEN = W * H;
 export function setProfile(p) { P = p; W = p.W; H = p.H; SCREEN = W * H; VIEWPORT.splice(0, 4, p.X0, p.Y0, p.X1, p.Y1); }
@@ -1057,7 +1058,7 @@ const SHAPE = { 1: (x, y, a, b) => [x + b, y - a], 2: (x, y, a, b) => [x + b, y 
 function deathParticles(v, bg, ts, victim, rng, sound, mode, xkill) {   // 285c:0f61
   const t = ts[victim - 1], bursts = rng.word(5) + 5;
   for (let n = 0; n < bursts; n++) {
-    const m = rng.word(390) + 2, kind = rng.word(8) + 1, frames = [];
+    const m = rng.word(P.sparkM) + 2, kind = rng.word(8) + 1, frames = [];
     const gen = (f) => {
       const pts = [];
       for (let i = 0; i < m; i++) {
@@ -1094,7 +1095,7 @@ function deathParticles(v, bg, ts, victim, rng, sound, mode, xkill) {   // 285c:
 function death4(v, bg, ts, victim, rng, sound) {                          // 285c:28d9
   const t = ts[victim - 1], waves = rng.word(30) + 30;
   for (let r = 1; r <= waves; r++) {
-    const n = rng.word(400);
+    const n = rng.word(P.fountainN);
     for (let i = 0; i < n; i++) {
       const h = rng.word(10 * r), w = rng.word(h + 10);
       const dx = P.fixed ? FX.truncSubHalf(w - 5, h) : trunc((w - h / 2) - 5);
