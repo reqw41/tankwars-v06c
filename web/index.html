@@ -175,7 +175,7 @@ figcaption { font-size: 12px; color: var(--muted); }
         <button id="b-new" class="fire" style="grid-column:auto;padding:8px 16px">Начать матч</button>
         <button id="b-rnd">Случайный сид</button>
       </div>
-      <p class="note">Экран «Вектор-06Ц» — та же модель в размерах и цветах Вектора: поле 250×226 точек, три плоскости и 8 цветов (фон, земля, рамка, временный цвет мяча и огня, четыре танка), до четырёх игроков, фон всегда чёрный, следа снаряда нет; яркость танка по здоровью — сменой палитры. Строки 0–23 оставлены под панель. Экран «DOS» — оригинал один в один. Весь матч считает модель, сверенная с настоящей игрой: перетасовка игроков, стены, фон, рельеф, расстановка, ветер, ход, все виды оружия, семь вариантов гибели, семь компьютерных игроков, результаты и магазин. При одном сиде и одних настройках матч компьютеров повторяется ход в ход. Настройки по умолчанию — из BOMB.CFG оригинала. Звука нет: в оригинале он ещё и расходует случайные числа, здесь считается выключенным.</p>
+      <p class="note">Экран «Вектор-06Ц» — та же модель в размерах и цветах Вектора: поле 250×226 точек, три плоскости и 8 цветов (фон, земля, рамка, временный цвет мяча и огня, четыре танка), до четырёх игроков, фон всегда чёрный, следа снаряда нет; яркость танка по здоровью — сменой палитры. Панель хода (строки 0–23), результаты и магазин рисуются на самом экране шрифтом 5×7 в знакоместе 8×8, 32 знака в строке; кнопки рядом — только управление. Экран «DOS» — оригинал один в один. Весь матч считает модель, сверенная с настоящей игрой: перетасовка игроков, стены, фон, рельеф, расстановка, ветер, ход, все виды оружия, семь вариантов гибели, семь компьютерных игроков, результаты и магазин. При одном сиде и одних настройках матч компьютеров повторяется ход в ход. Настройки по умолчанию — из BOMB.CFG оригинала. Звука нет: в оригинале он ещё и расходует случайные числа, здесь считается выключенным.</p>
     </div>
   </section>
 
@@ -271,7 +271,11 @@ const frame = () => new Promise(requestAnimationFrame);
 const speed = () => +$('speed').value;
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function log(t) { const el = $('log'); const d = document.createElement('div'); d.textContent = t; el.prepend(d); while (el.children.length > 60) el.lastChild.remove(); }
-function render() { paint($('scr'), G.v, G.ps); }
+function render() {
+  if (isV() && G.fl) TW.drawPanel(G.v, G.phase === 'turn' || G.phase === 'busy' ? curP() : null, G.fl.wind);   // панель Вектора — на самом экране
+  paint($('scr'), G.v, G.ps);
+}
+function showScreen(draw) { if (!isV()) return; const b = new Uint8Array(65536); draw(b); paint($('scr'), b, G.ps); }
 function clearOvl() { const o = $('ovl'); if (o.width !== TW.W || o.height !== TW.H) { o.width = TW.W; o.height = TW.H; } o.getContext('2d').clearRect(0, 0, TW.W, TW.H); }
 const curP = () => G.ps[G.cur - 1];
 const humanTurn = () => G.phase === 'turn' && curP() && curP().ctrl !== 3;
@@ -326,7 +330,7 @@ function startMatch() {
   G.ps = Array.from({ length: n }, (_, i) => TW.newPlayer(i + 1, G.rounds));
   G.ps.forEach((p, i) => {                                   // экран игроков 32ec:37b8 + 32ec:0139
     const k = kinds[i];
-    if (k === 'Человек') { p.ctrl = 1; p.name = 'Игрок ' + (i + 1); }
+    if (k === 'Человек') { p.ctrl = 1; p.name = 'Player ' + (i + 1); }
     else { p.ctrl = 3; p.name = k === 'Random' ? TW.AI_PICKABLE[G.rng.word(6)] : k; }
     p.strategy = TW.pickStrategy(p.name, G.rng);
   });
@@ -353,7 +357,7 @@ async function nextTurn(gen) {
   const p = curP();
   TW.turnBegin(p.hist);                                             // 2583:27b9
   TW.autoSwitchWeapon(p);                                           // 2583:27d7
-  G.phase = 'turn'; hud();
+  G.phase = 'turn'; hud(); render();
   if (p.ctrl !== 3) return;                                         // человек: ждём ввода
   G.phase = 'busy'; hud();
   for (let i = 0; i < 5000; i++) {
@@ -370,7 +374,7 @@ function act(code) {
   const p = curP();
   if (TW.needsWeaponSwitch(p) && code !== 7) code = 8;               // 2b39:0f78: пустое оружие -> только смена
   if (code === 5) { G.phase = 'busy'; if (p.guided) p.target = +$('g-target').value || 0; shoot(G.gen); return; }
-  TW.applyCode(G.v, G.bg, p, code); render(); hud();
+  TW.applyCode(G.v, G.bg, p, code); hud(); render();
 }
 async function shoot(gen) {
   const p = curP(), shooter = p.idx, before = new Uint8Array(G.v), path = [];
@@ -412,6 +416,7 @@ async function endRound(gen, winner) {
   const last = G.round >= G.rounds;
   hud();
   const rows = G.ps.map((t, i) => `<tr><td class="n">${i + 1}</td><td><span class="sw" style="background:${css(t)}"></span>${esc(t.name)}</td><td class="n">${t.wins}</td><td class="n">${t.score}</td><td class="n">${money(t)}</td></tr>`).join('');
+  showScreen((b) => TW.drawResults(b, G.ps, G.round, G.rounds));
   const sh = $('sheet'); sh.hidden = false;
   sh.innerHTML = `<h2>${last ? 'Итог матча' : `После раунда ${G.round} из ${G.rounds}`}</h2>
     <div class="tbl"><table><tr><th class="n">№</th><th>Игрок</th><th class="n">Победы</th><th class="n">Очки</th><th class="n">Деньги</th></tr>${rows}</table></div>
@@ -432,6 +437,7 @@ function humanShop(p) {
     const sh = $('sheet'); let menu, qty, cart;
     const reset = () => { menu = TW.shopMenu(p); qty = menu.map(() => 0); cart = 0; };
     const draw = () => {
+      showScreen((b) => TW.drawShop(b, p, menu, qty, cart));
       const left = money(p) - cart;
       const rows = menu.map(([cat, i], c) => {
         const price = TW.SHOP_PRICE[cat][i], name = cat === 0 ? WEAPONS[i] : TW.SHOP_NAMES[cat][i], can = qty[c] < 9 && price <= left;
@@ -456,7 +462,7 @@ function humanShop(p) {
 useProfile();
 $('nplayers').onchange = plist; plist();
 $('profile').onchange = () => { useProfile(); plist(); startMatch(); };
-$('weapon').onchange = () => { if (humanTurn()) { curP().weapon = +$('weapon').value; hud(); } };
+$('weapon').onchange = () => { if (humanTurn()) { curP().weapon = +$('weapon').value; hud(); render(); } };
 $('g-herb').onchange = () => act(9); $('g-vick').onchange = () => act(10);
 $('g-target').onchange = () => { if (humanTurn()) curP().target = +$('g-target').value; };
 $('b-al').onclick = () => act(1); $('b-ar').onclick = () => act(2); $('b-flip').onclick = () => act(6);

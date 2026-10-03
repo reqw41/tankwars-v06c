@@ -24,7 +24,7 @@ export const PROFILE_V06C = { name: 'v06c', W: 256, H: 256, X0: 3, Y0: 27, X1: 2
   ground: 1, frame: 2, ball: 3, beam: 3, tank0: 4, nTank: 4, maxPlayers: 4,
   passable: (c) => c === 0,
   fire: () => 3, tmp: () => 3, isTmp: (c) => c === 3,
-  sky: () => 0, trail: null, noBg: true, aiNoDraw: true, stream: true, fixed: true,
+  sky: () => 0, trail: null, noBg: true, aiNoDraw: true, stream: true, fixed: true, clip: true,
   playerColors: [[1, X, X], [1, 1, X], [X, 1, 1], [1, X, 1]],          // красный, жёлтый, голубой, пурпурный
   terrain: { init: 200, lo: 20, hi: 185, min: 3, max: 205, margin: (n) => 50 - 6 * (n - 2) },
   place: { rnd: 24, off: 5 }, bgKinds: 1 };
@@ -103,7 +103,9 @@ export class TPRandom {
 }
 
 // ---------- примитивы VRAM ----------
-const off16 = (x, y) => ((y * W + x) & 0xffff);
+// Вектор: точка за пределами экрана 0..255 не пишется и читается как 0 (адрес-заглушка за концом массива).
+// На 4743 ходах самоигры таких обращений не было (work/oob.mjs), правило — страховка для порта.
+const off16 = (x, y) => (P.clip && (x < 0 || x > 255 || y < 0 || y > 255) ? 0x10000 : (y * W + x) & 0xffff);
 function poke(v, o, c) { if (o < v.length) v[o] = c; }
 function peek(v, o) { return o < v.length ? v[o] : 0; }
 
@@ -1604,4 +1606,83 @@ export function playRound(rng, ps, cfg, maxTurns = 5000) {
     if (alive.length <= 1) { winner = alive[0] || null; break; }
   }
   return { winner, turns: turns + 1, v: r.v, bg: r.bg, fl };
+}
+
+// =====================================================================================================
+// Экран Вектора целиком: шрифт, панель хода, результаты, магазин (docs/spec/v06c-screen.md).
+// Знакоместо 8×8, 32 столбца × 32 строки; текст только из 64 знаков 20h..5Fh (строчные буквы → прописные).
+// =====================================================================================================
+// Знак 5×7 в знакоместе 8×8 (столбцы 1..5, строки 0..6). 5 байт на знак — столбцы, бит 0 сверху. 320 байт.
+const FONT_HEX =
+  '0000000000' + '00005F0000' + '0007000700' + '147F147F14' + '242A7F2A12' + '2313086462' + '3649562050' + '0008070300' +
+  '001C224100' + '0041221C00' + '2A1C7F1C2A' + '08083E0808' + '0080703000' + '0808080808' + '0000606000' + '2010080402' +
+  '3E5149453E' + '00427F4000' + '7249494946' + '2141494D33' + '1814127F10' + '2745454539' + '3C4A494931' + '4121110907' +
+  '3649494936' + '464949291E' + '0000140000' + '0040340000' + '0008142241' + '1414141414' + '0041221408' + '0201590906' +
+  '3E415D594E' + '7C1211127C' + '7F49494936' + '3E41414122' + '7F4141413E' + '7F49494941' + '7F09090901' + '3E41415173' +
+  '7F0808087F' + '00417F4100' + '2040413F01' + '7F08142241' + '7F40404040' + '7F021C027F' + '7F0408107F' + '3E4141413E' +
+  '7F09090906' + '3E4151215E' + '7F09192946' + '2649494932' + '03017F0103' + '3F4040403F' + '1F2040201F' + '3F4038403F' +
+  '6314081463' + '0304780403' + '6159494D43' + '007F414141' + '0204081020' + '004141417F' + '0402010204' + '4040404040';
+export const FONT = hexBytes(FONT_HEX);
+export const TEXT_COLOR = () => P.frame;
+// col 0..31, row 0..31 — знакоместа. Фон знакоместа очищается в 0.
+export function drawChar(v, col, row, ch, color) {
+  let c = ch.toUpperCase().charCodeAt(0); if (c < 0x20 || c > 0x5f) c = 0x3f;
+  const g = (c - 0x20) * 5, x0 = col * 8, y0 = row * 8;
+  if (col < 0 || col > 31 || row < 0 || row > 31) return;
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+    const on = x >= 1 && x <= 5 && y < 7 && (FONT[g + x - 1] >> y) & 1;
+    v[(y0 + y) * W + x0 + x] = on ? color : 0;
+  }
+}
+export function drawText(v, col, row, str, color = TEXT_COLOR()) { for (let i = 0; i < str.length; i++) drawChar(v, col + i, row, str[i], color); }
+const padL = (s, n) => String(s).padStart(n).slice(-n), padR = (s, n) => String(s).padEnd(n).slice(0, n);
+export const WEAPON_NAMES = ['Lead Ball', 'Incinerator', 'Mark II Incin.', '20 Kilo Nuke', '5 Meg Nuke', 'Laser', 'CRI 4/D', 'CRI 8/ND', 'CRI 8/D', 'CRI 20/ND',
+  'CRI 20/D', 'Hand Grenade', 'Sonic Blaster', "Ball 'O' Dirt", 'Mark II Dirt', 'Pressured Dirt', 'High Pres. Dirt', 'Xplosive Dirt'];   // DS:1920+0x100*w
+// Панель хода — строки знакомест 0..2 (точки y 0..23):
+//   0: имя игрока его цветом (13)              WIND <123 / WIND 123> / WIND 0   (столбцы 21..31)
+//   1: ANG <75 или ANG 75>   POW 1000   MEN 100
+//   2: название оружия (15) xNNNN               H V — наведение: есть запас; * перед буквой — включено
+export function drawPanel(v, p, wind) {
+  for (let i = 0; i < 24 * W; i++) v[i] = 0;
+  if (!p) return;
+  drawText(v, 0, 0, padR(p.name, 13), tankColor(p.idx));
+  const w = Math.abs(wind), ws = wind < 0 ? '<' + w : wind > 0 ? w + '>' : '0';
+  drawText(v, 21, 0, 'WIND ' + padL(ws, 6));
+  drawText(v, 0, 1, 'ANG ' + padR(p.facing < 0 ? '<' + p.angle : p.angle + '>', 3) + '  POW ' + padR(p.power, 4) + '  MEN ' + padL(Math.max(p.men, 0), 3));
+  drawText(v, 0, 2, padR(WEAPON_NAMES[p.weapon], 15) + ' x' + padR(p.ammo[p.weapon], 5));
+  if (p.herb > 0) drawText(v, 26, 2, (p.guided & 1 ? '*' : ' ') + 'H');
+  if (p.vick > 0) drawText(v, 29, 2, (p.guided & 2 ? '*' : ' ') + 'V');
+}
+// Экран результатов (вместо поля): заголовок, по строке на игрока в порядке мест, подсказка.
+export function drawResults(v, ps, round, rounds) {
+  v.fill(0); frameRects(v);
+  const last = round >= rounds;
+  drawText(v, 2, 5, last ? 'FINAL RESULTS' : 'AFTER ROUND ' + round + ' OF ' + rounds);
+  drawText(v, 2, 8, '# PLAYER        WINS  SCORE');
+  ps.forEach((p, i) => {
+    const row = 10 + 2 * i;
+    drawText(v, 2, row, String(i + 1));
+    drawText(v, 4, row, padR(p.name, 13), tankColor(p.idx));
+    drawText(v, 18, row, padL(p.wins, 4) + padL(p.score, 7));
+  });
+  drawText(v, 2, 20, 'MONEY');
+  ps.forEach((p, i) => drawText(v, 8 + 6 * i, 20, padL(p.score - p.spent, 5), tankColor(p.idx)));
+  drawText(v, 2, 28, last ? 'GAME OVER' : 'PRESS ANY KEY');
+}
+// Магазин (весь экран, без рамки): строка на позицию меню; sel — выбранная строка (0..menu.length+1: дальше BUY и DONE),
+// -1 — без курсора. Позиций не больше 22 (18 видов оружия без двух непродаваемых + 2 наведения + 2 защиты = 20).
+export function drawShop(v, p, menu, qty, cart, sel = -1) {
+  v.fill(0);
+  drawText(v, 0, 0, 'SHOP');
+  drawText(v, 5, 0, padR(p.name, 13), tankColor(p.idx));
+  drawText(v, 0, 1, 'MONEY ' + padL(p.score - p.spent - cart, 6) + '   CART ' + padL(cart, 6));
+  drawText(v, 2, 3, 'ITEM            PRICE  HAVE BUY');
+  menu.forEach(([cat, i], c) => {
+    const row = 4 + c, name = cat === 0 ? WEAPON_NAMES[i] : SHOP_NAMES[cat][i];
+    drawText(v, 0, row, sel === c ? '>' : ' ');
+    drawText(v, 2, row, padR(name, 15) + padL(SHOP_PRICE[cat][i], 6) + padL(Math.min(shopHave(p, cat, i), 99999), 6) + padL(qty[c] || '', 3));
+  });
+  const row = 5 + menu.length;
+  drawText(v, 0, row, (sel === menu.length ? '>' : ' ') + ' BUY');
+  drawText(v, 10, row, (sel === menu.length + 1 ? '>' : ' ') + ' DONE');
 }

@@ -17,6 +17,10 @@ export const RAW_MAX = 0x7fffffff;
 export let debug = true;
 export function setDebug(on) { debug = on; }
 
+// Наибольшая разрядность промежуточных значений (биты модуля), копится при debug. См. docs/spec/v06c-screen.md.
+export const WIDTH = {};
+function width(name, big) { const b = (big < 0n ? -big : big).toString(2).length; if (!(WIDTH[name] >= b)) WIDTH[name] = b; }
+
 /** raw — целое Q16.16 в диапазоне int32. */
 export function guard(raw, op) {
   if (!debug) return raw;
@@ -151,6 +155,7 @@ export function mulInt(a, n) {
  *  Деление на 0 даёт 0: так q() в вещественной модели обнуляет неконечный результат. */
 export function div(a, b) {
   if (b === 0) return 0;
+  if (debug) { width('div: делимое << 16', BigInt(a) << BigInt(FRAC)); width('div: делитель', BigInt(b)); }
   return guard(Number(roundDiv(BigInt(a) << BigInt(FRAC), BigInt(b))), 'div');
 }
 
@@ -174,10 +179,12 @@ export function mulWide(a, b) {
   const half = 1n << BigInt(FRAC - 1);
   const neg = p < 0n;
   const r = ((neg ? -p : p) + half) >> BigInt(FRAC);
+  if (debug) width('mulWide: результат', r);
   return neg ? -r : r;
 }
 export function divWide(num, den) {
   if (den === 0n) return 0n;
+  if (debug) { width('divWide: делимое << 16', num << BigInt(FRAC)); width('divWide: делитель', den); }
   return roundDiv(num << BigInt(FRAC), den);
 }
 export function narrow(w, op) { return guard(Number(w), op); }
@@ -187,6 +194,7 @@ export function narrow(w, op) { return guard(Number(w), op); }
 export function sqrt(raw) {
   if (raw < 0) throw new Error('fixmath: sqrt < 0');
   if (raw === 0) return 0;
+  if (debug) width('sqrt: аргумент << 16', BigInt(raw) << BigInt(FRAC));
   return guard(Number(isqrtRound(BigInt(raw) << BigInt(FRAC))), 'sqrt');
 }
 
@@ -194,6 +202,7 @@ export function sqrt(raw) {
  *  Квадрат расстояния в 300 точек в Q16.16 не влезает, поэтому квадрат не сужается. */
 export function hypot(a, b) {
   const s = BigInt(a) * BigInt(a) + BigInt(b) * BigInt(b);
+  if (debug) width('hypot: сумма квадратов', s);
   if (s === 0n) return 0;
   return guard(Number(isqrtRound(s)), 'hypot');
 }

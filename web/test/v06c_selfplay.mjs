@@ -53,8 +53,21 @@ for (const [n, seed] of CASES) {
   }
   out.push({ players: n, seed, rounds });
 }
+// экраны: панель хода, результаты, магазин — на фиксированном состоянии
+{
+  const rng = new TW.TPRandom(31337);
+  const ps = ['Twanger', 'Lob & Shoot', 'Windless Wit', 'Player 4'].map((nm, i) => { const p = TW.newPlayer(i + 1, 10); p.name = nm; return p; });
+  ps[0].score = 45700; ps[0].wins = 2; ps[0].ammo[5] = 1000; ps[1].score = 11460; ps[1].spent = 3000; ps[1].wins = 1; ps[1].herb = 5; ps[1].vick = 5; ps[1].guided = 1;
+  const r = TW.roundStart(rng, ps, 1, 0, 2);
+  TW.drawPanel(r.v, ps[1], r.wind);
+  const res = new Uint8Array(65536); TW.drawResults(res, ps, 2, 10);
+  const shop = new Uint8Array(65536), menu = TW.shopMenu(ps[0]), qty = menu.map(() => 0); qty[1] = 2; TW.drawShop(shop, ps[0], menu, qty, 8000, 1);
+  for (const [nm, buf] of [['panel', r.v], ['results', res], ['shop', shop]]) { if (buf.some((c) => c > 7)) problems.push(`экран ${nm}: цвет вне 0..7`); }
+  out.push({ screens: { panel: sha(r.v), results: sha(res), shop: sha(shop) } });
+}
 console.log(`матчей ${CASES.length}, раундов ${CASES.length * ROUNDS}, ходов ${turns}; нарушений инвариантов: ${problems.length}`);
 for (const p of problems.slice(0, 10)) console.log('  ' + p);
+if (process.argv.includes('--width')) { const FX = await import('../fixmath.js'); console.log('наибольшая разрядность (бит модуля):'); for (const [k, b] of Object.entries(FX.WIDTH)) console.log(`  ${k}: ${b}`); }
 if (process.argv.includes('--update') || !existsSync(GOLD)) { writeFileSync(GOLD, JSON.stringify(out, null, 1)); console.log('золотые хеши записаны'); }
 else { const same = JSON.stringify(json(GOLD)) === JSON.stringify(out); console.log(same ? 'OK  совпадает с золотыми хешами' : 'FAIL отличается от золотых хешей'); if (!same) process.exit(1); }
 process.exit(problems.length ? 1 : 0);
