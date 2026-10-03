@@ -1,19 +1,12 @@
-; Знак и строка: drawChar / drawText эталона. Шрифт 64×5 байт, бит 0 — верх.
-; Знакоместо 8×8 = один столбец байт; фон клетки пишется 0.
+; Знак и строка: drawChar / drawText. Шрифт 64×8 байт-строк (font2rows.mjs из FONT эталона).
 
 font:
 	include	"font.inc"
 
 draw_char:
 	ld	a, (ch_col)
-	and	0x80
-	ret	nz
-	ld	a, (ch_col)
 	cp	32
 	ret	nc
-	ld	a, (ch_row)
-	and	0x80
-	ret	nz
 	ld	a, (ch_row)
 	cp	32
 	ret	nc
@@ -32,106 +25,101 @@ dc_qm:
 	ld	a, 0x3F
 dc_ok:
 	sub	0x20
-	ld	e, a
-	ld	d, 0
-	ld	h, d
 	ld	l, a
+	ld	h, 0
 	add	hl, hl
 	add	hl, hl
-	add	hl, de
+	add	hl, hl
 	ld	de, font
 	add	hl, de
 	ld	(ch_gly), hl
 	ld	a, (ch_col)
 	or	0xA0
-	ld	(ch_h), a
+	ld	d, a
+	ld	b, a
 	ld	a, (ch_row)
 	add	a, a
 	add	a, a
 	add	a, a
 	cpl
-	ld	(ch_l), a
-	xor	a
-	ld	(ch_yi), a
-dc_y:
-	ld	a, (ch_yi)
-	cp	7
-	ld	c, 0
-	jp	z, dc_put
-	ld	hl, (ch_gly)
-	ld	c, 0
-	ld	a, 0x40
-	ld	(ch_m), a
-	ld	b, 5
-dc_colb:
-	ld	a, (hl)
 	ld	e, a
-	ld	a, (ch_yi)
-	or	a
-	jp	z, dc_tst
-	ld	d, a
-dc_shr:
-	xor	a
-	ld	a, e
-	rra
-	ld	e, a
-	dec	d
-	jp	nz, dc_shr
-dc_tst:
-	ld	a, e
-	and	1
-	jp	z, dc_nx
-	ld	a, (ch_m)
-	or	c
-	ld	c, a
-dc_nx:
-	ld	a, (ch_m)
-	or	a
-	rra
-	ld	(ch_m), a
-	inc	hl
-	dec	b
-	jp	nz, dc_colb
-dc_put:
-	ld	a, (ch_h)
-	ld	h, a
-	ld	a, (ch_l)
-	ld	l, a
 	ld	a, (ch_c)
-	ld	b, a
-	call	dc_plane
+	cp	2
+	jp	z, dc_c2
+	ld	b, 8
+dc_y:
+	ld	hl, (ch_gly)
+	ld	c, (hl)
+	inc	hl
+	ld	(ch_gly), hl
+	ld	h, d
+	ld	l, e
+	ld	a, (ch_c)
+	rrca
+	jp	nc, dc_a0
+	ld	a, c
+	ld	(hl), a
+	jp	dc_a1
+dc_a0:
+	xor	a
+	ld	(hl), a
+dc_a1:
 	ld	a, h
 	add	a, 0x20
 	ld	h, a
-	call	dc_plane
+	ld	a, (ch_c)
+	rrca
+	rrca
+	jp	nc, dc_b0
+	ld	a, c
+	ld	(hl), a
+	jp	dc_b1
+dc_b0:
+	xor	a
+	ld	(hl), a
+dc_b1:
 	ld	a, h
 	add	a, 0x20
 	ld	h, a
-	call	dc_plane
-	ld	a, (ch_l)
-	dec	a
-	ld	(ch_l), a
-	ld	a, (ch_yi)
-	inc	a
-	ld	(ch_yi), a
-	cp	8
+	ld	a, (ch_c)
+	rrca
+	rrca
+	rrca
+	jp	nc, dc_c0
+	ld	a, c
+	ld	(hl), a
+	jp	dc_c1
+dc_c0:
+	xor	a
+	ld	(hl), a
+dc_c1:
+	dec	e
+	dec	b
 	jp	nz, dc_y
 	ret
 
-dc_plane:
-	ld	a, b
-	rrca
-	ld	b, a
-	jp	nc, dc_z
-	ld	a, c
-	ld	(hl), a
-	ret
-dc_z:
+dc_c2:
+	ld	hl, (ch_gly)
+	dup	8
+	ld	c, (hl)
+	inc	hl
+	ex	de, hl
 	xor	a
 	ld	(hl), a
+	ld	a, h
+	add	a, 0x20
+	ld	h, a
+	ld	(hl), c
+	add	a, 0x20
+	ld	h, a
+	xor	a
+	ld	(hl), a
+	ld	h, b
+	dec	l
+	ex	de, hl
+	edup
 	ret
 
-; DE = адрес строки, B = длина, ch_col/ch_row/ch_c заданы
 draw_text:
 	ld	a, b
 	or	a
@@ -160,7 +148,3 @@ ch_row:	db	0
 ch:	db	0
 ch_c:	db	0
 ch_gly:	dw	0
-ch_h:	db	0
-ch_l:	db	0
-ch_yi:	db	0
-ch_m:	db	0
