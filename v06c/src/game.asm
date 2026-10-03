@@ -615,6 +615,7 @@ gm_p:		dw	0
 	include	"aiplan.asm"
 	include	"ailob.asm"
 	include	"aiwit.asm"
+	include	"airifle.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"
