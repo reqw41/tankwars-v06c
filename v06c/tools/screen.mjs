@@ -1,10 +1,10 @@
 // Экран Вектора (три плоскости A000/C000/E000) → массив 256×256 индексов 0..7, как v[y*256+x] эталона.
 
-/** Адрес байта и маска бита точки (x, y) в плоскости. y=0 — верх, бит 7 — левая точка. */
+/** Адрес байта и маска бита точки (x, y) в плоскости. y=0 — верх (младший байт адреса 255-y), бит 7 — левая точка. */
 export function pixelLoc(x, y) {
   const col = x >> 3;
   const mask = 0x80 >> (x & 7);
-  const off = col * 256 + y;
+  const off = col * 256 + (255 - y);
   return {
     col, mask, y, off,
     a000: 0xA000 + off,
@@ -17,9 +17,9 @@ export function planesToScreen(mem) {
   const v = new Uint8Array(256 * 256);
   for (let y = 0; y < 256; y++) {
     for (let col = 0; col < 32; col++) {
-      const a = mem[0xA000 + col * 256 + y];
-      const b = mem[0xC000 + col * 256 + y];
-      const c = mem[0xE000 + col * 256 + y];
+      const a = mem[0xA000 + col * 256 + (255 - y)];
+      const b = mem[0xC000 + col * 256 + (255 - y)];
+      const c = mem[0xE000 + col * 256 + (255 - y)];
       for (let bit = 0; bit < 8; bit++) {
         const mask = 0x80 >> bit;
         const x = col * 8 + bit;

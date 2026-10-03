@@ -8,3 +8,4 @@ work/*/gh/
 work/*/export/
 work/*/*.log
 __pycache__/
+v06c/build/
