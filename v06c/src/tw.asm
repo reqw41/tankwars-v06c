@@ -38,6 +38,7 @@ MODE_UI		equ	16
 MODE_DISC	equ	17
 MODE_SHOW	equ	18
 MODE_TERRAIN	equ	19
+MODE_FX		equ	20
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -100,6 +101,8 @@ entry:
 	jp	z, do_show
 	cp	MODE_TERRAIN
 	jp	z, do_terrain
+	cp	MODE_FX
+	jp	z, do_fx
 	jp	done
 done:
 	halt
@@ -705,6 +708,93 @@ do_terrain:
 	call	copy_b
 	jp	done
 
+; арифметика: записи LIST по 9 байт (операция, a, b) -> RESULT по 8 байт
+; 1 mul, 2 div, 3 idiv (b = делитель), 4 sqrt, 5 hypot, 6 sincos (a = градусы) -> cos, sin, 7 atan -> байт, 8 trunc -> слово
+do_fx:
+	ld	hl, (PARAM_COUNT)
+	ld	(left), hl
+	ld	hl, LIST
+	ld	(list_ptr), hl
+	ld	hl, RESULT
+	ld	(res_ptr), hl
+dfx_lp:
+	ld	hl, (left)
+	ld	a, h
+	or	l
+	jp	z, done
+	dec	hl
+	ld	(left), hl
+	ld	hl, (list_ptr)
+	ld	a, (hl)
+	ld	(fx_op), a
+	inc	hl
+	ex	de, hl
+	ld	hl, fx_a
+	ld	b, 8
+	call	fx_copy			; a и b подряд: fx_a, fx_b
+	ex	de, hl
+	ld	(list_ptr), hl
+	ld	a, (fx_op)
+	dec	a
+	jp	z, dfx_mul
+	dec	a
+	jp	z, dfx_div
+	dec	a
+	jp	z, dfx_idiv
+	dec	a
+	jp	z, dfx_sqrt
+	dec	a
+	jp	z, dfx_hyp
+	dec	a
+	jp	z, dfx_sc
+	dec	a
+	jp	z, dfx_atan
+	call	fx_trunc
+	ld	(fx_a), hl
+	jp	dfx_out
+dfx_mul:
+	call	fx_mul
+	jp	dfx_out
+dfx_div:
+	call	fx_div
+	jp	dfx_out
+dfx_idiv:
+	ld	hl, (fx_b)
+	ex	de, hl
+	call	fx_idiv
+	jp	dfx_out
+dfx_sqrt:
+	call	fx_sqrt
+	jp	dfx_out
+dfx_hyp:
+	call	fx_hypot
+	jp	dfx_out
+dfx_atan:
+	call	fx_atan
+	ld	(fx_a), a
+	jp	dfx_out
+dfx_sc:
+	ld	hl, (fx_a)
+	call	fx_sincos
+	ld	hl, (res_ptr)
+	ld	de, fx_cos
+	ld	b, 8
+	call	fx_copy			; cos и sin подряд
+	ld	(res_ptr), hl
+	jp	dfx_lp
+dfx_out:
+	ld	hl, (res_ptr)
+	ld	de, fx_a
+	ld	b, 4
+	call	fx_copy
+	inc	hl
+	inc	hl
+	inc	hl
+	inc	hl
+	ld	(res_ptr), hl
+	jp	dfx_lp
+fx_op:	db	0
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -817,6 +907,7 @@ kernel_start:
 	include	"fill.asm"
 	include	"disc.asm"
 	include	"terrain.asm"
+	include	"fx.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"
@@ -846,6 +937,7 @@ rom_end:
 	display	"pal_apply=", /h, pal_apply, "-", /h, pal_apply_end, " bytes ", /d, pal_apply_end - pal_apply
 	display	"draw_panel=", /h, draw_panel, "-", /h, draw_panel_end, " bytes ", /d, draw_panel_end - draw_panel
 	display	"disc=", /h, disc, "-", /h, disc_end, " bytes ", /d, disc_end - disc
+	display	"fx=", /h, fx_shl, "-", /h, fx_end, " bytes ", /d, fx_end - fx_shl
 	display	"stand=", /d, kernel_start - 0x0100
 	display	"kernel=", /d, kernel_end - kernel_start
 	display	"rom=", /d, rom_end - 0x0100

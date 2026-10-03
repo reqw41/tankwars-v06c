@@ -8,6 +8,7 @@ ASM="$ROOT/tools/bin/sjasmplus"
 mkdir -p v06c/build
 node v06c/tools/font2rows.mjs
 node v06c/tools/disc2tab.mjs
+node v06c/tools/fx2tab.mjs
 
 out=$($ASM --i8080 --fullpath -i v06c/src \
 	--lst=v06c/build/tw.lst --sym=v06c/build/tw.sym --sld=v06c/build/tw.sld \
