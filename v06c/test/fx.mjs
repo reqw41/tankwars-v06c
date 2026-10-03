@@ -9,7 +9,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const L = parseSym(path.join(ROOT, 'v06c/build/tw.sym'));
 const rom = new Uint8Array(fs.readFileSync(path.join(ROOT, 'v06c/build/tw.rom')));
 const machine = createMachine();
-const PARAM = 0x80, LIST = 0x4000, RESULT = 0x7000, MODE_FX = 20;
+const PARAM = 0x80, LIST = 0x6400, RESULT = 0x7C00, MODE_FX = 20;
 const le = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
 const i32 = (m, o) => (m[o] | (m[o + 1] << 8) | (m[o + 2] << 16) | (m[o + 3] << 24)) | 0;
 let seed = 12345; const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296;
@@ -67,7 +67,7 @@ const fits = (f) => { try { FX.setDebug(true); const v = f(); FX.setDebug(false)
 { // синус и косинус: все углы -360..720
   const recs = [], want = [];
   for (let d = -360; d <= 720; d++) { recs.push([6, d, 0]); const [c, s] = FX.sincos(d); want.push([c, s]); }
-  batch('синус и косинус', recs, want, (m, o) => [i32(m, o), i32(m, o + 4)]);
+  for (let k = 0; k < recs.length; k += 550) batch('синус и косинус', recs.slice(k, k + 550), want.slice(k, k + 550), (m, o) => [i32(m, o), i32(m, o + 4)]);   // список и результат не должны пересечься
 }
 { // арктангенс
   const recs = [], want = [];
