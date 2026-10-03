@@ -16,36 +16,54 @@ fill_screen:
 	rrca
 	sbc	a, a
 	ld	(fl_p2), a
-	ld	hl, 0xA000
 	ld	a, (fl_p0)
-	call	fill_8k
 	ld	hl, 0xC000
-	ld	a, (fl_p1)
 	call	fill_8k
+	ld	a, (fl_p1)
 	ld	hl, 0xE000
+	call	fill_8k
 	ld	a, (fl_p2)
+	ld	hl, 0x0000
 	jp	fill_8k
 
-; HL начало плоскости, A байт, 32 столбца × 256.
+; A байт, HL = адрес сразу за плоскостью (C000/E000/0000). 4096× PUSH.
 fill_8k:
-	ld	d, 32
-f8c:
+	ld	(fl_end), hl
+	ld	d, a
 	ld	e, a
-f8r:
-	ld	(hl), a
-	inc	l
-	jp	nz, f8r
-	inc	h
-	ld	a, e
-	dec	d
-	jp	nz, f8c
+	ld	hl, 0
+	add	hl, sp
+	ld	(fl_save), hl
+	ld	hl, (fl_end)
+	ld	sp, hl
+	ld	b, 0
+f8_lp:
+	push	de
+	push	de
+	push	de
+	push	de
+	push	de
+	push	de
+	push	de
+	push	de
+	push	de
+	push	de
+	push	de
+	push	de
+	push	de
+	push	de
+	push	de
+	push	de
+	dec	b
+	jp	nz, f8_lp
+	ld	hl, (fl_save)
+	ld	sp, hl
 	ret
 
 clear_screen:
 	xor	a
 	jp	fill_screen
 
-; Строки y=0..23 (L=232..255) во всех столбцах трёх плоскостей, цвет 0.
 clear_panel:
 	xor	a
 	ld	h, 0xA0
@@ -57,10 +75,24 @@ clr24:
 	ld	d, 32
 c24c:
 	ld	l, 232
-c24r:
+	dup	3
 	ld	(hl), a
 	inc	l
-	jp	nz, c24r
+	ld	(hl), a
+	inc	l
+	ld	(hl), a
+	inc	l
+	ld	(hl), a
+	inc	l
+	ld	(hl), a
+	inc	l
+	ld	(hl), a
+	inc	l
+	ld	(hl), a
+	inc	l
+	ld	(hl), a
+	inc	l
+	edup
 	inc	h
 	dec	d
 	jp	nz, c24c
@@ -73,3 +105,5 @@ clear_panel_end:
 fl_p0:	db	0
 fl_p1:	db	0
 fl_p2:	db	0
+fl_save:	dw	0
+fl_end:	dw	0
