@@ -49,6 +49,7 @@ MODE_ACTION	equ	27
 MODE_DEATH	equ	28
 MODE_SHOP	equ	29
 MODE_TURN	equ	30
+MODE_AISTEP	equ	31
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -133,6 +134,8 @@ entry:
 	jp	z, do_shop_ai
 	cp	MODE_TURN
 	jp	z, do_turn
+	cp	MODE_AISTEP
+	jp	z, do_aistep
 	jp	done
 done:
 	halt
@@ -1135,6 +1138,49 @@ do_turn:
 	call	copy_b
 	jp	done
 
+; шаг ИИ и служебное: LIST = записи игроков; PARAM_N = число игроков; PARAM_KIND = что вызвать:
+; 1 choose_code (PARAM_C = место) -> RESULT[0] = код; 2 turn_begin (PARAM_C = место);
+; 3 next_alive (PARAM_C = текущее место) -> RESULT[0]; 4 round_winner -> RESULT[0] = CF (0/1), RESULT[1] = A.
+do_aistep:
+	ld	a, (PARAM_N)
+	ld	(n_players), a
+	ld	hl, LIST
+	ld	de, players
+	call	dm_copy
+	ld	a, (PARAM_KIND)
+	dec	a
+	jp	z, das_1
+	dec	a
+	jp	z, das_2
+	dec	a
+	jp	z, das_3
+	call	round_winner
+	ld	(RESULT + 1), a
+	ld	a, 0
+	jp	nc, das_4
+	inc	a
+das_4:
+	ld	(RESULT), a
+	jp	das_e
+das_1:
+	ld	a, (PARAM_C)
+	call	choose_code
+	ld	(RESULT), a
+	jp	das_e
+das_2:
+	ld	a, (PARAM_C)
+	call	turn_begin
+	jp	das_e
+das_3:
+	ld	a, (PARAM_C)
+	call	next_alive
+	ld	(RESULT), a
+das_e:
+	ld	hl, players
+	ld	de, LIST
+	call	dm_copy
+	jp	done
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -1258,6 +1304,7 @@ kernel_start:
 	include	"action.asm"
 	include	"death.asm"
 	include	"turn.asm"
+	include	"aistep.asm"
 	include	"shop.asm"
 	include	"barrel.asm"
 	include	"text.asm"
