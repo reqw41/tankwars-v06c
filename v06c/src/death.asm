@@ -676,10 +676,484 @@ rc_nx:
 	ld	a, (dt_rc0)
 	jp	putpixel
 
+; ===== варианты 0 и 2: обломки =====
+; Обломок: X, Y, VX, VY (Q16.16, координаты во вьюпорте поля). Шаг: X += VX; Y += VY; VY += 0.007; VX += ветер/5000.
+
+; --- 0: одиннадцать обломков по очереди, каждый кончается вспышкой ---
 death0:
+	call	dt_frag_setup
+	ld	a, 11
+d0_f:
+	ld	(dt_cnt), a
+	call	dt_frag_new
+d0_s:
+	call	dt_frag_step		; A = цвет под обломком, dt_px/dt_py
+	ld	b, 0			; done
+	cp	1
+	jp	z, d0_d1
+	cp	2
+	jp	nz, d0_t
+d0_d1:
+	ld	b, 1
+d0_t:
+	ld	c, a
+	ld	a, b
+	ld	(dt_done), a
+	ld	a, c
+	ld	de, 5
+	call	dt_frag_tank		; CF = 1 — упёрся в щит
+	jp	nc, d0_b
+	ld	a, 1
+	ld	(dt_done), a
+d0_b:	; py < 0, py > 256, px < 0, px > 256
+	ld	hl, (dt_py)
+	ld	de, 256
+	call	dt_range
+	jp	c, d0_d2
+	ld	hl, (dt_px)
+	ld	de, 256
+	call	dt_range
+	jp	nc, d0_p
+d0_d2:
+	ld	a, 1
+	ld	(dt_done), a
+d0_p:
+	call	dt_frag_put
+	ld	a, (dt_done)
+	or	a
+	jp	z, d0_s
+	xor	a
+	call	dt_blast
+	ld	a, (dt_cnt)
+	dec	a
+	jp	nz, d0_f
+	jp	dt_outro
+
+; --- 2: одиннадцать обломков разом, вспышки потом ---
 death2:
+	call	dt_frag_setup
+	ld	hl, dt_frags
+	ld	a, 11
+d2_n:
+	ld	(dt_cnt), a
+	push	hl
+	call	dt_frag_new
+	pop	hl
+	ld	de, dt_f
+	ld	b, 16
+	call	fx_copy
+	ld	(hl), 0			; dead
+	ld	de, 5
+	add	hl, de
+	ld	a, (dt_cnt)
+	dec	a
+	jp	nz, d2_n
+d2_pass:
+	xor	a
+	ld	(dt_any), a
+	ld	hl, dt_frags
+	ld	a, 11
+d2_f:
+	ld	(dt_cnt), a
+	ld	(dt_fp), hl
+	ld	de, 16
+	add	hl, de
+	ld	a, (hl)
+	or	a
+	jp	nz, d2_nx		; уже остановился
+	ld	hl, dt_f
+	ex	de, hl
+	ld	hl, (dt_fp)
+	ex	de, hl
+	ld	b, 16
+	call	fx_copy			; запись -> рабочая копия
+	call	dt_frag_step
+	ld	b, a
+	ld	a, 1
+	ld	(dt_any), a
+	xor	a
+	ld	(dt_done), a
+	ld	a, b
+	cp	1
+	jp	z, d2_d1
+	cp	2
+	jp	nz, d2_t
+d2_d1:
+	ld	a, 1
+	ld	(dt_done), a
+	ld	a, b
+d2_t:
+	ld	de, 10
+	call	dt_frag_tank
+	jp	nc, d2_b
+	ld	a, 1
+	ld	(dt_done), a
+d2_b:	; py < 0, py > Y1 − Y0, px < 0, px > X1 − X0
+	ld	hl, (dt_py)
+	ld	de, DT_Y1 - DT_Y0
+	call	dt_range
+	jp	c, d2_d2
+	ld	hl, (dt_px)
+	ld	de, DT_X1 - DT_X0
+	call	dt_range
+	jp	nc, d2_p
+d2_d2:
+	ld	a, 1
+	ld	(dt_done), a
+d2_p:
+	call	dt_frag_put
+	ld	hl, (dt_fp)		; рабочая копия -> запись
+	ld	de, dt_f
+	ld	b, 16
+	call	fx_copy
+	ld	a, (dt_done)
+	or	a
+	jp	z, d2_nx
+	ld	(hl), a			; dead = 1, конечная точка
+	inc	hl
+	ld	a, (dt_px)
+	ld	(hl), a
+	inc	hl
+	ld	a, (dt_px + 1)
+	ld	(hl), a
+	inc	hl
+	ld	a, (dt_py)
+	ld	(hl), a
+	inc	hl
+	ld	a, (dt_py + 1)
+	ld	(hl), a
+d2_nx:
+	ld	hl, (dt_fp)
+	ld	de, 21
+	add	hl, de
+	ld	a, (dt_cnt)
+	dec	a
+	jp	nz, d2_f
+	ld	a, (dt_any)
+	or	a
+	jp	nz, d2_pass
+	; вспышки в точках остановки
+	ld	hl, dt_frags + 17
+	ld	a, 11
+d2_bl:
+	ld	(dt_cnt), a
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	inc	hl
+	ex	de, hl
+	ld	(dt_px), hl
+	ex	de, hl
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	ex	de, hl
+	ld	(dt_py), hl
+	ex	de, hl
+	ld	de, 18
+	add	hl, de
+	push	hl
+	ld	a, 1
+	call	dt_blast
+	pop	hl
+	ld	a, (dt_cnt)
+	dec	a
+	jp	nz, d2_bl
+	jp	dt_outro
+
+; общее начало: 54 случайных числа, ветер/5000, координаты танка во вьюпорте
+dt_frag_setup:
+	ld	a, 54
+	call	dt_burn
+	ld	hl, 0
+	ld	(fx_a), hl
+	ld	hl, (dt_wind)
+	ld	(fx_a + 2), hl
+	ld	de, 5000
+	call	fx_idiv
+	ld	hl, dt_wq
+	ld	de, fx_a
+	ld	b, 4
+	jp	fx_copy
+; A раз взять Random(65535)
+dt_burn:
+	ld	(dt_bn), a
+dt_burn1:
+	ld	de, 0xFFFF
+	call	random
+	ld	a, (dt_bn)
+	dec	a
+	ld	(dt_bn), a
+	jp	nz, dt_burn1
 	ret
+; новый обломок в рабочей копии dt_f: X = tx, Y = ty, VX = 0.5 − Random, VY = 0.1 − Random
+dt_frag_new:
+	ld	hl, 0
+	ld	(dt_f), hl
+	ld	(dt_f + 4), hl
+	ld	a, (dt_x)
+	sub	DT_X0
+	ld	l, a
+	ld	(dt_f + 2), hl
+	ld	a, (dt_y)
+	sub	DT_Y0
+	ld	l, a
+	ld	(dt_f + 6), hl
+	call	rnd_hi
+	ld	de, dt_f + 8
+	ld	bc, 32768
+	call	dt_vel
+	call	rnd_hi
+	ld	de, dt_f + 12
+	ld	bc, 6554
+; (DE) = BC − HL, 32 бита со знаком
+dt_vel:
+	ld	a, c
+	sub	l
+	ld	(de), a
+	inc	de
+	ld	a, b
+	sbc	a, h
+	ld	(de), a
+	inc	de
+	ld	a, 0
+	sbc	a, 0
+	ld	(de), a
+	inc	de
+	ld	(de), a
+	ret
+; шаг обломка; на выходе dt_px, dt_py (вьюпорт, слова) и A = цвет точки под ним (0 за экраном)
+dt_frag_step:
+	ld	hl, dt_f
+	ld	de, dt_f + 8
+	ld	b, 4
+	call	fx_addm			; X += VX
+	ld	hl, dt_f + 4
+	ld	de, dt_f + 12
+	ld	b, 4
+	call	fx_addm			; Y += VY
+	ld	hl, dt_f + 12		; VY += 459
+	ld	a, (hl)
+	add	a, 459 & 255
+	ld	(hl), a
+	inc	hl
+	ld	a, (hl)
+	adc	a, 459 >> 8
+	ld	(hl), a
+	inc	hl
+	ld	a, (hl)
+	adc	a, 0
+	ld	(hl), a
+	inc	hl
+	ld	a, (hl)
+	adc	a, 0
+	ld	(hl), a
+	ld	hl, dt_f + 8		; VX += ветер/5000
+	ld	de, dt_wq
+	ld	b, 4
+	call	fx_addm
+	ld	hl, fx_a
+	ld	de, dt_f
+	ld	b, 4
+	call	fx_copy
+	call	fx_trunc
+	ld	(dt_px), hl
+	ld	hl, fx_a
+	ld	de, dt_f + 4
+	ld	b, 4
+	call	fx_copy
+	call	fx_trunc
+	ld	(dt_py), hl
+	; цвет точки (px + X0, py + Y0), если она на экране
+	ld	hl, (dt_px)
+	ld	de, DT_X0
+	add	hl, de
+	ld	a, h
+	or	a
+	jp	nz, dt_fs0
+	ld	b, l
+	ld	hl, (dt_py)
+	ld	de, DT_Y0
+	add	hl, de
+	ld	a, h
+	or	a
+	jp	nz, dt_fs0
+	ld	d, b
+	ld	e, l
+	jp	getpixel
+dt_fs0:
+	xor	a
+	ret
+; обломок над танком: A = цвет, DE = добавка к урону (5 или 10). CF = 1 — у танка щит (обломок останавливается);
+; иначе при включённом xkill танк теряет Random(10) + добавка.
+dt_frag_tank:
+	cp	4
+	jp	c, dt_ft0
+	sub	3
+	ld	b, a
+	ld	a, (dt_xkill)
+	or	a
+	jp	z, dt_ft0
+	ld	a, (n_players)
+	cp	b
+	jp	c, dt_ft0
+	ld	a, b
+	push	de
+	call	dt_ptr
+	ld	(dt_hp), hl
+	call	dt_shield_pos
+	pop	de
+	ret	c
+	push	de
+	ld	de, 10
+	call	random
+	pop	de
+	add	hl, de
+	ex	de, hl
+	call	dt_hurt
+dt_ft0:
+	or	a
+	ret
+; CF = 1, если HL < 0 или HL > DE (слова со знаком)
+dt_range:
+	ld	a, h
+	or	a
+	scf
+	ret	m
+	call	fl_scmp
+	cp	1
+	scf
+	ret	z
+	or	a
+	ret
+; точка обломка цветом жертвы, если она в поле
+dt_frag_put:
+	ld	hl, (dt_px)
+	ld	de, DT_X0
+	add	hl, de
+	ld	a, h
+	or	a
+	ret	nz
+	ld	a, l
+	cp	DT_X0
+	ret	c
+	cp	DT_X1 + 1
+	ret	nc
+	ld	b, a
+	ld	hl, (dt_py)
+	ld	de, DT_Y0
+	add	hl, de
+	ld	a, h
+	or	a
+	ret	nz
+	ld	a, l
+	cp	DT_Y0
+	ret	c
+	cp	DT_Y1 + 1
+	ret	nc
+	ld	d, b
+	ld	e, a
+	ld	a, (dt_victim)
+	add	a, 3
+	jp	putpixel
+; вспышка в точке (dt_px, dt_py): круг радиуса 4k в двух центрах, огонь и стирание. A = 1 — с лишними случайными числами.
+dt_blast:
+	ld	(dt_c0), a
+	ld	de, 3
+	call	random			; оттенок: число берётся, цвет один
+	ld	de, 10
+	call	random
+	ld	a, l
+	ld	b, 4
+	cp	3
+	jp	c, dt_bk
+	ld	b, 8
+	cp	6
+	jp	c, dt_bk
+	ld	b, 12
+	cp	8
+	jp	c, dt_bk
+	ld	b, 16
+	jp	z, dt_bk
+	ld	b, 20
+dt_bk:
+	ld	a, b
+	ld	(dk_r), a
+	call	dt_blast_rnd
+	ld	hl, (dt_px)
+	ld	de, DT_X0
+	add	hl, de
+	ld	(dk_x), hl
+	ld	hl, (dt_py)
+	ld	de, DT_Y0
+	add	hl, de
+	ld	(dk_y), hl
+	xor	a
+	ld	(dk_el), a
+	inc	a
+	ld	(dk_er), a
+	ld	a, 3
+	ld	(dk_c), a
+	call	disc
+	call	dt_blast_rnd
+	xor	a
+	ld	(dk_c), a
+	jp	disc
+; при dt_c0 = 1: (радиус + 1) раз Random(65535)
+dt_blast_rnd:
+	ld	a, (dt_c0)
+	or	a
+	ret	z
+	ld	a, (dk_r)
+	inc	a
+	jp	dt_burn
+; общий конец вариантов 0 и 2
+dt_outro:
+	ld	a, 150
+	call	dt_burn
+	ld	a, 45
+dt_o1:
+	ld	(dt_bn), a
+	ld	de, 63
+	call	random
+	ld	a, (dt_bn)
+	dec	a
+	jp	nz, dt_o1
+	ld	a, (dt_x)
+	ld	l, a
+	ld	h, 0
+	ld	(dk_x), hl
+	ld	a, (dt_y)
+	ld	l, a
+	ld	(dk_y), hl
+	xor	a
+	ld	(dk_el), a
+	inc	a
+	ld	(dk_er), a
+	ld	a, 30
+	ld	(dk_r), a
+	ld	a, 3
+	ld	(dk_c), a
+	call	disc
+	xor	a
+	ld	(dk_c), a
+	call	disc
+	call	redraw_all
+	ld	a, (dt_victim)
+	add	a, 3
+	call	replace_color
+	ld	a, 3
+	jp	replace_color
 death_end:
+
+dt_f:		ds	16
+dt_wq:		ds	4
+dt_frags:	ds	11 * 21
+dt_fp:		dw	0
+dt_done:	db	0
+dt_any:		db	0
+dt_bn:		db	0
+dt_c0:		db	0
 
 dt_variant:	db	0
 dt_victim:	db	0
