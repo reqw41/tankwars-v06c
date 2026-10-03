@@ -255,7 +255,7 @@ const K15 = 1.5, K18 = 1.7999999999992724, K07 = 0.6999999999998181;
 function applyDamage(players, victim, shooter, dmg) {
   victim.shield -= dmg;
   if (victim.shield < 0) {
-    if (victim.idx !== shooter) players[shooter - 1].score -= victim.shield * 10;
+    if (victim.idx !== shooter && players[shooter - 1]) players[shooter - 1].score -= victim.shield * 10;   // shooter 0 — «призрак» гибели 6
     victim.men += victim.shield; victim.shield = 0;
   }
 }
@@ -495,4 +495,626 @@ export function generateWind(rng, mode) {
   let w = ((span >> 1) - rng.word(span)) << 16 >> 16;
   for (const th of WTHR) if (rng.real() < th) w = ((w << 2) & 0xffff) << 16 >> 16;
   return Math.max(-30000, Math.min(30000, w));
+}
+
+// =====================================================================================================
+// T05: игрок, ход целиком, гибель, фоны, начало раунда, ИИ, матч (scripts/ref/{game,death,background,ai,match}.py)
+// =====================================================================================================
+
+// ---------- игрок: запись 0x61 байт от DS:3EFC + 0x61*i ----------
+export class Player {
+  constructor(idx) {
+    Object.assign(this, { idx, name: 'Player ' + idx, x: 0, y: 0, score: 0, spent: 0, wins: 0, power: 200, angle: 90, facing: 1,
+      men: 100, alive: true, weapon: 1, guided: 0, target: 0, herb: 0, vick: 0, ammo: new Array(18).fill(0), shield: 0, damp: 0,
+      colors: [1, 1, 1], ctrl: 1, hist: newHist(), strategy: 0 });
+  }
+  get energy() { return this.ammo[5]; }           // энергия лазера — это запас оружия 5 (+0x2B)
+  set energy(v) { this.ammo[5] = v; }
+}
+const i16 = (v) => (v << 16) >> 16;
+// b — Uint8Array записи; base = 0 (от DS:3EFC) или 0x0E (от DS:3EEE, тогда читается имя)
+export function playerFromRec(b, idx, base = 0) {
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength), w = (o) => dv.getInt16(base + o, true), l = (o) => dv.getInt32(base + o, true);
+  const p = new Player(idx);
+  if (base) p.name = String.fromCharCode(...b.subarray(1, 1 + b[0]));
+  Object.assign(p, { x: w(0), y: w(2), score: l(4), spent: l(8), wins: w(0x0c), power: w(0x0e), angle: w(0x10), facing: w(0x12),
+    men: w(0x14), alive: b[base + 0x16] !== 0, weapon: w(0x17), guided: w(0x19), target: w(0x1b), herb: w(0x1d), vick: w(0x1f),
+    shield: l(0x45), damp: l(0x49), colors: [w(0x4d), w(0x4f), w(0x51)] });
+  for (let k = 0; k < 18; k++) p.ammo[k] = w(0x21 + 2 * k);
+  return p;
+}
+// 32ec:02b9 — новый игрок матча
+const COLOR_DIV = [[1, 0x7fff, 0x7fff], [0x7fff, 1, 0x7fff], [0x7fff, 0x7fff, 1], [1, 1, 0x7fff], [0x7fff, 1, 1], [1, 0x7fff, 1], [1, 1, 1], [1, 2, 0x7fff], [1, 0x7fff, 2], [1, 2, 2]];
+export function newPlayer(idx, rounds) {
+  const p = new Player(idx);
+  p.ammo[0] = 100; p.ammo[1] = rounds * 3; p.ammo[11] = Math.min(999, rounds * 10);
+  p.colors = COLOR_DIV[idx - 1].slice();
+  return p;
+}
+// 1062:07a9 — цвет танка в палитре (0..63 на компонент)
+export function tankRGB(p) { if (p.men < 0) return [0, 0, 0]; const L = trunc(p.men * 63 / 100); return p.colors.map((d) => trunc(L / d)); }
+
+// ---------- полёт с отрисовкой мяча и следа (2583:01c0) ----------
+const K12 = real48ToFloat(new Uint8Array([0x81, 0x9a, 0x99, 0x99, 0x99, 0x19]));
+const CROSS = [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0]];
+function cross(v, src, x, y, color = null) {
+  const b = off16(x, y);
+  for (const [dx, dy] of CROSS) { const o = (b + dy * W + dx) & 0xffff; if (o < v.length) v[o] = color !== null ? color : (o < src.length ? src[o] : 0); }
+}
+// inp: angle, power, facing, tank_x, tank_y, wind, rebound, weapon, men, guided, target:[x,y]; onFrame(x, y) — для анимации
+export function flightDraw(v, bg, inp, shooter, ballVisible, trail, players = 1, onFrame = null) {
+  const [c, s] = trigOf(inp.angle);
+  let x = q(q(inp.tank_x) + q(q(c * 10) * inp.facing)), y = q(q(inp.tank_y) - q(s * 10));
+  let vx = q(q(q(inp.power / 50) * c) * inp.facing), vy = q(q(inp.power / 50) * s);
+  if (vy !== 0) vy = q(-vy);
+  const step = 10, fuse = 1000 - 2 * inp.men;
+  let sub = players, pxPrev = -99, pyPrev = -99, guided = inp.guided || 0;     // DS:3EAC перед полётом = число игроков
+  const tcol = (100 - shooter) & 0xff;
+  const get = (X, Y) => (X >= 0 && X < W && Y >= 0 && Y < H ? v[Y * W + X] : 0);
+  for (let i = 0; i < (inp.maxSteps || 200000); i++) {
+    sub++; if (sub > step) sub = 0;
+    x = q(x + q(vx / step)); y = q(y + q(vy / step));
+    vy = q(vy + q(0.1 / step)); vx = q(vx + q(q((inp.wind || 0) / 5000) / step));
+    if (guided && inp.target) {                       // 2583:06cf (в составе хода исполнением не сверено)
+      const tdx = q(q(inp.target[0]) - x), tdy = q(q(inp.target[1]) - y);
+      if ((guided === 2 || guided === 3) && Math.abs(tdx) <= 2) { vx = q(0); y = tdy > 0 ? q(y + 0.5) : q(y - 0.5); }
+      if ((guided === 1 || guided === 3) && Math.abs(tdy) <= 2) { vy = q(0); const prod = q(tdx * vx); vx = q(vx * (prod >= 0 ? HERB : -HERB)); }
+    }
+    if (pxPrev < 309 && pyPrev > 31 && pxPrev > 11) {
+      const ix = trunc(pxPrev), iy = trunc(pyPrev);
+      if (ballVisible) cross(v, bg, ix, iy);
+      if (trail) { const o = off16(ix, iy); v[o] = tcol; bg[o] = tcol; }
+    }
+    pxPrev = x; pyPrev = y;
+    const px = trunc(x), py = trunc(y);
+    let stop = null, hit = 0;
+    if (y < 189 && x < 309 && y > 33 && x > 11) {
+      let done = false;                               // ромб обходится целиком (2583:0c52..0e1d)
+      for (const [dx, dy] of DIAMOND) {
+        const cp = get(px + dx, py + dy);
+        if (!isHit(cp)) continue;
+        hit = cp;
+        const tank = cp >= 20 && cp <= 29;
+        if (tank || sub === step || inp.power < fuse) done = true;
+        if (cp === 2 && inp.power === fuse) done = false;
+        if (tank && inp.weapon >= 12 && inp.weapon <= 16) { done = false; vy = q(q(-vy) * K12); guided = 0; }
+      }
+      if (done) stop = hit >= 20 && hit <= 29 ? 'tank' : 'terrain';
+    } else if (inp.rebound) {
+      if (vx < 0 && x < 10) vx = q(-vx); if (vx > 0 && x > 310) vx = q(-vx);
+      if (vy < 0 && y < 30) vy = q(-vy); if (vy > 0 && y > 190) vy = q(-vy);
+    } else if (!guided) {
+      if (vx > 1 && x > 310 && inp.wind > 0) y = 200;
+      if (vx < 1 && x < 10 && inp.wind < 0) y = 200;
+    }
+    if (stop === null && (y < -5000 || y > 193)) stop = 'bounds';
+    if (stop !== null) {
+      if (y > 0 && y < 200 && x > 0 && x < 320) cross(v, bg, trunc(x), trunc(y));
+      return { stop, x, y, hit };
+    }
+    if (ballVisible && x < 309 && y > 31 && x > 11) cross(v, null, px, py, 19);
+    if (onFrame) onFrame(px, py);
+  }
+  return { stop: 'max', x, y, hit: 0 };
+}
+
+// ---------- эффект оружия 318e:00e0 и выстрел ----------
+function effect(v, bg, ps, shooter, x, y, hit, rng, fl) {
+  const w = ps[shooter - 1].weapon;
+  if (w in RADIUS) explode(v, bg, ps, x, y, hit, shooter, w, rng, fl.sound);
+  else if (w >= 6 && w <= 10) cri(v, bg, ps, x, y, hit, shooter, w, rng, fl.sound);
+  else if (w === 12) sonic(v, bg, x, y, rng, fl.sound);
+  else if (w >= 13 && w <= 16) dirtBall(v, x, y, w);
+  else if (w === 17) explosiveDirt(v, bg, x, y, rng, fl.sound, fl.crumble);
+}
+// fl: {rebound, crumble, fall, xkill, sound, wind, ballVisible, trail}. Возвращает точку остановки снаряда (или null у лазера).
+export function fire(v, bg, ps, shooter, rng, fl, onFrame = null) {
+  const s = ps[shooter - 1];
+  if (s.weapon === 5) { laser(v, bg, ps, shooter, rng, fl.sound, fl.rebound); return null; }
+  s.ammo[s.weapon] = i16(s.ammo[s.weapon] - 1);       // 2583:02f1
+  if (s.guided === 1 || s.guided === 3) s.herb--;
+  if (s.guided === 2 || s.guided === 3) s.vick--;
+  if (rng.real() < LASER_P) s.men -= 1;               // 2583:0348
+  const t = s.guided && ps[s.target - 1] ? ps[s.target - 1] : null;
+  const r = flightDraw(v, bg, { angle: s.angle, power: s.power, facing: s.facing, tank_x: s.x, tank_y: s.y, wind: fl.wind,
+    rebound: fl.rebound, weapon: s.weapon, men: s.men, guided: t ? s.guided : 0, target: t ? [t.x, t.y] : null },
+  shooter, fl.ballVisible, fl.trail, ps.length, onFrame);
+  if (r.stop === 'terrain' || r.stop === 'tank') effect(v, bg, ps, shooter, r.x, r.y, r.hit, rng, fl);
+  return r;
+}
+
+// ---------- гибель танка (оверлей 285c), вариант Random(7) ----------
+function eraseTankBarrel(v, bg, t) { eraseTank(v, bg, t.x, t.y); const [bdx, bdy] = barrelOf(t.angle); line(v, t.x, t.y, t.x + bdx * t.facing, t.y - bdy, 0, bg); }
+const redrawAll = (v, ts) => { for (const t of ts) drawTankBarrel(v, t); };
+const gpVp = (v, x, y) => { const X = x + 11, Y = y + 31; return X >= 0 && X < W && Y >= 0 && Y < H ? v[Y * W + X] : 0; };
+const ppVp = (v, x, y, c) => { const X = x + 11, Y = y + 31; if (inVp(X, Y, VIEWPORT)) v[Y * W + X] = c; };
+function replaceColor(v, bg, lo, hi) { for (let o = 64000; o > 0; o--) if (o < v.length && v[o] >= lo && v[o] <= hi) v[o] = bg[o]; }
+const G0 = 0.006999999999997897, VX0 = 0.5, VY0 = 0.10000000000002274;
+const blastK = (n) => (n <= 2 ? 1 : n <= 5 ? 2 : n <= 7 ? 3 : n === 8 ? 4 : 5);
+function deathIntro(rng, sound) { for (let i = 0; i < 54; i++) { if (sound) rng.word(500); rng.word(0xffff); } }
+function deathOutro(v, bg, ts, tx, ty, rng, sound, color, hi, twin) {
+  let r6 = 0;
+  for (let ae = 0; ae < 5; ae++) for (let b0 = 3; b0 < 6; b0++) {
+    r6++;
+    const col = (10 * b0 + 100 + ae) & 0xff;
+    for (const rr of [r6, r6 + 1]) {
+      ring(v, tx, ty, rr, col); if (twin) ring(v, tx + 1, ty, rr, col);
+      for (let k = 0; k < 5; k++) { if (sound) rng.word((1300 - 40 * r6) & 0xffff); rng.word(0xffff); }
+    }
+    r6++;
+  }
+  for (let ae = 4; ae >= 0; ae--) for (let k = 4 - ae; k >= 0; k--) { if (sound) rng.word(200); rng.word(63); rng.word(63); rng.word(63); }
+  for (let r = 30; r >= 0; r--) { ringRestore(v, bg, tx, ty, r); ringRestore(v, bg, tx + 1, ty, r); }
+  redrawAll(v, ts);
+  replaceColor(v, bg, color, color);
+  replaceColor(v, bg, 0x82, hi);
+}
+function miniBlast(v, bg, px, py, rng, sound, call0) {
+  const base = 10 * (rng.word(3) + 3), k = blastK(rng.word(10));
+  for (let r = 0; r <= 4 * k; r++) {
+    if (sound) rng.word(2500); if (call0) rng.word(0xffff);
+    const col = (base + 100 + trunc(r / k)) & 0xff;
+    ring(v, px, py, r, col); ring(v, px + 1, py, r, col);
+  }
+  for (let r = 4 * k; r >= 0; r--) { if (sound) rng.word(2500); if (call0) rng.word(0xffff); ringRestore(v, bg, px, py, r); ringRestore(v, bg, px + 1, py, r); }
+}
+function death0(v, bg, ts, victim, rng, sound, wind, xkill) {          // 285c:0020
+  const t = ts[victim - 1], color = victim + 19, tx = t.x - 11, ty = t.y - 31;
+  deathIntro(rng, sound);
+  for (let f = 0; f < 11; f++) {
+    if (sound) rng.word(500);
+    let X = q(tx), Y = q(ty), vx = q(VX0 - rng.real()), vy = q(VY0 - rng.real()), px, py;
+    for (;;) {
+      let done = false;
+      X = q(X + vx); Y = q(Y + vy); vy = q(vy + G0); vx = q(q(wind / 5000) + vx);
+      px = trunc(X); py = trunc(Y);
+      const c = gpVp(v, px, py);
+      if (c === 13 || c === 2) done = true;
+      if (xkill && c >= 20 && c <= 29 && ts[c - 20]) { const vic = ts[c - 20]; if (vic.shield > 0) done = true; else vic.men -= rng.word(10) + 5; }
+      if (py < 0 || py > 200 || px < 0 || px > 320) done = true;
+      ppVp(v, px, py, color);
+      if (done) break;
+    }
+    miniBlast(v, bg, px, py, rng, sound, false);
+  }
+  deathOutro(v, bg, ts, tx, ty, rng, sound, color, 0x9f, true);
+}
+function death2(v, bg, ts, victim, rng, sound, wind, xkill) {          // 285c:1da5
+  const t = ts[victim - 1], color = victim + 19, tx = t.x - 11, ty = t.y - 31;
+  deathIntro(rng, sound);
+  const F = [];
+  for (let i = 0; i < 11; i++) { if (sound) rng.word(500); F.push({ X: q(tx), Y: q(ty), vx: q(VX0 - rng.real()), vy: q(VY0 - rng.real()), dead: false, end: [0, 0] }); }
+  for (;;) {
+    let any = false;
+    for (const f of F) {
+      if (f.dead) continue;
+      f.X = q(f.X + f.vx); f.Y = q(f.Y + f.vy); f.vy = q(f.vy + G0); f.vx = q(q(wind / 5000) + f.vx);
+      const px = trunc(f.X), py = trunc(f.Y); any = true;
+      const c = gpVp(v, px, py);
+      if (c === 13 || c === 2) f.dead = true;
+      if (xkill && c >= 20 && c <= 29 && ts[c - 20]) { const vic = ts[c - 20]; if (vic.shield >= 1) f.dead = true; else vic.men -= rng.word(10) + 10; }
+      if (py < 0 || py > 0x9e || px < 0 || px > 0x12a) f.dead = true;
+      ppVp(v, px, py, color);
+      if (f.dead) f.end = [px, py];
+    }
+    if (!any) break;
+  }
+  for (const f of F) miniBlast(v, bg, f.end[0], f.end[1], rng, sound, true);
+  deathOutro(v, bg, ts, tx, ty, rng, sound, color, 0x9a, false);
+}
+const vget16 = (v, x, y) => peek(v, off16(x, y)), vput16 = (v, x, y, c) => poke(v, off16(x, y), c);
+function particleHit(v, ts, x, y, rng, xkill) {
+  if (!xkill) return;
+  const c = vget16(v, x, y);
+  if (c >= 20 && c <= 29 && ts[c - 20] && ts[c - 20].shield <= 0) ts[c - 20].men -= rng.word(3);
+}
+const SHAPE = { 1: (x, y, a, b) => [x + b, y - a], 2: (x, y, a, b) => [x + b, y + a], 3: (x, y, a, b) => [x + a, y - b], 4: (x, y, a, b) => [x - a, y - b],
+  5: (x, y, a, b) => [x + b + a, y - a], 6: (x, y, a, b) => [x + b - a, y - a], 7: (x, y, a, b) => [x + b + a, y + a], 8: (x, y, a, b) => [x + b - a, y + a] };
+function deathParticles(v, bg, ts, victim, rng, sound, mode, xkill) {   // 285c:0f61
+  const t = ts[victim - 1], bursts = rng.word(5) + 5;
+  for (let n = 0; n < bursts; n++) {
+    const m = rng.word(390) + 2, kind = rng.word(8) + 1, frames = [];
+    for (let f = 1; f <= 5; f++) {
+      const pts = [];
+      for (let i = 0; i < m; i++) { const a = rng.word(10 * f), b = trunc((rng.word(a + 10) - a / 2) - 5); pts.push(SHAPE[kind](t.x, t.y, a, b)); }
+      frames.push(pts);
+    }
+    for (const pts of frames) for (const p of pts) {
+      if (p[0] > 309) p[0] = 618 - p[0]; if (p[1] > 189) p[1] = 378 - p[1]; if (p[1] < 31) p[1] = 62 - p[1]; if (p[0] < 11) p[0] = 22 - p[0];
+    }
+    if (mode === 0) {
+      for (let f = 1; f <= 5; f++) for (let i = 0; i < m; i++) {
+        if (sound) rng.word(f === 1 ? 500 : (500 * f) & 0xffff);
+        const [x, y] = frames[f - 1][i];
+        particleHit(v, ts, x, y, rng, xkill); vput16(v, x, y, rng.word(14) + 1);
+        if (f > 1) { const [px, py] = frames[f - 2][i]; vput16(v, px, py, bg[off16(px, py)]); }
+      }
+      for (const [x, y] of frames[4]) vput16(v, x, y, bg[off16(x, y)]);
+    } else {
+      for (let f = 1; f <= 5; f++) for (let i = 0; i < m; i++) {
+        if (sound) rng.word((500 * f) & 0xffff);
+        const [x, y] = frames[f - 1][i];
+        particleHit(v, ts, x, y, rng, xkill);
+        let col = rng.word(14) + 0xc9; if (col === 0xca) col = 2;
+        vput16(v, x, y, col);
+      }
+    }
+  }
+  redrawAll(v, ts); eraseTankBarrel(v, bg, t); replaceColor(v, bg, 0xc9, 0xdc);
+}
+function death4(v, bg, ts, victim, rng, sound) {                          // 285c:28d9
+  const t = ts[victim - 1], waves = rng.word(30) + 30;
+  for (let r = 1; r <= waves; r++) {
+    const n = rng.word(400);
+    for (let i = 0; i < n; i++) {
+      const h = rng.word(10 * r), dx = trunc((rng.word(h + 10) - h / 2) - 5);
+      let y = t.y - h, x = t.x + dx;
+      while (y > 189 || x < 11 || y < 31 || x > 309) { if (x > 309) x = 618 - x; if (y > 189) y = 378 - y; if (y < 31) y = 62 - y; if (x < 11) x = 22 - x; }
+      vput16(v, x, y, 2);
+      if (sound) rng.word(1000);
+    }
+  }
+  redrawAll(v, ts); eraseTankBarrel(v, bg, t);
+}
+function death5(v, bg, ts, victim) { const t = ts[victim - 1]; t.men = -1; eraseTankBarrel(v, bg, t); }   // 285c:2b76
+function death6(v, bg, ts, victim, rng, sound) {                          // 285c:2c29
+  const t = ts[victim - 1], n = rng.word(10), count = n <= 1 ? 1 : n <= 4 ? 2 : n <= 7 ? 3 : 4;
+  for (let j = 1; j <= count; j++) { explode(v, bg, ts, t.x, t.y, 2, 0, j, rng, sound); redrawAll(v, ts); }
+  t.men = -1;
+}
+export function death(variant, v, bg, ts, victim, rng, sound, wind = 0, xkill = false) {
+  if (variant === 0) death0(v, bg, ts, victim, rng, sound, wind, xkill);
+  else if (variant === 1) deathParticles(v, bg, ts, victim, rng, sound, 0, xkill);
+  else if (variant === 2) death2(v, bg, ts, victim, rng, sound, wind, xkill);
+  else if (variant === 3) deathParticles(v, bg, ts, victim, rng, sound, 1, xkill);
+  else if (variant === 4) death4(v, bg, ts, victim, rng, sound);
+  else if (variant === 5) death5(v, bg, ts, victim);
+  else death6(v, bg, ts, victim, rng, sound);
+}
+
+// ---------- ход целиком: 2583:2976..2cee ----------
+export function afterShot(v, bg, ps, shooter, rng, fl, onDeath = null) {
+  for (const p of ps) drawTankBarrel(v, p);
+  if (fl.crumble > 0) crumbleGate(v, bg, rng, fl.crumble, fl.rebound);
+  if (fl.fall) tanksFall(v, bg, ps, rng, fl.rebound);
+  for (;;) {
+    let died = false;
+    for (const p of ps) {
+      if (p.men > 0 || !p.alive) continue;
+      died = true; p.alive = false;
+      const variant = rng.word(7);
+      death(variant, v, bg, ps, p.idx, rng, fl.sound, fl.wind, fl.xkill);
+      if (shooter !== p.idx) ps[shooter - 1].score += 1500;
+      drawFrame(v, fl.rebound);
+      if (rng.real() * 100 < fl.crumble) crumble(v, bg);
+      if (fl.fall) tanksFall(v, bg, ps, rng, fl.rebound);
+      if (onDeath) onDeath(p, variant);
+    }
+    if (!died) break;
+  }
+}
+export function turn(v, bg, ps, shooter, rng, fl) { const r = fire(v, bg, ps, shooter, rng, fl); afterShot(v, bg, ps, shooter, rng, fl); return r; }
+
+// ---------- фон поля 2eef:0000 ----------
+export function drawBackground(kind, rng) {
+  const v = new Uint8Array(SCREEN), VP = VIEWPORT;
+  if (kind === 1) for (let i = 0; i < 500; i++) { const x = rng.word(299) + 11, y = rng.word(159) + 31, c = rng.word(20) + 30; v[y * W + x] = c; }
+  else if (kind === 2) for (let y = 31; y <= 190; y++) line(v, 11, y, 310, y, (y % 30) + 30);
+  else if (kind === 3) for (let r = 0; r <= 170; r++) { ring(v, 149, 79, r, (r % 30) + 30, VP); ring(v, 150, 79, r, (r % 30) + 30, VP); }
+  else if (kind === 4) {
+    let k = 0; const ray = (x, y) => { line(v, 160, 100, x, y, (k % 30) + 30); k++; };
+    for (let x = VP[0]; x <= VP[2]; x++) ray(x, VP[1]);
+    for (let y = VP[1]; y <= VP[3]; y++) ray(VP[2], y);
+    for (let x = VP[2]; x >= VP[0]; x--) ray(x, VP[3]);
+    for (let y = VP[3]; y >= VP[1]; y--) ray(VP[0], y);
+    for (let x = VP[0]; x <= (VP[2] + VP[0]) >> 1; x++) ray(x, VP[1]);
+  } else if (kind === 5) for (let y = 31; y <= 190; y++) line(v, 11, y, 310, y, ((y - 30) >> 3) + 30);
+  rect(v, 8, 28, 312, 192, 13); rect(v, 10, 30, 310, 190, 13);
+  return v;
+}
+
+// ---------- начало раунда: 2eef:0909 + 2583:2531..2675 ----------
+export function roundStart(rng, ps, wallsCfg, bgCfg, windMode) {
+  let rebound = !(rng.real() > 0.5);
+  if (wallsCfg === 0) rebound = false;
+  if (wallsCfg === 2) rebound = true;
+  const kind = bgCfg <= 5 ? bgCfg : rng.word(6);
+  const bg = drawBackground(kind, rng), v = new Uint8Array(bg), n = ps.length;
+  renderTerrain(generateTerrain(rng, n), v);
+  const ts = placeTanks(rng, n, v, bg, rebound);
+  ps.forEach((p, i) => { const t = ts[i]; Object.assign(p, { idx: i + 1, x: t.x, y: t.y, angle: t.angle, power: t.power, facing: t.facing, men: t.men, alive: true }); });
+  const first = rng.word(n);
+  const wind = generateWind(rng, windMode);
+  return { v, bg, rebound, wind, first, kind };
+}
+
+// ---------- ИИ: 2cab:000d, 2b39:0425 ----------
+export const AI_NAMES = { 'Mr. Stupid': 1, 'Birdy Bonker': 2, Rifleman: 3, Lobber: 4, 'Lob & Shoot': 5, 'Windless Wit': 6, Twanger: 7 };
+export function newHist() { return { n: 0, planned: 0, power: 0, angle: 0, facing: 0, weapon: 0, shots: {}, target: 0 }; }
+export function histFromBytes(b) {
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength), w = (o) => dv.getInt16(o, true);
+  const h = { n: w(0), planned: b[2], power: w(3), angle: w(5), facing: w(7), weapon: w(9), shots: {}, target: w(0x7e6), strategy: w(0x800) };
+  for (let k = 0; k < 200; k++) { const o = 0x0b + 10 * k; h.shots[k] = { angle: w(o), power: w(o + 2), facing: w(o + 4), x: w(o + 6), y: w(o + 8) }; }
+  return h;
+}
+const shot = (h, k) => h.shots[k] || { angle: 0, power: 0, facing: 0, x: 0, y: 0 };
+export function aiType(name, rebound) {
+  let t = AI_NAMES[name] || 0;
+  if (t === 5) t = rebound ? 3 : 4;
+  if (t === 7 && !rebound) t = 3;
+  return t;
+}
+export function chooseCode(p, h) {                     // 2cab:213e
+  while (p.ammo[h.weapon] < 1) { h.weapon--; if (h.weapon < 0) h.weapon = 12; }
+  if (10 * p.men < h.power) h.power = 10 * p.men;
+  if (p.energy < h.power && h.weapon === 5) h.power = p.energy;
+  if (h.power < 0) h.power = 0;
+  let code = 5; const t = trunc((p.facing - 1) / 2);
+  if (p.angle < h.angle) code = 1 - t;
+  if (p.angle > h.angle) code = t + 2;
+  if (p.power > h.power) code = 3;
+  if (p.power < h.power) code = 4;
+  if (p.facing !== h.facing) code = 6;
+  if (p.weapon !== h.weapon) code = 8;
+  if (code === 3 && p.power - h.power > 99) p.power -= 90;
+  if (code === 3 && p.power - h.power > 9) p.power -= 9;
+  if (code === 4 && h.power - p.power > 99) p.power += 90;
+  if (code === 4 && h.power - p.power > 9) p.power += 9;
+  if (code === 5) h.planned = 0;
+  return code;
+}
+// 2b39:0577..0efe — применить код действия (общий для человека и ИИ); 9/10 — наведение
+export function applyCode(v, bg, p, code) {
+  const eraseBarrel = () => { const [bdx, bdy] = barrelOf(p.angle); line(v, p.x, p.y, p.x + bdx * p.facing, p.y - bdy, 0, bg); };
+  if (code === 7 || code === 8) {
+    for (let guard = 0; guard < 40; guard++) {
+      p.weapon += code === 8 ? 1 : -1;
+      if (p.weapon < 0) p.weapon = 17; if (p.weapon > 17) p.weapon = 0;
+      if (p.ammo[p.weapon] > 0 && !(p.ammo[p.weapon] < 100 && p.weapon === 5)) break;
+    }
+  } else if (code === 1 || code === 2) {
+    eraseBarrel();
+    p.angle += code === 1 ? p.facing : -p.facing;
+    if (p.angle > 90) { p.facing = -p.facing; p.angle = 180 - p.angle; }
+    if (p.angle < 0) { p.facing = -p.facing; p.angle = Math.abs(p.angle); }
+    drawTankBarrel(v, p);
+  } else if (code === 3 || code === 4) {
+    p.power += code === 4 ? 1 : -1;
+    if (p.power > 10 * p.men) p.power = 10 * p.men;
+    if (p.power < 0) p.power = 0;
+    if (p.power > p.energy && p.weapon === 5) p.power = p.energy;
+  } else if (code === 6) { eraseBarrel(); p.facing = -p.facing; drawTankBarrel(v, p); }
+  else if (code === 9 && p.herb > 0) p.guided ^= 1;
+  else if (code === 10 && p.vick > 0) p.guided ^= 2;
+}
+export const needsWeaponSwitch = (p) => p.ammo[p.weapon] <= 0 || (p.weapon === 5 && p.ammo[5] <= 100);
+// один «опрос ввода» компьютера (2b39:0f78): код действия
+export function computerStep(v, bg, ps, p, rng, rebound) {
+  if (needsWeaponSwitch(p)) return 8;
+  if (!p.hist.planned) plan(v, bg, ps, p, p.hist, rng, rebound, p.name);
+  return chooseCode(p, p.hist);
+}
+export function computerTurn(v, bg, ps, p, rng, rebound, maxCalls = 5000) {
+  const codes = [];
+  for (let i = 0; i < maxCalls; i++) { const c = computerStep(v, bg, ps, p, rng, rebound); codes.push(c); applyCode(v, bg, p, c); if (c === 5) break; }
+  return codes;
+}
+// история выстрелов (2583:27b9, 2583:29ee)
+export const turnBegin = (h) => { h.n = i16(h.n + 1); };
+export function recordShot(h, p, x, y) { const tx = trunc(x); h.shots[h.n] = { angle: p.angle, power: p.power, facing: p.facing, x: tx > 0x7fff ? 0x7fff : i16(tx), y: i16(trunc(y)) }; }
+
+const hyp = (a, b) => q(Math.sqrt(q(q(a * a) + q(b * b))));
+const RAD2DEG_PI = 3.1415926535883045;
+const atanDeg = (x) => trunc(q(q(q(Math.atan(x)) * 180) / RAD2DEG_PI));
+function firstWeapon(p, h) { h.weapon = 11; for (let w = 1; w <= 4; w++) if (p.ammo[w] > 0) h.weapon = w; }
+function planStupid(v, bg, ps, p, h, rng, rebound) {
+  do { h.facing = rng.word(3) - 1; } while (Math.abs(h.facing) !== 1);
+  firstWeapon(p, h);
+  h.angle = rng.word(90); h.power = rng.word(5000) + 20;
+  if (!rebound) { h.facing = trunc(ps.length / 2) < p.idx ? -1 : 1; h.power = rng.word(250) + 50; }
+  if (10 * p.men < h.power) h.power = 10 * p.men;
+  h.planned = 1;
+}
+function planBirdy(v, bg, ps, p, h) { h.weapon = 1; h.facing = 1; h.angle = 90; h.power = 300; if (10 * p.men < h.power) h.power = 10 * p.men; h.planned = 1; }
+function planLobber(v, bg, ps, p, h, rng) {
+  const N = ps.length, by = (k) => ps[k - 1];
+  let target = p.idx, best = 0x7fff;
+  h.weapon = p.ammo[1] >= 1 ? 1 : 11;
+  if (Math.abs(h.facing) !== 1) h.facing = 1;
+  let d = h.facing;
+  if (rng.real() <= 0.5 && h.n === 1) d = -d;
+  if (h.n < 3) {
+    do { target += d; if (target > N) target = 1; if (target < 1) target = N; } while (!(target !== p.idx && by(target).alive));
+  } else {
+    const sx = shot(h, h.n - 1).x;
+    for (let k = 1; k <= N; k++) if (k !== p.idx && Math.abs(sx - by(k).x) < best && by(k).alive) { target = k; best = Math.abs(sx - by(k).x); }
+  }
+  if (target > N) target = 1;
+  h.target = target;
+  if ((h.facing === 1 && target < p.idx) || (h.facing === -1 && target > p.idx)) h.n = 1;
+  h.facing = target > p.idx ? 1 : -1;
+  if (h.n === 1) { h.angle = 75; h.power = rng.word(100) + 100; h.planned = 1; }
+  else if (h.n === 2) { h.angle = 75; h.power = rng.word(100) + 200; h.planned = 1; }
+  else {
+    const si = shot(h, h.n - 2), sj = shot(h, h.n - 1);
+    const dx = (sj.x - si.x) || 1, dp = (sj.power - si.power) || 1, ratio = q(dp / dx), miss = by(target).x - si.x;
+    h.planned = 1;
+    h.power = i16(si.power + (trunc(q(miss * ratio)) % 0x7fff));
+    if (h.power < 0) h.power = -h.power * 2;
+    if (Math.abs(miss) > 5) h.weapon = 2;
+    if (Math.abs(miss) > 15) h.weapon = 3;
+    if (Math.abs(miss) > 30) h.weapon = 4;
+    const nxt = { 11: 0, 1: 11, 2: 1, 3: 2, 4: 3 };
+    while (p.ammo[h.weapon] < 1 && h.weapon in nxt) h.weapon = nxt[h.weapon];
+  }
+}
+function planWit(v, bg, ps, p, h, rng) {
+  let target;
+  do { target = rng.word(ps.length) + 1; } while (!(target !== p.idx && ps[target - 1].alive));
+  h.target = target;
+  const t = ps[target - 1];
+  let dx = t.x - p.x, dy = t.y - p.y;
+  if (dy < 0) dy += 4; if (dx > 0) dx -= 4; if (dx < 0) dx += 4;
+  const r = rng.word(100) + 50;
+  let vx = q((target > p.idx ? r : -r) / 50);
+  const tt = q(dx / vx);
+  let vy = q(q(dy - q(q(0.05000000000001137 * tt) * tt)) / tt);
+  vy = q(vy * 50); vx = q(vx * 50);
+  h.power = trunc(hyp(vy, vx));
+  h.angle = Math.abs(atanDeg(q(vy / vx)));
+  h.facing = target > p.idx ? 1 : -1;
+  if (10 * p.men < h.power) h.power = 10 * p.men;
+  firstWeapon(p, h); h.planned = 1;
+}
+const pxAt = (v, x, y) => (x >= 0 && x < W && y >= 0 && y < H ? v[y * W + x] : 0);
+function bigWeapon(p, h, dx, dy, sc) {
+  if (sc > 990) for (const [w, r] of [[2, 15], [3, 30], [4, 60]]) if (hyp(dx, dy) > r && p.ammo[w] > 0) h.weapon = w;
+  if (p.ammo[5] > 100 && sc <= 990) h.weapon = 5;
+}
+function planRifleman(v, bg, ps, p, h, rng, rebound) {
+  const N = ps.length, scr = new Uint8Array(v), score = {};
+  h.weapon = p.ammo[1] >= 1 ? 1 : 11;
+  for (let k = 1; k <= N; k++) {
+    const t = ps[k - 1];
+    let s = 1000;
+    if (t.y > p.y) s = 100;
+    if (k === p.idx || !t.alive) s = 0;
+    if (s > 0) {
+      const dx = t.x - p.x, dy = t.y - p.y, dist = hyp(dx, dy);
+      for (let i = 1; i <= trunc(dist); i++) {
+        const X = p.x + trunc(q(q(dx / dist) * i)), Y = p.y + trunc(q(q(dy / dist) * i));
+        if (pxAt(scr, X, Y) === 2) s--;
+        if (X >= 0 && X < W && Y >= 0 && Y < H) scr[Y * W + X] = k + 19;
+      }
+    }
+    score[k] = s;
+  }
+  let best = -32767, target = 0;
+  for (let k = 1; k <= N; k++) if (score[k] > best) { best = score[k]; target = k; }
+  h.target = target;
+  const t = ps[target - 1], dx = (t.x - p.x) || 1, dy = (p.y - t.y + 4) || 1;
+  bigWeapon(p, h, dx, dy, score[target]);
+  h.power = 1000;
+  h.angle = Math.abs(atanDeg(q(dy / dx)));
+  h.facing = target < p.idx ? -1 : 1;
+  if (dy < 0) {
+    if (rebound) h.angle = rng.word(70) + 10; else { h.power = rng.word(100) + 200; h.angle = 45; }
+    h.weapon = 1;
+  }
+  h.planned = 1;
+}
+const CEILING = 28;
+function twangTrace(scr, ps, p, h, k, score) {
+  const t = ps[k - 1], dx = t.x - p.x, dy = p.y - t.y, top = t.y - CEILING;
+  const a = q(Math.atan(Math.abs(q((dy + 2 * top) / dx))));
+  h.facing = k < p.idx ? -1 : 1;
+  const up = p.y - CEILING, tan = q(q(Math.sin(a)) / q(Math.cos(a))), ox = trunc(q((h.facing * up) / tan));
+  const seg = (x0, y0, ex, ey, sy, cost) => {
+    const dist = hyp(ex, ey);
+    for (let s = 1; s <= trunc(dist); s++) {
+      const X = trunc(q(x0 + q(q(ex / dist) * s))), Y = trunc(q(y0 + sy * q(q(ey / dist) * s)));
+      if (vget16(scr, X, Y) === 2) score[k] -= cost;
+      vput16(scr, X, Y, k + 19);
+    }
+  };
+  seg(p.x, p.y, ox, up, -1, 3);
+  const lx = p.x + ox, ly = p.y - up;
+  seg(lx, ly, t.x - lx, t.y - ly, 1, 1);
+}
+function planTwanger(v, bg, ps, p, h, rng) {
+  const N = ps.length; let scr = new Uint8Array(v), score = {};
+  h.weapon = 1;
+  for (let k = 1; k <= N; k++) { score[k] = (k === p.idx || !ps[k - 1].alive) ? -1 : 1000; if (score[k] !== -1) twangTrace(scr, ps, p, h, k, score); }
+  let best = 0, cnt = 1; const rank = {};
+  for (let k = 1; k <= N; k++) { rank[k] = 0; if (score[k] > best) { cnt++; best = score[k]; rank[k] = cnt; } else if (score[k] === best) rank[k] = cnt; }
+  const top = Math.max(0, ...Object.values(rank));
+  score = {}; best = 0; let target = 0;
+  for (let k = 1; k <= N; k++) {
+    score[k] = rank[k] >= top && rank[k] ? 1000 - trunc(hyp(p.x - ps[k - 1].x, p.y - ps[k - 1].y)) : 0;
+    if (score[k] > best) { best = score[k]; target = k; }
+  }
+  h.target = target; scr = new Uint8Array(v); score[target] = 1000;
+  twangTrace(scr, ps, p, h, target, score);
+  const t = ps[target - 1], dx = t.x - p.x, dy = p.y - t.y, tp = t.y - CEILING;
+  h.power = rng.word(51) + 950;
+  h.angle = Math.abs(atanDeg(Math.abs(q((dy + 2 * tp) / dx))));
+  h.facing = target < p.idx ? -1 : 1;
+  h.weapon = 1;
+  bigWeapon(p, h, dx, dy, score[target]);
+  h.planned = 1;
+}
+const PLANNERS = { 1: planStupid, 2: planBirdy, 3: planRifleman, 4: planLobber, 6: planWit, 7: planTwanger };
+export function plan(v, bg, ps, p, h, rng, rebound, name) {
+  const fn = PLANNERS[aiType(name, rebound)];
+  if (!fn) throw new Error('ИИ: неизвестное имя ' + name);
+  fn(v, bg, ps, p, h, rng, rebound);
+}
+
+// ---------- матч: перетасовка, результаты, магазин (224b) ----------
+export const W_PRICE = [-1, 3000, 4000, 7000, 10000, 10000, 5000, 5000, 10000, 10000, 15000, -1, 4500, 4000, 6000, 8000, 10000, 4500];
+export const W_PACK = [0, 100, 10, 2, 1, 1000, 5, 10, 3, 3, 1, 0, 10, 10, 7, 3, 1, 10];
+export const SHOP_PRICE = [W_PRICE, [20000, 20000], [20000, 10000]], SHOP_PACK = [W_PACK, [5, 5], [1000, 100]];
+export const SHOP_NAMES = [null, ["Herb's Guide", "Vick's Guide"], ['Energy Shield', 'Inertia Damp.']];
+export const MIN_PRICE = 3000;
+const STRATEGY_SETS = { 'Mr. Stupid': [1, 2, 4], Lobber: [1, 2, 4], 'Windless Wit': [1, 2, 4], Rifleman: [1, 2, 3, 4], 'Lob & Shoot': [1, 2, 3, 4], Twanger: [1, 2, 3, 4] };
+export const AI_PICKABLE = ['Mr. Stupid', 'Lobber', 'Rifleman', 'Lob & Shoot', 'Windless Wit', 'Twanger'];   // DS:0120.. — «Random» выбирает Random(6)+1
+export function pickStrategy(name, rng) { const a = STRATEGY_SETS[name]; for (;;) { const s = rng.word(4) + 1; if (!a || a.includes(s)) return s; } }
+const reindex = (ps) => ps.forEach((p, i) => { p.idx = i + 1; });
+export function shufflePlayers(rng, ps) {             // 224b:25a7
+  const n = ps.length, cnt = rng.word(20) + 10;
+  for (let i = 0; i < cnt; i++) { const a = rng.word(n); let b; do { b = rng.word(n); } while (a === b); [ps[a], ps[b]] = [ps[b], ps[a]]; }
+  reindex(ps);
+}
+export function winnerBonus(p, n) { p.wins++; p.score += i16(n * 1000); }
+export function results(rng, ps, auto) {              // 224b:2641
+  const n = ps.length, sw = (e) => { [ps[e], ps[e + 1]] = [ps[e + 1], ps[e]]; };
+  for (let k = 0; k < n; k++) for (let e = 0; e < n - 1; e++) if (ps[e].wins < ps[e + 1].wins) sw(e);
+  for (let k = 0; k < n; k++) for (let e = 0; e < n - 1; e++) if (ps[e].wins === ps[e + 1].wins && ps[e].score < ps[e + 1].score) sw(e);
+  for (const p of ps) p.men = 100;
+  reindex(ps);
+  if (auto) for (let i = 0; i < 200; i++) for (const m of [319, 199, 319, 199, 16]) rng.word(m);
+}
+export const shopHave = (p, cat, i) => (cat === 0 ? p.ammo[i] : cat === 1 ? (i ? p.vick : p.herb) : (i ? p.damp : p.shield));
+export function shopAdd(p, cat, i, n) {
+  if (cat === 0) p.ammo[i] = i16(p.ammo[i] + n);
+  else if (cat === 1) { if (i) p.vick = i16(p.vick + n); else p.herb = i16(p.herb + n); }
+  else if (i) p.damp += n; else p.shield += n;
+}
+export function shopMenu(p) {                          // 224b:0118 -> [[категория, номер], ...]
+  const money = p.score - p.spent, menu = [];
+  for (let w = 0; w < 18; w++) if ((p.ammo[w] > 0 || W_PRICE[w] <= money) && W_PACK[w] !== 0) menu.push([0, w]);
+  for (const cat of [1, 2]) for (let i = 0; i < 2; i++) if (shopHave(p, cat, i) > 0 || (SHOP_PRICE[cat][i] <= money && SHOP_PACK[cat][i] !== 0)) menu.push([cat, i]);
+  return menu;
+}
+export function shopCommit(p, menu, qty) {            // «Purchase»/«Done»
+  menu.forEach(([cat, i], c) => { if (qty[c] > 0) { p.spent += SHOP_PRICE[cat][i] * qty[c]; shopAdd(p, cat, i, SHOP_PACK[cat][i] * qty[c]); } });
+}
+function aiChoice(p, strategy, menu, qty, cart) {      // 224b:173d..1ab8: индекс позиции (с 0) или -1 = Done
+  const money = p.score - p.spent - cart;
+  let sel = -1;
+  if (strategy === 1) {
+    for (let c = menu.length - 1; c >= 0; c--) { const [cat, i] = menu[c]; if (cat === 0 && i >= 1 && i <= 4 && p.ammo[i] + W_PACK[i] * qty[c] < 20 && W_PRICE[i] <= money) sel = c; }
+    return sel;
+  }
+  if (strategy === 2 || strategy === 3) {
+    const hi = strategy === 2 ? 4 : 5;
+    for (let c = 0; c < menu.length; c++) { const [cat, i] = menu[c]; if (cat === 0 && i >= 1 && i <= hi && W_PRICE[i] <= money) sel = c; }
+  } else if (strategy === 4) {
+    for (let c = menu.length - 1; c >= 0; c--) { const [cat, i] = menu[c]; if (cat === 2 && SHOP_PRICE[2][i] <= money) sel = c; }
+  } else return -1;
+  if (p.ammo[1] + W_PACK[1] * (qty[0] || 0) < 20) sel = 0;
+  return sel;
+}
+export function aiShop(p, strategy) {
+  if (p.score - p.spent < MIN_PRICE || !strategy) return false;
+  const menu = shopMenu(p), qty = menu.map(() => 0);
+  let cart = 0;
+  for (let step = 0; step < 10000; step++) {
+    const sel = aiChoice(p, strategy, menu, qty, cart);
+    if (sel < 0 || !menu[sel]) break;
+    const [cat, i] = menu[sel], price = SHOP_PRICE[cat][i];
+    if (qty[sel] < 9 && price <= p.score - p.spent - cart) { cart += price; qty[sel]++; } else if (qty[sel] >= 9) break;   // в оригинале здесь зацикливание
+  }
+  shopCommit(p, menu, qty);
+  return true;
 }

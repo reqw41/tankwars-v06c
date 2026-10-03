@@ -134,6 +134,106 @@ section('ветер (T02, оригинал)', json(FX('js/wind_orig.json')), (c)
   return w === c.wind || `${w}/${c.wind}`;
 });
 
+// ================= T05 =================
+const hexU8 = (h) => new Uint8Array(Buffer.from(h, 'hex'));
+const inField = (k) => { const y = (k / 320) | 0, x = k % 320; return y >= 28 && y <= 192 && x >= 8 && x <= 312; };
+const fdiff = (a, b) => { let n = 0; for (let k = 0; k < 64000; k++) if (a[k] !== b[k] && inField(k)) n++; return n; };
+
+// --- гибель танка: 7 вариантов ---
+for (const dir of ['death', 'death_b']) {
+  section(`гибель ${dir} (T05)`, json(FX(`t05/${dir}/index.json`)), (c) => {
+    const d = `t05/${dir}/`;
+    const v = z(FX(d + c.name + '.pre.z')), bg = z(FX(d + c.name + '.bg.z')), post = z(FX(d + c.name + '.post.z'));
+    const ps = c.pre.players.map((h, i) => TW.playerFromRec(hexU8(h), i + 1));
+    const rng = new TW.TPRandom(c.pre.seed);
+    TW.death(c.variant, v, bg, ps, c.victim, rng, !!c.sound, c.wind || 0, !!c.xkill);
+    const want = c.post.players.map((h, i) => TW.playerFromRec(hexU8(h), i + 1));
+    const key = (p) => [p.men, p.shield, p.score].join();
+    if (!same(ps.map(key), want.map(key))) return 'игроки';
+    if (rng.seed !== c.post.seed) return 'RandSeed';
+    return vdiff(v, post) === 0 || 'vram ' + vdiff(v, post);
+  });
+}
+
+// --- ход целиком ---
+for (const dir of ['turns_ai2', 'turns_ai6']) {
+  section(`ход ${dir} (T05)`, json(FX(`t05/${dir}/index.json`)), (c) => {
+    const d = `t05/${dir}/`;
+    const v = z(FX(d + c.name + '.pre.z')), bg = z(FX(d + c.name + '.bg.z')), post = z(FX(d + c.name + '.post.z')), bgpost = z(FX(d + c.name + '.bgpost.z'));
+    const f = c.pre.flags;
+    const fl = { rebound: !!f.rebound, crumble: f.crumble, fall: !!f.fall, xkill: !!f.xkill, sound: !!f.sound, wind: f.wind, ballVisible: !f.ball_inv, trail: !!f.trail };
+    const ps = c.pre.players.map((h, i) => TW.playerFromRec(hexU8(h), i + 1));
+    const rng = new TW.TPRandom(c.pre.seed);
+    TW.turn(v, bg, ps, f.shooter, rng, fl);
+    const want = c.post.players.map((h, i) => TW.playerFromRec(hexU8(h), i + 1));
+    const key = (p) => [p.x, p.y, p.men, p.alive, p.shield, p.score, p.ammo.join('.')].join();
+    if (!same(ps.map(key), want.map(key))) return 'игроки';
+    if (rng.seed !== c.post.seed) return 'RandSeed';
+    if (vdiff(bg, bgpost)) return 'фон ' + vdiff(bg, bgpost);
+    return fdiff(v, post) === 0 || 'vram ' + fdiff(v, post);
+  });
+}
+
+// --- начало раунда: стены, фон, рельеф, танки, первый игрок, ветер ---
+section('начало раунда (T05)', json(FX('t05/rstart/index.json')), (c) => {
+  const ps = c.pre.players.map((h, i) => TW.playerFromRec(hexU8(h), i + 1));
+  const rng = new TW.TPRandom(c.pre.seed), cfg = c.pre.cfg;
+  const r = TW.roundStart(rng, ps, cfg.walls_cfg, cfg.bg_cfg, cfg.wind_mode);
+  const post = z(FX(`t05/rstart/${c.name}.post.z`)), bgo = z(FX(`t05/rstart/${c.name}.bg.z`));
+  if (vdiff(r.bg, bgo)) return 'фон ' + vdiff(r.bg, bgo);
+  if (fdiff(r.v, post)) return 'vram ' + fdiff(r.v, post);
+  const want = c.post.players.map((h, i) => TW.playerFromRec(hexU8(h), i + 1));
+  const key = (p) => [p.x, p.y, p.angle, p.power, p.facing, p.men, p.alive].join();
+  if (!same(ps.map(key), want.map(key))) return 'игроки';
+  return (rng.seed === c.post.seed && r.wind === c.post.wind && +r.rebound === c.post.rebound && r.first === c.post.first_raw) || 'seed/ветер/стены/первый';
+});
+
+// --- ИИ: план и цикл кодов ---
+{
+  const cases = [];
+  for (const d of ['birdy', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6r']) for (const c of json(FX(`t05/ai/${d}/index.json`))) cases.push({ ...c, dir: d, label: `${d}-${c.name}` });
+  const load = (c) => {
+    const ps = c.recs.slice(1).map((h, i) => TW.playerFromRec(hexU8(h), i + 1, 0x0e));
+    return { ps, p: ps[c.player - 1], bg: z(FX(`t05/ai/${c.dir}/${c.name}.bg.z`)) };
+  };
+  section('ИИ: план (T05)', cases, (c) => {
+    const { ps, p, bg } = load(c);
+    const h = TW.histFromBytes(hexU8(c.hist)), h1 = TW.histFromBytes(hexU8(c.hist1));
+    if (h.planned) return true;
+    const rng = new TW.TPRandom(c.seed0);
+    TW.plan(z(FX(`t05/ai/${c.dir}/${c.name}.v0.z`)), bg, ps, p, h, rng, !!c.flags.rebound, p.name);
+    const code = TW.chooseCode(p, h);
+    const f = (x) => [x.power, x.angle, x.facing, x.weapon, x.target, x.n].join();
+    if (f(h) !== f(h1)) return `план ${f(h)} / ${f(h1)}`;
+    if (rng.seed !== c.seeds[0]) return 'RandSeed';
+    return code === c.codes[0] || `код ${code}/${c.codes[0]}`;
+  });
+  section('ИИ: цикл кодов (T05)', cases, (c) => {
+    const { ps, p, bg } = load(c);
+    p.hist = TW.histFromBytes(hexU8(c.hist1)); p.hist.planned = 1;
+    const codes = TW.computerTurn(z(FX(`t05/ai/${c.dir}/${c.name}.v1.z`)), bg, ps, p, new TW.TPRandom(0), !!c.flags.rebound);
+    const end = TW.playerFromRec(hexU8(c.rec_end), c.player, 0x0e);
+    if (!same(codes, c.codes)) return `коды ${codes.length}/${c.codes.length}`;
+    return [p.angle, p.power, p.facing, p.weapon].join() === [end.angle, end.power, end.facing, end.weapon].join() || 'запись';
+  });
+}
+
+// --- матч: перетасовка, результаты, магазин ---
+for (const m of ['a', 'b', 'c']) {
+  const ev = json(FX(`t05/match/${m}.json`));
+  const pairs = []; for (let i = 0; i + 1 < ev.length; i++) pairs.push({ a: ev[i], b: ev[i + 1], label: `${m}-${i}-${ev[i].event}` });
+  const mk = (e) => e.recs.slice(1).map((h, i) => { const p = TW.playerFromRec(hexU8(h), i + 1, 0x0e); p.ctrl = e.ctrl[i + 1]; p.strategy = e.strategy[i + 1]; return p; });
+  const key = (p) => [p.name, p.score, p.spent, p.wins, p.men, p.ammo.join('.'), p.herb, p.vick, p.shield, p.damp, p.colors.join('.'), p.ctrl, p.strategy].join();
+  section(`матч ${m} (T05)`, pairs.filter((x) => x.a.event !== 'round'), ({ a, b }) => {
+    const ps = mk(a), want = mk(b), rng = new TW.TPRandom(a.seed);
+    if (a.event === 'shuffle') TW.shufflePlayers(rng, ps);
+    else if (a.event === 'results') TW.results(rng, ps, true);
+    else if (a.event === 'shop') for (const p of ps) if (p.ctrl === 3 && a.ai_buys) TW.aiShop(p, p.strategy);
+    if (!same(ps.map(key), want.map(key))) return 'игроки';
+    return rng.seed === b.seed || 'RandSeed';
+  });
+}
+
 let fail = 0, total = 0, okAll = 0;
 for (const [name, ok, n, bad] of results) {
   total += n; okAll += ok; if (ok !== n) fail++;
