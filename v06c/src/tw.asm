@@ -43,6 +43,7 @@ MODE_PLACE	equ	21
 MODE_MATCH	equ	22
 MODE_FLIGHT	equ	23
 MODE_ROUND	equ	24
+MODE_EXPLODE	equ	25
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -115,6 +116,8 @@ entry:
 	jp	z, do_flight
 	cp	MODE_ROUND
 	jp	z, do_round
+	cp	MODE_EXPLODE
+	jp	z, do_explode
 	jp	done
 done:
 	halt
@@ -923,6 +926,24 @@ do_round:
 	call	copy_b
 	jp	done
 
+; взрыв: LIST = записи игроков; RESULT (на входе) = 11 байт: x, y (Q16.16), hit, shooter, weapon; PARAM_N = число игроков.
+; Экран загружает стенд. После вызова записи копируются обратно в LIST.
+do_explode:
+	ld	a, (PARAM_N)
+	ld	(n_players), a
+	ld	hl, LIST
+	ld	de, players
+	call	dm_copy
+	ld	hl, RESULT
+	ld	de, ex_x
+	ld	b, 11
+	call	copy_b
+	call	explode
+	ld	hl, players
+	ld	de, LIST
+	call	dm_copy
+	jp	done
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -1041,6 +1062,7 @@ kernel_start:
 	include	"round.asm"
 	include	"fx.asm"
 	include	"flight.asm"
+	include	"explode.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"
