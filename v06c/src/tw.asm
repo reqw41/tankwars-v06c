@@ -1212,7 +1212,7 @@ dhd_res:
 	jp	done
 
 ; планировщики: LIST = записи игроков; PARAM_N = число игроков; PARAM_C = место; PARAM_KIND: 1 — plan_stupid
-; (PARAM_X = стены отражают), 2 — plan_birdy, 3 — record_shot (RESULT на входе = 4 байта fl_x). PARAM_SEED -> RandSeed и обратно.
+; (PARAM_X = стены отражают), 2 — plan_birdy, 3 — record_shot (RESULT на входе = 4 байта fl_x), 4 — plan_lobber. PARAM_SEED -> RandSeed и обратно.
 do_aiplan:
 	ld	hl, PARAM_SEED
 	ld	de, rand_seed
@@ -1228,6 +1228,12 @@ do_aiplan:
 	jp	z, dap_1
 	dec	a
 	jp	z, dap_2
+	dec	a
+	jp	z, dap_3
+	ld	a, (PARAM_C)
+	call	plan_lobber
+	jp	dap_e
+dap_3:
 	ld	hl, RESULT
 	ld	de, fl_x
 	ld	b, 4
@@ -1380,6 +1386,7 @@ kernel_start:
 	include	"aistep.asm"
 	include	"hud.asm"
 	include	"aiplan.asm"
+	include	"ailob.asm"
 	include	"shop.asm"
 	include	"barrel.asm"
 	include	"text.asm"
