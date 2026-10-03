@@ -815,6 +815,14 @@ export function newPlayer(idx, rounds) {
   return p;
 }
 // 1062:07a9 — цвет танка в палитре (0..63 на компонент)
+// Вектор: цвет танка в единицах палитры R3 G3 B2. Яркость по здоровью с нижним порогом, чтобы живой танк
+// не пропадал на чёрном фоне (правило оригинала после обрезки до 3 бит давало чёрный уже при men ≤ 12):
+// R и G: 3 + men·4 div 100 (3..7), B: 1 + men·2 div 100 (1..3); компонента есть, если её делитель в записи равен 1.
+export function tankPalV06C(p) {
+  if (p.men <= 0) return [0, 0, 0];
+  const m = Math.min(p.men, 100), rg = 3 + trunc(m * 4 / 100), b = 1 + trunc(m * 2 / 100);
+  return [p.colors[0] === 1 ? rg : 0, p.colors[1] === 1 ? rg : 0, p.colors[2] === 1 ? b : 0];
+}
 export function tankRGB(p) { if (p.men < 0) return [0, 0, 0]; const L = trunc(p.men * 63 / 100); return p.colors.map((d) => trunc(L / d)); }
 
 // ---------- полёт с отрисовкой мяча и следа (2583:01c0) ----------

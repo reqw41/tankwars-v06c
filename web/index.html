@@ -248,7 +248,7 @@ function paint(canvas, v, ps = null, mark = null) {
   if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
   const ctx = canvas.getContext('2d'), img = ctx.createImageData(W, H), d = img.data;
   // цвет танка: 1062:07a9 (яркость = здоровье); на Векторе — тот же расчёт, обрезанный до 3-3-2 бит
-  const tank = ps ? ps.map((p) => { const c = TW.tankRGB(p); return vec ? V332([c[0] >> 3, c[1] >> 3, c[2] >> 4]) : c.map((x) => x * 255 / 63 | 0); }) : null;
+  const tank = ps ? ps.map((p) => (vec ? V332(TW.tankPalV06C(p)) : TW.tankRGB(p).map((x) => x * 255 / 63 | 0))) : null;
   const base = ps ? ps.map((p) => p.colors.map((dv) => (63 / dv | 0) * 255 / 63 | 0)) : null;
   for (let i = 0; i < N; i++) {
     const c = v[i]; let rgb = vec ? (c < 4 ? V332(VPAL[c]) : [0, 0, 0]) : PAL[c] || [0, 0, 0];
