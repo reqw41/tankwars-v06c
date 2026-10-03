@@ -45,6 +45,7 @@ const codes = new Set(); let nC = 0, nT = 0, nA = 0, nW = 0;
 for (let t = 0; t < N; t++) {
   const n = 2 + rnd(3);
   { const ps = mk(n), place = 1 + rnd(n), p = ps[place - 1]; p.alive = true;
+    if (t % 5 === 0) { const w = [0, 1, 3, 5][rnd(4)]; p.ammo[w] = 300; p.weapon = w; p.men = 100; p.hist = { ...p.hist, power: p.power, angle: p.angle, facing: p.facing, weapon: w }; if (w === 5 && rnd(2)) p.ammo[5] = Math.max(1, p.power - rnd(3)); }   // план уже достигнут — код 5
     const before = { pw: p.power, an: p.angle, fa: p.facing, we: p.weapon, men: p.men, h: JSON.stringify(p.hist), ammo: p.ammo.join('.') };
     const got = run(1, ps, place); const code = TW.chooseCode(p, p.hist);
     const tag = `choose_code #${t} место=${place}: было power=${before.pw} angle=${before.an} facing=${before.fa} weapon=${before.we} men=${before.men} ammo=${before.ammo} план=${before.h}`;
