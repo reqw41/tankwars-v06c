@@ -32,19 +32,12 @@ entry:
 	xor	a
 	ld	(g_phase), a
 	ld	(gk_last), a
-	call	clear_screen
-	call	gm_pal_title
 	ei
-	; --- заставка ---
-	ld	de, s_gtitle
-	ld	hl, 0x0B0C		; H = столбец, L = строка
-	ld	bc, 0x0902		; B = длина, C = цвет
-	call	gm_text
-	ld	de, s_anykey
-	ld	hl, 0x0910
-	ld	bc, 0x0D02
-	call	gm_text
-	call	get_key
+	; --- экран настройки матча ---
+gm_setup:
+	call	setup
+	ld	a, PH_BUSY
+	ld	(g_phase), a
 	; --- начальное число ---
 	ld	hl, g_seed
 	ld	de, rand_seed
@@ -55,6 +48,7 @@ entry:
 	jp	nz, gm_match
 	ld	hl, (g_frames)		; время до нажатия — в начальное число
 	ld	(rand_seed), hl
+	ld	(g_seed), hl		; следующий матч начнётся с другого числа
 
 ; --- матч: игроки заново ---
 gm_match:
@@ -235,7 +229,7 @@ gm_end:
 	ld	b, a
 	ld	a, (g_round)
 	cp	b
-	jp	nc, gm_match
+	jp	nc, gm_setup		; матч окончен — снова настройка
 	; магазин: по порядку мест; компьютеры закупаются сами
 	ld	a, 1
 gm_shop:
@@ -358,24 +352,7 @@ gnp_z:
 	jp	z, gnp_c
 	ld	(hl), 3
 gnp_c:
-	; цвета: gm_colors[место]
-	ld	a, (gm_i)
-	ld	e, a
-	add	a, a
-	add	a, e
-	ld	e, a
-	ld	d, 0
-	ld	hl, gm_colors
-	add	hl, de
-	ex	de, hl
-	push	de
-	ld	hl, (gm_p)
-	ld	de, PL_COLORS
-	add	hl, de
-	pop	de
-	ex	de, hl
-	ld	b, 3
-	call	gm_copy
+	call	gnp_colors
 	; запасы: оружие 0 — 100, оружие 1 — раундов·3, оружие 11 — min(999, раундов·10)
 	ld	hl, (gm_p)
 	ld	de, PL_AMMO
@@ -436,6 +413,26 @@ gnp_st:
 	ld	a, (gm_i)
 	inc	a
 	jp	pick_strategy
+
+; цвета игрока gm_p на месте gm_i: gm_colors[место]
+gnp_colors:
+	ld	a, (gm_i)
+	ld	e, a
+	add	a, a
+	add	a, e
+	ld	e, a
+	ld	d, 0
+	ld	hl, gm_colors
+	add	hl, de
+	ex	de, hl
+	push	de
+	ld	hl, (gm_p)
+	ld	de, PL_COLORS
+	add	hl, de
+	pop	de
+	ex	de, hl
+	ld	b, 3
+	jp	gm_copy
 
 ; палитра по записям игроков: здоровье и цвета мест 1..4; пишет её прерывание
 gm_pal:
@@ -743,6 +740,7 @@ gm_p:		dw	0
 	include	"shop.asm"
 	include	"shopui.asm"
 	include	"hshop.asm"
+	include	"setup.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"

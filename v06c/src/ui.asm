@@ -887,9 +887,9 @@ draw_shop:
 	ld	(p32), a
 	ld	a, (ui_cart + 1)
 	ld	(p32 + 1), a
-	rla
-	sbc	a, a
+	ld	a, (ui_cart2)		; корзина — 32 бита без знака (старшее слово в ui_cart2)
 	ld	(p32 + 2), a
+	ld	a, (ui_cart2 + 1)
 	ld	(p32 + 3), a
 	call	ui_sub32
 	call	ui_itoa
@@ -902,9 +902,9 @@ draw_shop:
 	ld	(n32), a
 	ld	a, (ui_cart + 1)
 	ld	(n32 + 1), a
-	rla
-	sbc	a, a
+	ld	a, (ui_cart2)
 	ld	(n32 + 2), a
+	ld	a, (ui_cart2 + 1)
 	ld	(n32 + 3), a
 	call	ui_itoa
 	ld	hl, ui_num
@@ -1213,6 +1213,7 @@ pow10:
 
 n32:	db	0, 0, 0, 0
 p32:	db	0, 0, 0, 0
+ui_cart2:	dw	0			; старшее слово корзины
 it_pw:	dw	0
 it_out:	dw	0
 it_dg:	db	0

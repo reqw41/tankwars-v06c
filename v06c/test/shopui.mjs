@@ -28,10 +28,9 @@ for (let t = 0; t < N; t++) {
   const place = 1 + rnd(n), p = ps[place - 1];
   const menu = TW.shopMenu(p), qty = menu.map(() => (rnd(3) ? 0 : 1 + rnd(9)));
   let cart = 0; menu.forEach(([cat, i], c) => { cart += TW.SHOP_PRICE[cat][i] * qty[c]; });
-  if (cart > 65535) { qty.fill(0); cart = 0; }
   const sel = [-1, 0, rnd(menu.length + 2), menu.length, menu.length + 1][rnd(5)];
   const list = new Uint8Array(MAX_PLAYERS * PL_SIZE); ps.forEach((q, i) => list.set(packPlayer(q), i * PL_SIZE));
-  const res = new Uint8Array(4 + 66); res[0] = cart & 255; res[1] = (cart >> 8) & 255;
+  const res = new Uint8Array(4 + 66); res[0] = cart & 255; res[1] = (cart >> 8) & 255; res[2] = (cart >> 16) & 255;
   menu.forEach(([cat, i], c) => { res[4 + c] = cat; res[26 + c] = i; res[48 + c] = qty[c]; });
   loadRom(machine, rom);
   const junk = new Uint8Array(65536); for (let k = 0; k < 65536; k++) junk[k] = [0, 1, 1, 2, 4][(k * 7 + (k >> 8)) % 5];
