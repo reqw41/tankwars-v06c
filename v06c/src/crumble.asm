@@ -24,6 +24,7 @@ cr_gotm:
 	xor	a
 	ld	c, a
 	ld	e, a
+	ld	(cr_l0), a
 ; Просмотр столбца снизу вверх: C — «ниже есть пустота» (по битам), E — «земля над пустотой».
 ; Быстрые пути: пока пустоты нет (C = 0) — пропуск строк сплошной земли; когда пустота во всех битах (C = FFh) —
 ; пропуск пустых строк. В обоих случаях строка не меняет ни C, ни E.
@@ -69,6 +70,12 @@ cr_slow:
 	and	b
 	ld	b, a
 	and	c
+	jp	z, cr_s1
+	ld	d, a
+	ld	a, l
+	ld	(cr_l1), a		; самая верхняя строка с землёй над пустотой
+	ld	a, d
+cr_s1:
 	or	e
 	ld	e, a
 	ld	a, b
@@ -99,11 +106,16 @@ cr_fli:
 	inc	hl
 	dec	b
 	jp	nz, cr_fli
-	ld	a, 227
+	; строки от cr_l0 до cr_l1: ниже — сплошная земля, выше — осыпаться нечему
+	ld	a, (cr_l0)
+	ld	l, a
+	ld	b, a
+	ld	a, (cr_l1)
+	sub	b
+	inc	a
 	ld	(cr_n), a
 	ld	a, (cr_ah)
 	ld	h, a
-	ld	l, 2
 cr_row:
 	ld	a, l
 	ld	(cr_l), a
@@ -241,6 +253,12 @@ cr_f0l:
 	ld	c, 0
 	jp	cr_scend
 cr_f0x:
+	ld	a, (cr_l0)
+	or	a
+	jp	nz, cr_f0y
+	ld	a, l
+	ld	(cr_l0), a		; первая строка, где уже не сплошная земля
+cr_f0y:
 	ld	a, (cr_e)
 	ld	e, a
 	ld	c, 0
@@ -335,4 +353,6 @@ cr_bit:	db	0
 cr_bi:	db	0
 cr_n:	db	0
 cr_e:		db	0
+cr_l0:		db	0
+cr_l1:		db	0
 cr_fl:	ds	8
