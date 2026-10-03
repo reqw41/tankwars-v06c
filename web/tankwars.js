@@ -822,7 +822,7 @@ export function roundStart(rng, ps, wallsCfg, bgCfg, windMode) {
   const bg = drawBackground(kind, rng), v = new Uint8Array(bg), n = ps.length;
   renderTerrain(generateTerrain(rng, n), v);
   const ts = placeTanks(rng, n, v, bg, rebound);
-  ps.forEach((p, i) => { const t = ts[i]; Object.assign(p, { idx: i + 1, x: t.x, y: t.y, angle: t.angle, power: t.power, facing: t.facing, men: t.men, alive: true }); });
+  ps.forEach((p, i) => { const t = ts[i]; Object.assign(p, { idx: i + 1, x: t.x, y: t.y, angle: t.angle, power: t.power, facing: t.facing, men: t.men, alive: true }); if (p.hist) p.hist.n = 0; });   // 2eef:0909: счётчик истории ИИ = 0 (сами выстрелы остаются)
   const first = rng.word(n);
   const wind = generateWind(rng, windMode);
   return { v, bg, rebound, wind, first, kind };
@@ -940,7 +940,7 @@ function planLobber(v, bg, ps, p, h, rng) {
     const dx = (sj.x - si.x) || 1, dp = (sj.power - si.power) || 1, ratio = q(dp / dx), miss = by(target).x - si.x;
     h.planned = 1;
     h.power = i16(si.power + (trunc(q(miss * ratio)) % 0x7fff));
-    if (h.power < 0) h.power = -h.power * 2;
+    if (h.power < 0) h.power = i16(-h.power * 2);       // 16 бит: большое отрицательное остаётся отрицательным -> 0 в chooseCode
     if (Math.abs(miss) > 5) h.weapon = 2;
     if (Math.abs(miss) > 15) h.weapon = 3;
     if (Math.abs(miss) > 30) h.weapon = 4;
@@ -1117,4 +1117,31 @@ export function aiShop(p, strategy) {
   }
   shopCommit(p, menu, qty);
   return true;
+}
+
+// ---------- раунд целиком без анимации (2583:2531), все игроки — компьютеры ----------
+// cfg: {walls, bg, windMode, crumble, fall, xkill, sound, ballVisible, trail}
+export function nextAlive(ps, cur) { const n = ps.length; do { cur = cur % n + 1; } while (!ps[cur - 1].alive); return cur; }   // 2583:2783
+export function autoSwitchWeapon(p) {                                 // 2583:27d7
+  if (p.ammo[p.weapon] !== 0) return;
+  for (let g = 0; g < 40; g++) { p.weapon = p.weapon >= 17 ? 0 : p.weapon + 1; if (p.ammo[p.weapon] > 0) break; }
+}
+export function playRound(rng, ps, cfg, maxTurns = 5000) {
+  const r = roundStart(rng, ps, cfg.walls, cfg.bg, cfg.windMode);
+  const fl = { rebound: r.rebound, crumble: cfg.crumble, fall: cfg.fall, xkill: cfg.xkill, sound: cfg.sound, wind: r.wind, ballVisible: cfg.ballVisible, trail: cfg.trail };
+  let cur = r.first, turns = 0, winner = null;
+  for (; turns < maxTurns; turns++) {
+    cur = nextAlive(ps, cur);
+    const p = ps[cur - 1];
+    turnBegin(p.hist); autoSwitchWeapon(p);
+    computerTurn(r.v, r.bg, ps, p, rng, fl.rebound);
+    if (cfg.onTurn) cfg.onTurn('fire', cur, r, fl);
+    const res = fire(r.v, r.bg, ps, cur, rng, fl);
+    if (res) recordShot(p.hist, p, res.x, res.y);
+    afterShot(r.v, r.bg, ps, cur, rng, fl);
+    if (cfg.onTurn) cfg.onTurn('turn_end', cur, r, fl);
+    const alive = ps.filter((t) => t.alive);
+    if (alive.length <= 1) { winner = alive[0] || null; break; }
+  }
+  return { winner, turns: turns + 1, v: r.v, bg: r.bg, fl };
 }

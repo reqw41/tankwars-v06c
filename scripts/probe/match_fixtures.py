@@ -2,7 +2,7 @@
 результаты (224b:2641), магазин (224b:0e51). Ничего не подменяется, кроме числа раундов и флага «компьютеры покупают».
 usage: match_fixtures.py OUT_DIR N_EVENTS [AI] [PLAYERS]
 """
-import json, struct, sys
+import json, os, struct, sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from t03_common import boot_to_round, computer_keys  # noqa: E402
@@ -10,6 +10,7 @@ from unicorn import UC_HOOK_CODE  # noqa: E402
 
 REC, ST, HIST, HST = 0x3EEE, 0x61, 0x8896, 0x802
 POINTS = {'shuffle': (0x224B, 0x25A7), 'round': (0x2583, 0x2531), 'results': (0x224B, 0x2641), 'shop': (0x224B, 0x0E51)}
+TURN = {'fire': (0x2583, 0x2976), 'turn_end': (0x2583, 0x2CEE)}      # при TW_TRACE=1: трасса ходов в turns.json
 
 
 def snap(g, n):
@@ -26,7 +27,12 @@ def capture(out: Path, n_events, ai=2, players=4, dos_time=(0x2A3B, 0x4C5D)):
     g = boot_to_round(dos_time, players=players, players_keys=computer_keys(players, ai))
     g.ww(0x3EE8, 6)
     g.uc.mem_write(g.ds * 16 + 0x8869, b'\x01')
-    addr = {g.ghidra_abs(s) * 16 + o: k for k, (s, o) in POINTS.items()}
+    pts = dict(POINTS)
+    trace = bool(os.environ.get('TW_TRACE'))
+    if trace:
+        pts.update(TURN)
+    addr = {g.ghidra_abs(s) * 16 + o: k for k, (s, o) in pts.items()}
+    turns = []
     st = {'ev': None, 'skip': None}
 
     def hk(uc, a, size, d):
@@ -45,6 +51,14 @@ def capture(out: Path, n_events, ai=2, players=4, dos_time=(0x2A3B, 0x4C5D)):
             if r == 'exit' or r.startswith('error'):
                 print('стоп', r, g.where(), flush=True)
                 break
+            continue
+        if st['ev'] in TURN:
+            sh = g.rd(0x885E, 1)[0]
+            turns.append({'ev': st['ev'], 'after_event': len(ev), 'seed': struct.unpack('<I', g.rd(0x3774, 4))[0], 'shooter': sh,
+                          'recs': [g.rd(REC + ST * i, ST).hex() for i in range(1, players + 1)],
+                          'hist': g.rd(HIST + HST * sh, 0x80).hex(), 'wind': struct.unpack('<h', g.rd(0x3EDE, 2))[0], 'rebound': g.rd(0x8200, 1)[0]})
+            st['skip'] = st['at']
+            (out / 'turns.json').write_text(json.dumps(turns))
             continue
         s = snap(g, players)
         s['event'] = st['ev']

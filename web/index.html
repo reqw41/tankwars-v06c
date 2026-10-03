@@ -60,6 +60,22 @@ button:disabled { opacity: .45; cursor: default; }
 .log div:first-child { color: var(--fg); }
 .keys { font-size: 12px; color: var(--muted); }
 kbd { font: 11px var(--font-mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; color: var(--fg); }
+.setup { display: grid; gap: 12px; }
+.plist { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.plist label { display: grid; grid-template-columns: 14px 1fr; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.plist i { width: 12px; height: 12px; border-radius: 2px; display: block; }
+.sheet { background: var(--panel); border: 1px solid var(--accent); border-radius: 6px; padding: 14px; display: grid; gap: 12px; }
+.sheet h2 { font-family: var(--font-display); font-weight: 400; font-size: 28px; line-height: 1; margin: 0; color: var(--accent); }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th { font: 500 11px var(--font-mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); text-align: left; padding: 4px 8px; }
+td { padding: 4px 8px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+td.n, th.n { text-align: right; font-family: var(--font-mono); }
+td .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+.qty { display: inline-flex; align-items: center; gap: 6px; }
+.qty button { padding: 2px 9px; }
+.ctrl.c3 { grid-template-columns: repeat(3, 1fr); }
+.ctrl.c3 button.fire { grid-column: span 3; }
 /* Сверка */
 .vhead { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
 .summary { font: 500 14px var(--font-mono); }
@@ -86,7 +102,7 @@ figcaption { font-size: 12px; color: var(--muted); }
 <div class="wrap">
   <header>
     <h1>TANK WARS 2.5</h1>
-    <p class="sub">Эталонная модель на JS, перенесённая с разобранного кода оригинала. Каждая её функция сверена с настоящей игрой побайтно: 423 из 423 событий.</p>
+    <p class="sub">Эталонная модель на JS, перенесённая с разобранного кода оригинала. Каждая её функция сверена с настоящей игрой побайтно: 778 из 778 событий, а три матча компьютеров целиком (338 ходов) повторяются ход в ход вместе с генератором случайных чисел.</p>
   </header>
   <nav class="tabs" role="tablist">
     <button class="tab" role="tab" id="tab-game" aria-selected="true" aria-controls="pane-game">Игра</button>
@@ -101,7 +117,7 @@ figcaption { font-size: 12px; color: var(--muted); }
       </div>
       <div class="panel">
         <div>
-          <div class="label">Ход</div>
+          <div class="label" id="roundlbl">Матч не начат</div>
           <div class="turn" id="turn">—</div>
         </div>
         <div class="readouts">
@@ -109,32 +125,51 @@ figcaption { font-size: 12px; color: var(--muted); }
           <div class="readout"><span class="label">Мощность</span><b id="r-power">—</b></div>
           <div class="readout"><span class="label">Ветер</span><b id="r-wind">—</b></div>
         </div>
-        <label class="row" style="display:grid;gap:3px"><span class="label">Оружие</span>
+        <label class="row" style="display:grid;gap:3px"><span class="label">Оружие (остаток)</span>
           <select id="weapon"></select></label>
-        <div class="ctrl">
-          <button id="b-al" title="Угол влево (←)">◀ угол</button>
-          <button id="b-ar" title="Угол вправо (→)">угол ▶</button>
-          <button id="b-pd" title="Мощность −10 (↓)">− мощн.</button>
-          <button id="b-pu" title="Мощность +10 (↑)">+ мощн.</button>
+        <div class="row" id="guide" hidden>
+          <label><span><input type="checkbox" id="g-herb"> Herb</span></label>
+          <label><span><input type="checkbox" id="g-vick"> Vick</span></label>
+          <label>Цель<select id="g-target"></select></label>
+        </div>
+        <div class="ctrl c3">
+          <button id="b-al" title="Код 1 (←)">◀ угол</button>
+          <button id="b-flip" title="Разворот (I)">⇄</button>
+          <button id="b-ar" title="Код 2 (→)">угол ▶</button>
+          <button id="b-pd" title="Мощность −1 (↓), −100 (PgDn)">− мощн.</button>
+          <button id="b-p100" title="Мощность +100 (PgUp)">+100</button>
+          <button id="b-pu" title="Мощность +1 (↑)">+ мощн.</button>
           <button class="fire" id="b-fire">Огонь (пробел)</button>
         </div>
         <div class="players" id="players"></div>
         <div class="log" id="log"></div>
-        <div class="keys"><kbd>←</kbd><kbd>→</kbd> угол, <kbd>↑</kbd><kbd>↓</kbd> мощность (с <kbd>Shift</kbd> по 10), <kbd>W</kbd> оружие, <kbd>Пробел</kbd> огонь</div>
+        <div class="keys"><kbd>←</kbd><kbd>→</kbd> угол, <kbd>↑</kbd><kbd>↓</kbd> мощность, <kbd>PgUp</kbd><kbd>PgDn</kbd> ±100, <kbd>Tab</kbd> или <kbd>W</kbd> оружие, <kbd>I</kbd> разворот, <kbd>H</kbd><kbd>V</kbd> наведение, <kbd>Пробел</kbd> огонь — как в оригинале</div>
       </div>
     </div>
-    <div class="panel" style="margin-top:18px">
+    <div class="sheet" id="sheet" style="margin-top:18px" hidden></div>
+    <div class="panel setup" style="margin-top:18px">
       <div class="row">
-        <label>Сид раунда<input type="number" id="seed" value="487264648"></label>
-        <label>Игроков<select id="nplayers"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>
+        <label>Сид матча<input type="number" id="seed" value="487264648"></label>
+        <label>Игроков<select id="nplayers"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></label>
+        <label>Раундов<input type="number" id="rounds" value="10" min="1" max="99" style="width:5em"></label>
         <label>Ветер<select id="windmode"><option value="0">None</option><option value="1">Low</option><option value="2" selected>Norm</option><option value="3">High</option><option value="4">Gale</option><option value="5">Random</option></select></label>
-        <label>Стены<select id="walls"><option value="0">обычные</option><option value="1">отражают</option></select></label>
-        <label>Осыпание, %<input type="number" id="crumble" value="10" min="0" max="100"></label>
-        <label>Танки падают<select id="fall"><option value="1">да</option><option value="0">нет</option></select></label>
-        <button id="b-new">Новый раунд</button>
+        <label>Стены<select id="walls"><option value="0">обычные</option><option value="1" selected>случайно</option><option value="2">отражают</option></select></label>
+        <label>Фон<select id="bgkind"><option value="0">нет</option><option value="1">звёзды</option><option value="2">полосы</option><option value="3">круги</option><option value="4">солнце</option><option value="5">небо</option><option value="6" selected>случайно</option></select></label>
+        <label>Осыпание, %<input type="number" id="crumble" value="50" min="0" max="100" style="width:5em"></label>
+        <label>Скорость<select id="speed"><option value="1">обычная</option><option value="4" selected>быстрая</option><option value="40">мгновенная</option></select></label>
+      </div>
+      <div class="row">
+        <label><span><input type="checkbox" id="fall" checked> танки падают</span></label>
+        <label><span><input type="checkbox" id="xkill" checked> обломки ранят</span></label>
+        <label><span><input type="checkbox" id="trail" checked> след снаряда</span></label>
+        <label><span><input type="checkbox" id="aibuy" checked> компьютеры покупают</span></label>
+      </div>
+      <div class="plist" id="plist"></div>
+      <div class="row">
+        <button id="b-new" class="fire" style="grid-column:auto;padding:8px 16px">Начать матч</button>
         <button id="b-rnd">Случайный сид</button>
       </div>
-      <p class="note">Рельеф, расстановка танков и ветер при одном и том же сиде такие же, как у модели, сверенной с игрой (сид — значение RandSeed на входе генератора рельефа). Нет магазина, ИИ и анимаций гибели: они ещё не разобраны. Оружие бесконечное.</p>
+      <p class="note">Весь матч считает модель, сверенная с настоящей игрой: перетасовка игроков, стены, фон, рельеф, расстановка, ветер, ход, все виды оружия, семь вариантов гибели, семь компьютерных игроков, результаты и магазин. При одном сиде и одних настройках матч компьютеров повторяется ход в ход. Настройки по умолчанию — из BOMB.CFG оригинала. Звука нет: в оригинале он ещё и расходует случайные числа, здесь считается выключенным.</p>
     </div>
   </section>
 
@@ -172,13 +207,14 @@ const WEAPONS = ['Lead Ball', 'Incinerator', 'Mark II Incinerator', '20 Kiloton 
   'Mark II Dirt', 'Pressured Dirt', 'High Pres. Dirt', 'Xplosive Dirt'];
 const $ = (id) => document.getElementById(id);
 
-function paint(canvas, v, tanks = null, mark = null) {
+function paint(canvas, v, ps = null, mark = null) {
   const ctx = canvas.getContext('2d'), img = ctx.createImageData(320, 200), d = img.data;
+  const tank = ps ? ps.map((p) => TW.tankRGB(p).map((x) => x * 255 / 63 | 0)) : null;          // 1062:07a9
+  const base = ps ? ps.map((p) => p.colors.map((dv) => (63 / dv | 0) * 255 / 63 | 0)) : null;
   for (let i = 0; i < 64000; i++) {
-    let c = v[i], rgb = PAL[c] || [0, 0, 0];
-    if (tanks && c >= 20 && c <= 29) {           // 1062:07a9 — яркость танка = здоровье
-      const t = tanks[c - 20]; const k = t ? Math.max(0, Math.min(100, t.men)) / 100 : 1; rgb = rgb.map((x) => x * k | 0);
-    }
+    const c = v[i]; let rgb = PAL[c] || [0, 0, 0];
+    if (tank && c >= 20 && c <= 29 && tank[c - 20]) rgb = tank[c - 20];
+    else if (base && c >= 90 && c <= 99 && base[99 - c]) rgb = base[99 - c].map((x) => x * .55 | 0);   // след 100−p
     if (mark) { const m = mark[i]; if (m === 1) rgb = [242, 184, 75]; else if (m === 2) rgb = [255, 70, 60]; else rgb = rgb.map((x) => x * .28 | 0); }
     d[4 * i] = rgb[0]; d[4 * i + 1] = rgb[1]; d[4 * i + 2] = rgb[2]; d[4 * i + 3] = 255;
   }
@@ -186,136 +222,210 @@ function paint(canvas, v, tanks = null, mark = null) {
 }
 
 // ---------------- Игра ----------------
-const G = { v: null, bg: null, tanks: [], rng: null, wind: 0, cur: 0, busy: false, rebound: false };
-const tankRGB = (i) => `rgb(${PAL[19 + i].join(',')})`;
-function log(s) { const el = $('log'); const d = document.createElement('div'); d.textContent = s; el.prepend(d); }
-function hud() {
-  const t = G.tanks[G.cur];
-  $('turn').textContent = t ? `Игрок ${t.idx}` : '—';
-  $('turn').style.color = t ? tankRGB(t.idx) : '';
-  if (t) {
-    const shown = t.facing > 0 ? t.angle : 180 - t.angle;
-    $('r-angle').textContent = shown + '°';
-    $('r-power').textContent = t.power;
-    $('weapon').value = t.weapon;
-  }
-  $('r-wind').textContent = (G.wind > 0 ? '→ ' : G.wind < 0 ? '← ' : '') + Math.abs(G.wind);
-  $('players').innerHTML = G.tanks.map((p, i) => `<div class="pl ${p.alive ? '' : 'dead'} ${i === G.cur ? 'cur' : ''}">
-    <i style="background:${tankRGB(p.idx)}"></i><span>Игрок ${p.idx}</span><b>${Math.max(p.men, 0)} · ${p.score}</b>
-    <div class="bar"><span style="width:${Math.max(0, Math.min(100, p.men))}%"></span></div></div>`).join('');
-  for (const b of ['b-al', 'b-ar', 'b-pd', 'b-pu', 'b-fire']) $(b).disabled = G.busy || !t;
-}
-function render() { paint($('scr'), G.v, G.tanks); }
-function newRound(seed) {
-  const n = +$('nplayers').value;
-  G.rebound = $('walls').value === '1';
-  G.rng = new TW.TPRandom(seed >>> 0);
-  G.bg = TW.skyBackground();
-  G.v = TW.renderTerrain(TW.generateTerrain(G.rng, n), new Uint8Array(G.bg));
-  G.tanks = TW.placeTanks(G.rng, n, G.v, G.bg, G.rebound);
-  for (const t of G.tanks) { t.weapon = 1; TW.drawTankBarrel(G.v, t); }
-  G.wind = TW.generateWind(G.rng, +$('windmode').value);
-  G.cur = 0; G.busy = false;
-  $('log').innerHTML = '';
-  log(`Раунд, сид ${seed >>> 0}: ${n} игрока, ветер ${G.wind}${G.rebound ? ', стены отражают' : ''}`);
-  render(); hud(); clearOvl();
-}
-function clearOvl() { $('ovl').getContext('2d').clearRect(0, 0, 320, 200); }
-function redrawTank(t) {
-  const [dx, dy] = barrel[String(t.angle)] || [0, 0];
-  // стереть старый ствол фоном и нарисовать танк заново
-  for (const a of [t._prevAngle ?? t.angle]) { const [bx, by] = barrel[String(a)]; TW.line(G.v, t.x, t.y, t.x + bx * (t._prevFacing ?? t.facing), t.y - by, 0, G.bg); }
-  TW.drawTankBarrel(G.v, t);
-  t._prevAngle = t.angle; t._prevFacing = t.facing;
-}
-function turnAngle(delta) {
-  const t = G.tanks[G.cur]; if (!t || G.busy) return;
-  t._prevAngle = t._prevAngle ?? t.angle; t._prevFacing = t._prevFacing ?? t.facing;
-  let shown = (t.facing > 0 ? t.angle : 180 - t.angle) + delta;
-  shown = Math.max(0, Math.min(180, shown));
-  if (shown <= 90) { t.facing = 1; t.angle = shown; } else { t.facing = -1; t.angle = 180 - shown; }
-  redrawTank(t); render(); hud();
-}
-function setPower(delta) {
-  const t = G.tanks[G.cur]; if (!t || G.busy) return;
-  t.power = Math.max(1, Math.min(10 * Math.max(t.men, 0), t.power + delta)); hud();   // 2583:2925: не больше 10·здоровье
-}
+const KINDS = ['Человек', 'Random', ...TW.AI_PICKABLE, 'Birdy Bonker'];
+const G = { ps: [], v: new Uint8Array(64000), bg: new Uint8Array(64000), rng: null, fl: null, cur: 0, round: 0, rounds: 0, phase: 'idle', gen: 0, wait: null };
+const css = (p) => `rgb(${p.colors.map((dv) => (63 / dv | 0) * 255 / 63 | 0).join(',')})`;
+const money = (p) => p.score - p.spent;
+const shownAngle = (p) => (p.facing > 0 ? p.angle : 180 - p.angle);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function fire() {
-  const t = G.tanks[G.cur]; if (!t || G.busy) return;
-  G.busy = true; hud();
-  t.weapon = +$('weapon').value;
-  const name = WEAPONS[t.weapon];
-  const ov = $('ovl').getContext('2d');
-  if (t.weapon === 5) {
-    TW.laser(G.v, G.bg, G.tanks, t.idx, G.rng, false, G.rebound);
-    log(`Игрок ${t.idx}: ${name}, мощность ${t.power}`);
-  } else {
-    const getPixel = (x, y) => (x >= 0 && x < 320 && y >= 0 && y < 200 ? G.v[y * 320 + x] : 0);
-    const r = TW.flight({ angle: t.angle, power: t.power, facing: t.facing, tank_x: t.x, tank_y: t.y, wind: G.wind,
-      rebound: G.rebound, weapon: t.weapon, guided: 0, men: t.men }, getPixel);
-    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const per = reduce ? 1e9 : 14;
-    ov.fillStyle = '#ffffff';
-    for (let i = 0; i < r.positions.length; i += per) {
-      ov.clearRect(0, 0, 320, 200);
-      for (let j = Math.max(0, i - 60); j <= Math.min(i, r.positions.length - 1); j += 2) { const [x, y] = r.positions[j]; ov.globalAlpha = .25 + .75 * (j - i + 60) / 60; ov.fillRect(x, y, 1, 1); }
-      await new Promise(requestAnimationFrame);
+const frame = () => new Promise(requestAnimationFrame);
+const speed = () => +$('speed').value;
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function log(t) { const el = $('log'); const d = document.createElement('div'); d.textContent = t; el.prepend(d); while (el.children.length > 60) el.lastChild.remove(); }
+function render() { paint($('scr'), G.v, G.ps); }
+function clearOvl() { $('ovl').getContext('2d').clearRect(0, 0, 320, 200); }
+const curP = () => G.ps[G.cur - 1];
+const humanTurn = () => G.phase === 'turn' && curP() && curP().ctrl !== 3;
+
+function plist() {
+  const n = +$('nplayers').value, old = [...document.querySelectorAll('#plist select')].map((x) => x.value);
+  $('plist').innerHTML = Array.from({ length: n }, (_, i) => {
+    const c = TW.newPlayer(i + 1, 1), val = old[i] ?? (i === 0 ? 'Человек' : 'Random');
+    return `<label><i style="background:${css(c)}"></i><select data-i="${i}">${KINDS.map((k) => `<option${k === val ? ' selected' : ''}>${k}</option>`).join('')}</select></label>`;
+  }).join('');
+}
+function hud() {
+  const p = G.phase === 'turn' || G.phase === 'busy' ? curP() : null;
+  $('roundlbl').textContent = G.round ? `Раунд ${G.round} из ${G.rounds}${G.fl && G.fl.rebound ? ' · стены отражают' : ''}` : 'Матч не начат';
+  $('turn').textContent = p ? p.name : '—'; $('turn').style.color = p ? css(p) : '';
+  $('r-angle').textContent = p ? shownAngle(p) + '°' : '—';
+  $('r-power').textContent = p ? p.power : '—';
+  const w = G.fl ? G.fl.wind : 0;
+  $('r-wind').textContent = (w > 0 ? '→ ' : w < 0 ? '← ' : '') + Math.abs(w);
+  const sel = $('weapon');
+  sel.innerHTML = p ? p.ammo.map((a, i) => (a > 0 && !(i === 5 && a < 100) ? `<option value="${i}"${i === p.weapon ? ' selected' : ''}>${WEAPONS[i]} · ${a}</option>` : '')).join('') : '';
+  const hum = humanTurn();
+  sel.disabled = !hum;
+  $('guide').hidden = !(hum && (p.herb > 0 || p.vick > 0));
+  if (!$('guide').hidden) {
+    $('g-herb').checked = !!(p.guided & 1); $('g-herb').disabled = p.herb <= 0;
+    $('g-vick').checked = !!(p.guided & 2); $('g-vick').disabled = p.vick <= 0;
+    $('g-target').innerHTML = G.ps.filter((t) => t.alive && t !== p).map((t) => `<option value="${t.idx}"${t.idx === p.target ? ' selected' : ''}>${esc(t.name)}</option>`).join('');
+  }
+  $('players').innerHTML = G.ps.map((t) => `<div class="pl ${t.alive ? '' : 'dead'} ${p === t ? 'cur' : ''}">
+    <i style="background:${css(t)}"></i><span>${esc(t.name)}${t.ctrl === 3 ? '' : ' (вы)'}</span><b>${Math.max(t.men, 0)} · ${t.score} оч. · ${t.wins} поб.</b>
+    <div class="bar"><span style="width:${Math.max(0, Math.min(100, t.men))}%"></span></div></div>`).join('');
+  for (const id of ['b-al', 'b-ar', 'b-flip', 'b-pd', 'b-pu', 'b-p100', 'b-fire']) $(id).disabled = !hum;
+}
+
+function startMatch() {
+  const gen = ++G.gen;
+  const n = +$('nplayers').value, kinds = [...document.querySelectorAll('#plist select')].map((x) => x.value);
+  G.rng = new TW.TPRandom(+$('seed').value >>> 0);
+  G.rounds = Math.max(1, +$('rounds').value | 0); G.round = 0;
+  G.ps = Array.from({ length: n }, (_, i) => TW.newPlayer(i + 1, G.rounds));
+  G.ps.forEach((p, i) => {                                   // экран игроков 32ec:37b8 + 32ec:0139
+    const k = kinds[i];
+    if (k === 'Человек') { p.ctrl = 1; p.name = 'Игрок ' + (i + 1); }
+    else { p.ctrl = 3; p.name = k === 'Random' ? TW.AI_PICKABLE[G.rng.word(6)] : k; }
+    p.strategy = TW.pickStrategy(p.name, G.rng);
+  });
+  $('log').innerHTML = ''; $('sheet').hidden = true;
+  log(`Матч: ${n} игроков, ${G.rounds} раундов, сид ${+$('seed').value >>> 0}`);
+  nextRound(gen);
+}
+async function nextRound(gen) {
+  if (gen !== G.gen) return;
+  G.round++;
+  TW.shufflePlayers(G.rng, G.ps);
+  const r = TW.roundStart(G.rng, G.ps, +$('walls').value, +$('bgkind').value, +$('windmode').value);
+  G.v = r.v; G.bg = r.bg;
+  G.fl = { rebound: r.rebound, crumble: +$('crumble').value | 0, fall: $('fall').checked, xkill: $('xkill').checked, sound: false, wind: r.wind, ballVisible: true, trail: $('trail').checked };
+  G.cur = r.first;
+  log(`Раунд ${G.round}: ветер ${r.wind}${r.rebound ? ', стены отражают' : ''}`);
+  render(); clearOvl();
+  nextTurn(gen);
+}
+async function nextTurn(gen) {
+  if (gen !== G.gen) return;
+  G.cur = TW.nextAlive(G.ps, G.cur);                                // 2583:2783
+  const p = curP();
+  TW.turnBegin(p.hist);                                             // 2583:27b9
+  TW.autoSwitchWeapon(p);                                           // 2583:27d7
+  G.phase = 'turn'; hud();
+  if (p.ctrl !== 3) return;                                         // человек: ждём ввода
+  G.phase = 'busy'; hud();
+  for (let i = 0; i < 5000; i++) {
+    const code = TW.computerStep(G.v, G.bg, G.ps, p, G.rng, G.fl.rebound);
+    TW.applyCode(G.v, G.bg, p, code);
+    if (code === 5) break;
+    if (i % (3 * speed()) === 0) { render(); hud(); await frame(); if (gen !== G.gen) return; }
+  }
+  p.target = p.hist.target;
+  shoot(gen);
+}
+function act(code) {
+  if (!humanTurn()) return;
+  const p = curP();
+  if (TW.needsWeaponSwitch(p) && code !== 7) code = 8;               // 2b39:0f78: пустое оружие -> только смена
+  if (code === 5) { G.phase = 'busy'; if (p.guided) p.target = +$('g-target').value || 0; shoot(G.gen); return; }
+  TW.applyCode(G.v, G.bg, p, code); render(); hud();
+}
+async function shoot(gen) {
+  const p = curP(), shooter = p.idx, before = new Uint8Array(G.v), path = [];
+  hud();
+  const what = `${p.name}: ${WEAPONS[p.weapon]}, ${shownAngle(p)}°, мощность ${p.power}`;
+  const r = TW.fire(G.v, G.bg, G.ps, shooter, G.rng, G.fl, (x, y) => path.push(x, y));
+  if (r) TW.recordShot(p.hist, p, r.x, r.y);                         // 2583:29ee
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches, ov = $('ovl').getContext('2d');
+  if (!reduce && speed() < 40 && path.length) {                      // показать полёт поверх кадра «до выстрела»
+    paint($('scr'), before, G.ps);
+    const per = 24 * speed();
+    for (let i = 0; i < path.length; i += per) {
+      ov.clearRect(0, 0, 320, 200); ov.fillStyle = '#fff';
+      for (let j = Math.max(0, i - 80); j <= i; j += 2) { ov.globalAlpha = .2 + .8 * (j - i + 80) / 80; ov.fillRect(path[j], path[j + 1], 1, 1); }
+      await frame(); if (gen !== G.gen) return;
     }
     ov.globalAlpha = 1; clearOvl();
-    const hit = r.stop === 'terrain' || r.stop === 'tank';
-    log(`Игрок ${t.idx}: ${name}, ${t.facing > 0 ? t.angle : 180 - t.angle}°, мощность ${t.power} — ${hit ? (r.stop === 'tank' ? 'попал в танк' : 'попал в землю') : 'мимо'}`);
-    if (hit) {
-      const w = t.weapon, R = TW.RADIUS[w] || ({ 6: 4, 7: 8, 8: 8, 9: 20, 10: 20, 13: 10, 14: 15, 15: 30, 16: 60, 12: 3, 17: 12 })[w] || 0;
-      if (R && !reduce && ![13, 14, 15, 16].includes(w)) {             // вспышка (палитра огня в оригинале)
-        for (let k = 1; k <= 8; k++) { ov.clearRect(0, 0, 320, 200); ov.fillStyle = `rgba(255,${120 + k * 12},40,${1 - k / 9})`; ov.beginPath(); ov.arc(r.x, r.y, R * k / 8, 0, 7); ov.fill(); await sleep(28); }
-        clearOvl();
-      }
-      if (TW.RADIUS[w]) TW.explode(G.v, G.bg, G.tanks, r.x, r.y, r.hit, t.idx, w, G.rng, false);
-      else if (w >= 6 && w <= 10) TW.cri(G.v, G.bg, G.tanks, r.x, r.y, r.hit, t.idx, w, G.rng, false);
-      else if (w === 12) TW.sonic(G.v, G.bg, r.x, r.y, G.rng, false);
-      else if (w >= 13 && w <= 16) TW.dirtBall(G.v, r.x, r.y, w);
-      else if (w === 17) TW.explosiveDirt(G.v, G.bg, r.x, r.y, G.rng, false, +$('crumble').value);
+    if (r && (r.stop === 'terrain' || r.stop === 'tank')) {
+      const R = TW.RADIUS[p.weapon] || ({ 6: 4, 7: 8, 8: 8, 9: 20, 10: 20, 12: 3, 17: 12 })[p.weapon] || 0;
+      for (let k = 1; R && k <= 6; k++) { ov.clearRect(0, 0, 320, 200); ov.fillStyle = `rgba(255,${120 + k * 16},40,${1 - k / 7})`; ov.beginPath(); ov.arc(r.x, r.y, R * k / 6, 0, 7); ov.fill(); await sleep(24 / speed()); }
+      clearOvl(); if (gen !== G.gen) return;
     }
   }
-  for (const p of G.tanks) TW.drawTankBarrel(G.v, p);                    // 2583:29c5 — перерисовать всех
-  render(); await sleep(120);
-  const pct = +$('crumble').value;
-  if (pct > 0 && TW.crumbleGate(G.v, G.bg, G.rng, pct, G.rebound)) log('Земля осыпалась');
-  if ($('fall').value === '1') TW.tanksFall(G.v, G.bg, G.tanks, G.rng, G.rebound);
-  for (const p of G.tanks) if (p.alive && p.men <= 0) {                  // гибель (анимации 285c не разобраны)
-    p.alive = false; TW.eraseTank(G.v, G.bg, p.x, p.y);
-    const [bx, by] = barrel[String(p.angle)]; TW.line(G.v, p.x, p.y, p.x + bx * p.facing, p.y - by, 0, G.bg);
-    log(`Игрок ${p.idx} уничтожен`);
-  }
-  for (const p of G.tanks) { TW.drawTankBarrel(G.v, p); p._prevAngle = p.angle; p._prevFacing = p.facing; p.power = Math.min(p.power, 10 * Math.max(p.men, 0)); }
+  log(what + (r ? (r.stop === 'tank' ? ' — в танк' : r.stop === 'terrain' ? ' — в землю' : ' — мимо') : ''));
   render();
-  const alive = G.tanks.filter((p) => p.alive);
-  if (alive.length <= 1) {
-    log(alive.length ? `Раунд за игроком ${alive[0].idx}` : 'Все уничтожены');
-    G.cur = -1; G.busy = false; hud(); return;
-  }
-  do { G.cur = (G.cur + 1) % G.tanks.length; } while (!G.tanks[G.cur].alive);
-  G.busy = false; hud();
+  TW.afterShot(G.v, G.bg, G.ps, shooter, G.rng, G.fl, (dead, variant) => log(`${dead.name} уничтожен (гибель ${variant})`));
+  render(); hud();
+  if (speed() < 40) await sleep(160 / speed()); else if (G.ps.every((t) => t.ctrl === 3)) await frame();
+  if (gen !== G.gen) return;
+  const alive = G.ps.filter((t) => t.alive);
+  if (alive.length <= 1) return endRound(gen, alive[0] || null);
+  nextTurn(gen);
 }
-$('weapon').innerHTML = WEAPONS.map((w, i) => `<option value="${i}">${i} · ${w}</option>`).join('');
-$('weapon').onchange = () => { const t = G.tanks[G.cur]; if (t) t.weapon = +$('weapon').value; };
-$('b-al').onclick = () => turnAngle(1); $('b-ar').onclick = () => turnAngle(-1);
-$('b-pd').onclick = () => setPower(-10); $('b-pu').onclick = () => setPower(10);
-$('b-fire').onclick = fire;
-$('b-new').onclick = () => newRound(+$('seed').value);
-$('b-rnd').onclick = () => { $('seed').value = (Math.random() * 2 ** 32) >>> 0; newRound(+$('seed').value); };
+async function endRound(gen, winner) {
+  G.phase = 'results';
+  if (winner) { TW.winnerBonus(winner, G.ps.length); log(`Раунд ${G.round} за ${winner.name}: +${G.ps.length * 1000}`); } else log(`Раунд ${G.round}: все уничтожены`);
+  const auto = G.ps.every((t) => t.ctrl === 3);
+  TW.results(G.rng, G.ps, auto);                                     // сортировка, men = 100
+  const last = G.round >= G.rounds;
+  hud();
+  const rows = G.ps.map((t, i) => `<tr><td class="n">${i + 1}</td><td><span class="sw" style="background:${css(t)}"></span>${esc(t.name)}</td><td class="n">${t.wins}</td><td class="n">${t.score}</td><td class="n">${money(t)}</td></tr>`).join('');
+  const sh = $('sheet'); sh.hidden = false;
+  sh.innerHTML = `<h2>${last ? 'Итог матча' : `После раунда ${G.round} из ${G.rounds}`}</h2>
+    <div class="tbl"><table><tr><th class="n">№</th><th>Игрок</th><th class="n">Победы</th><th class="n">Очки</th><th class="n">Деньги</th></tr>${rows}</table></div>
+    <div class="row">${last ? '<span class="note">Матч окончен. Новый — кнопкой «Начать матч» ниже.</span>' : '<button id="b-next" class="fire" style="grid-column:auto;padding:8px 16px">Дальше: магазин и следующий раунд</button>'}</div>`;
+  if (last) { G.phase = 'over'; return; }
+  if (auto) await sleep(speed() >= 40 ? 0 : 1200 / speed()); else await new Promise((res) => { $('b-next').onclick = res; });
+  if (gen !== G.gen) return;
+  for (const p of G.ps) {                                            // магазин 224b:0e51
+    if (money(p) < TW.MIN_PRICE) continue;
+    if (p.ctrl === 3) { if ($('aibuy').checked) { const m0 = money(p); if (TW.aiShop(p, p.strategy) && money(p) !== m0) log(`${p.name} потратил ${m0 - money(p)}`); } }
+    else { await humanShop(p); if (gen !== G.gen) return; }
+  }
+  sh.hidden = true;
+  nextRound(gen);
+}
+function humanShop(p) {
+  return new Promise((done) => {
+    const sh = $('sheet'); let menu, qty, cart;
+    const reset = () => { menu = TW.shopMenu(p); qty = menu.map(() => 0); cart = 0; };
+    const draw = () => {
+      const left = money(p) - cart;
+      const rows = menu.map(([cat, i], c) => {
+        const price = TW.SHOP_PRICE[cat][i], name = cat === 0 ? WEAPONS[i] : TW.SHOP_NAMES[cat][i], can = qty[c] < 9 && price <= left;
+        return `<tr><td>${esc(name)}</td><td class="n">${price}</td><td class="n">×${TW.SHOP_PACK[cat][i]}</td><td class="n">${TW.shopHave(p, cat, i)}</td>
+          <td class="n"><span class="qty"><button data-c="${c}" data-d="-1"${qty[c] ? '' : ' disabled'}>−</button><b>${qty[c]}</b><button data-c="${c}" data-d="1"${can ? '' : ' disabled'}>+</button></span></td></tr>`;
+      }).join('');
+      sh.innerHTML = `<h2 style="color:${css(p)}">Магазин — ${esc(p.name)}</h2>
+        <div class="row"><span class="summary">Деньги: ${left}</span><span class="note">в корзине на ${cart}</span></div>
+        <div class="tbl"><table><tr><th>Товар</th><th class="n">Цена</th><th class="n">Пачка</th><th class="n">Есть</th><th class="n">Купить</th></tr>${rows}</table></div>
+        <div class="row"><button id="b-buy">Купить</button><button id="b-done" class="fire" style="grid-column:auto;padding:8px 16px">Готово</button></div>`;
+      sh.querySelectorAll('button[data-c]').forEach((b) => { b.onclick = () => {
+        const c = +b.dataset.c, [cat, i] = menu[c], price = TW.SHOP_PRICE[cat][i];
+        if (+b.dataset.d > 0) { if (qty[c] < 9 && price <= money(p) - cart) { qty[c]++; cart += price; } } else if (qty[c] > 0) { qty[c]--; cart -= price; }
+        draw();
+      }; });
+      $('b-buy').onclick = () => { TW.shopCommit(p, menu, qty); reset(); hud(); draw(); };   // «Purchase»: меню строится заново
+      $('b-done').onclick = () => { TW.shopCommit(p, menu, qty); hud(); done(); };
+    };
+    reset(); draw();
+  });
+}
+$('nplayers').onchange = plist; plist();
+$('weapon').onchange = () => { if (humanTurn()) { curP().weapon = +$('weapon').value; hud(); } };
+$('g-herb').onchange = () => act(9); $('g-vick').onchange = () => act(10);
+$('g-target').onchange = () => { if (humanTurn()) curP().target = +$('g-target').value; };
+$('b-al').onclick = () => act(1); $('b-ar').onclick = () => act(2); $('b-flip').onclick = () => act(6);
+$('b-pd').onclick = () => act(3); $('b-pu').onclick = () => act(4);
+const bigPower = (d) => { if (humanTurn()) { curP().power += d > 0 ? 99 : -99; act(d > 0 ? 4 : 3); } };       // PgUp/PgDn: ±99 и код 4/3
+$('b-p100').onclick = () => bigPower(1);
+$('b-fire').onclick = () => act(5);
+$('b-new').onclick = startMatch;
+$('b-rnd').onclick = () => { $('seed').value = (Math.random() * 2 ** 32) >>> 0; startMatch(); };
 document.addEventListener('keydown', (e) => {
-  if ($('pane-game').hidden || e.target.matches('input, select')) return;
-  const big = e.shiftKey ? 10 : 1;
-  if (e.key === 'ArrowLeft') { turnAngle(big); e.preventDefault(); }
-  else if (e.key === 'ArrowRight') { turnAngle(-big); e.preventDefault(); }
-  else if (e.key === 'ArrowUp') { setPower(big); e.preventDefault(); }
-  else if (e.key === 'ArrowDown') { setPower(-big); e.preventDefault(); }
-  else if (e.key === ' ') { fire(); e.preventDefault(); }
-  else if (e.key === 'w' || e.key === 'W') { const s = $('weapon'); s.value = (+s.value + 1) % WEAPONS.length; s.onchange(); hud(); }
+  if ($('pane-game').hidden || e.target.matches('input, select') || !humanTurn()) return;
+  const k = e.key, onButton = e.target.matches('button');
+  const map = { ArrowLeft: 1, ArrowRight: 2, ArrowDown: 3, ArrowUp: 4, i: 6, I: 6, h: 9, H: 9, v: 10, V: 10, w: 8, W: 8, q: 7, Q: 7 };
+  if (k === 'Tab' && !onButton) act(e.shiftKey ? 7 : 8);             // Tab с кнопки — обычный переход фокуса
+  else if ((k === ' ' || k === 'Enter') && !onButton) act(5);
+  else if (k === 'PageUp') bigPower(1);
+  else if (k === 'PageDown') bigPower(-1);
+  else if (k in map) act(map[k]);
+  else return;
+  e.preventDefault();
 });
-newRound(+$('seed').value);
+startMatch();
 
 // ---------------- Сверка ----------------
 const inflate = async (b64) => {
@@ -323,13 +433,8 @@ const inflate = async (b64) => {
   const s = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
   return new Uint8Array(await new Response(s).arrayBuffer());
 };
-function decode(hex, idx) {
-  const b = new DataView(Uint8Array.from(hex.match(/../g), (h) => parseInt(h, 16)).buffer);
-  return { idx, x: b.getInt16(0, true), y: b.getInt16(2, true), score: b.getInt32(4, true), power: b.getInt16(0x0e, true),
-    angle: b.getInt16(0x10, true), facing: b.getInt16(0x12, true), men: b.getInt16(0x14, true), alive: b.getUint8(0x16) !== 0,
-    weapon: b.getInt16(0x17, true), energy: b.getInt16(0x2b, true), shield: b.getInt32(0x45, true), damp: b.getInt32(0x49, true) };
-}
-const KIND = { placement: 'Начало раунда: рельеф и танки', explosion: 'Обычный взрыв', crumble: 'Осыпание и падение танков', laser: 'Лазер', cri: 'CRI (цепная реакция)' };
+const decode = (hex, idx) => TW.playerFromRec(Uint8Array.from(hex.match(/../g), (h) => parseInt(h, 16)), idx);
+const KIND = { placement: 'Начало раунда: рельеф и танки', explosion: 'Обычный взрыв', crumble: 'Осыпание и падение танков', laser: 'Лазер', cri: 'CRI (цепная реакция)', death: 'Гибель танка (7 вариантов)', turn: 'Ход целиком (ИИ Lobber)' };
 let VD = null; const RES = new Map();
 async function runCase(kind, c) {
   let pre, post, js, players = 'нет', seed = 'нет';
@@ -347,6 +452,13 @@ async function runCase(kind, c) {
     else if (kind === 'crumble') { if (c.event === 'crumble') TW.crumbleGate(js, bg, rng, c.pre.percent, !!c.pre.rebound); else TW.tanksFall(js, bg, ps, rng, !!c.pre.rebound); keys = (p) => [p.x, p.y, p.men, p.damp].join(); }
     else if (kind === 'laser') { TW.laser(js, bg, ps, c.player, rng, c.sound, !!c.rebound); keys = (p) => [p.men, p.shield, p.energy, p.power].join(); }
     else if (kind === 'cri') TW.cri(js, bg, ps, c.x, c.y, c.hit_color, c.shooter, c.weapon, rng, c.sound);
+    else if (kind === 'death') TW.death(c.variant, js, bg, ps, c.victim, rng, !!c.sound, c.wind || 0, !!c.xkill);
+    else if (kind === 'turn') {
+      const f = c.pre.flags;
+      TW.turn(js, new Uint8Array(bg), ps, f.shooter, rng, { rebound: !!f.rebound, crumble: f.crumble, fall: !!f.fall, xkill: !!f.xkill, sound: !!f.sound, wind: f.wind, ballVisible: !f.ball_inv, trail: !!f.trail });
+      keys = (p) => [p.x, p.y, p.men, p.alive, p.shield, p.score].join();
+      for (let i = 0; i < 64000; i++) { const y = i / 320 | 0, x = i % 320; if (y < 28 || y > 192 || x < 8 || x > 312) js[i] = post[i]; }   // вне поля — панель с текстом, не моделируется
+    }
     const want = c.post.players.map((h, i) => decode(h, i + 1));
     players = ps.every((p, i) => keys(p) === keys(want[i])); seed = rng.seed === c.post.seed;
   }
@@ -360,6 +472,8 @@ function caseLabel(kind, c) {
   if (kind === 'explosion') return `${c.name}: ${WEAPONS[c.weapon]}${c.hit_color >= 20 ? ', в танк' : ''}`;
   if (kind === 'crumble') return `${c.name.replace(/\d+$/, '')} ${c.vram_changed} px`;
   if (kind === 'laser') return `${c.name}`;
+  if (kind === 'death') return `вариант ${c.variant}${c.sound ? ', звук' : ''}`;
+  if (kind === 'turn') return `${c.name}: ${c.ndiff} px`;
   return `${c.name}: ${WEAPONS[c.weapon]}`;
 }
 async function show(kind, i, btn) {
