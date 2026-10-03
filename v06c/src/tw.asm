@@ -40,6 +40,7 @@ MODE_SHOW	equ	18
 MODE_TERRAIN	equ	19
 MODE_FX		equ	20
 MODE_PLACE	equ	21
+MODE_MATCH	equ	22
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -106,6 +107,8 @@ entry:
 	jp	z, do_fx
 	cp	MODE_PLACE
 	jp	z, do_place
+	cp	MODE_MATCH
+	jp	z, do_match
 	jp	done
 done:
 	halt
@@ -821,6 +824,54 @@ do_place:
 	call	copy_b
 	jp	done
 
+; матч: LIST = n записей игроков по PL_SIZE; PARAM_KIND: 1 перетасовка, 2 бонус (PARAM_C = место), 3 результаты (PARAM_C = auto)
+; PARAM_N = число игроков; PARAM_SEED -> rand_seed и обратно; записи копируются в players и обратно в LIST.
+do_match:
+	ld	hl, PARAM_SEED
+	ld	de, rand_seed
+	ld	b, 4
+	call	copy_b
+	ld	a, (PARAM_N)
+	ld	(n_players), a
+	ld	hl, LIST
+	ld	de, players
+	call	dm_copy
+	ld	a, (PARAM_KIND)
+	dec	a
+	jp	z, dm_shuffle
+	dec	a
+	jp	z, dm_bonus
+	ld	a, (PARAM_C)
+	call	results_sort
+	jp	dm_out
+dm_shuffle:
+	call	shuffle_players
+	jp	dm_out
+dm_bonus:
+	ld	a, (PARAM_C)
+	call	winner_bonus
+dm_out:
+	ld	hl, players
+	ld	de, LIST
+	call	dm_copy
+	ld	hl, rand_seed
+	ld	de, PARAM_SEED
+	ld	b, 4
+	call	copy_b
+	jp	done
+dm_copy:				; MAX_PLAYERS * PL_SIZE байт из HL в DE
+	ld	bc, MAX_PLAYERS * PL_SIZE
+dm_cp:
+	ld	a, (hl)
+	ld	(de), a
+	inc	hl
+	inc	de
+	dec	bc
+	ld	a, b
+	or	c
+	jp	nz, dm_cp
+	ret
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -924,6 +975,7 @@ copy_b:
 	jp	nz, copy_b
 	ret
 
+	include	"player.inc"
 kernel_start:
 	include	"random.asm"
 	include	"pixel.asm"
@@ -934,6 +986,7 @@ kernel_start:
 	include	"disc.asm"
 	include	"terrain.asm"
 	include	"place.asm"
+	include	"match.asm"
 	include	"fx.asm"
 	include	"barrel.asm"
 	include	"text.asm"
