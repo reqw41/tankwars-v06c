@@ -85,6 +85,8 @@ entry:
 	jp	z, do_crumble
 	cp	MODE_REPLACE
 	jp	z, do_replace
+	cp	MODE_PAL
+	jp	z, do_pal
 	jp	done
 done:
 	halt
@@ -660,6 +662,23 @@ do_replace:
 	call	replace_tmp
 	jp	done
 
+do_pal:
+	ld	hl, LIST
+	ld	de, pal_men
+	ld	b, 8
+	call	copy_b
+	ld	de, pal_divr
+	ld	b, 8
+	call	copy_b
+	ld	de, pal_divg
+	ld	b, 8
+	call	copy_b
+	ld	de, pal_divb
+	ld	b, 8
+	call	copy_b
+	call	pal_apply
+	jp	done
+
 copy_b:
 	ld	a, (hl)
 	ld	(de), a
@@ -679,6 +698,7 @@ copy_b:
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"
+	include	"pal.asm"
 
 list_ptr:	dw	0
 res_ptr:	dw	0
@@ -700,3 +720,4 @@ rom_end:
 	display	"draw_char=", /h, draw_char, "-", /h, draw_char_end, " bytes ", /d, draw_char_end - draw_char
 	display	"crumble=", /h, crumble, "-", /h, crumble_end, " bytes ", /d, crumble_end - crumble
 	display	"replace_tmp=", /h, replace_tmp, "-", /h, replace_tmp_end, " bytes ", /d, replace_tmp_end - replace_tmp
+	display	"pal_apply=", /h, pal_apply, "-", /h, pal_apply_end, " bytes ", /d, pal_apply_end - pal_apply

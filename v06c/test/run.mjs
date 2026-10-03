@@ -11,7 +11,8 @@ const ROM = path.join(ROOT, 'v06c/build/tw.rom');
 const SYM = path.join(ROOT, 'v06c/build/tw.sym');
 const PARAM = 0x0080, LIST = 0x2000, RESULT = 0x7000;
 const MODE_RANDOM = 1, MODE_PIXELS = 2, MODE_LINES = 3, MODE_BENCH = 4;
-const MODE_ERASELN = 5, MODE_FRAME = 6, MODE_TANK = 7, MODE_CROSS = 8, MODE_RING = 9, MODE_CLEAR = 10, MODE_BARREL = 11, MODE_TEXT = 12, MODE_CRUMBLE = 13, MODE_REPLACE = 14;
+const MODE_ERASELN = 5, MODE_FRAME = 6, MODE_TANK = 7, MODE_CROSS = 8, MODE_RING = 9;
+const MODE_CLEAR = 10, MODE_BARREL = 11, MODE_TEXT = 12, MODE_CRUMBLE = 13, MODE_REPLACE = 14, MODE_PAL = 15;
 const KIND_RANDOM = 1, KIND_PIXEL = 2, KIND_LINE = 3;
 const KIND_FRAME = 4, KIND_TANK = 5, KIND_CROSS = 6, KIND_RING = 7, KIND_CLEAR = 8, KIND_CHAR = 10;
 
@@ -488,6 +489,50 @@ function testReplace() {
   console.log(`OK  replaceTmp: ${cases.length}, точка (0,0) не трогается`);
 }
 
+function encPal(r, g, b) { return ((b & 3) << 6) | ((g & 7) << 3) | (r & 7); }
+
+function testPal() {
+  const gen = new LCG(0x0A1);
+  const PAGE = [[0, 0, 0], [1, 5, 0], [5, 5, 2], [7, 6, 1]].map(([r, g, b]) => encPal(r, g, b));
+  const gameC = (idx) => ((idx >> 2) & 1) + 2 * ((idx >> 1) & 1) + 4 * (idx & 1);
+  let n = 0;
+  const runCase = (ps) => {
+    const list = new Uint8Array(32);
+    for (let i = 0; i < 4; i++) {
+      const p = ps[i];
+      list[i * 2] = p.men & 255; list[i * 2 + 1] = (p.men >> 8) & 255;
+      list[8 + i * 2] = p.colors[0] & 255; list[9 + i * 2] = (p.colors[0] >> 8) & 255;
+      list[16 + i * 2] = p.colors[1] & 255; list[17 + i * 2] = (p.colors[1] >> 8) & 255;
+      list[24 + i * 2] = p.colors[2] & 255; list[25 + i * 2] = (p.colors[2] >> 8) & 255;
+    }
+    const bytes = PAGE.slice();
+    for (let i = 0; i < 4; i++) {
+      const [R, G, B] = TW.tankRGB(ps[i]);
+      bytes[4 + i] = encPal(R >> 3, G >> 3, B >> 4);
+    }
+    const exp = new Uint8Array(16);
+    for (let idx = 0; idx < 16; idx++) exp[idx] = bytes[gameC(idx)];
+    const extra = new Uint8Array(15);
+    extra[1] = 1;
+    const r = runMode(MODE_PAL, extra, list);
+    for (let i = 0; i < 16; i++) {
+      if (r.mem[RESULT + i] !== exp[i]) {
+        fail(`палитра случай #${n} рег ${i} emu=${r.mem[RESULT + i]} oracle=${exp[i]}`);
+      }
+    }
+    n++;
+  };
+  const def = TW.PROFILE_V06C.playerColors.map((c, i) => ({ men: 100, colors: c.slice(), idx: i + 1 }));
+  runCase(def);
+  runCase(def.map((p, i) => ({ ...p, men: i === 0 ? -1 : 50 })));
+  runCase(def.map((p) => ({ ...p, men: 0 })));
+  runCase(def.map((p) => ({ ...p, men: 1 })));
+  while (n < 200) {
+    runCase(def.map((p) => ({ ...p, men: gen.below(120) - 10 })));
+  }
+  console.log(`OK  палитра: ${n} наборов 16 регистров`);
+}
+
 function pokeBench(kind, fields) {
   boot();
   const b = new Uint8Array(16);
@@ -549,6 +594,7 @@ testBarrel();
 testText();
 testCrumble();
 testReplace();
+testPal();
 console.log('--- замер ---');
 const sz = sizes(L);
 const tRandom = bench('Random(n=100)', L.random, L.bench_random_ret, KIND_RANDOM, { seed: 1, n: 100 });
