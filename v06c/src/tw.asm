@@ -44,6 +44,7 @@ MODE_MATCH	equ	22
 MODE_FLIGHT	equ	23
 MODE_ROUND	equ	24
 MODE_EXPLODE	equ	25
+MODE_AFTER	equ	26
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -118,6 +119,8 @@ entry:
 	jp	z, do_round
 	cp	MODE_EXPLODE
 	jp	z, do_explode
+	cp	MODE_AFTER
+	jp	z, do_after
 	jp	done
 done:
 	halt
@@ -944,6 +947,34 @@ do_explode:
 	call	dm_copy
 	jp	done
 
+; после выстрела: LIST = записи игроков; PARAM_N = число игроков; PARAM_KIND = процент осыпания; PARAM_C = танки падают;
+; PARAM_Y2 = стены отражают; PARAM_SEED -> rand_seed и обратно. Экран загружает стенд.
+do_after:
+	ld	hl, PARAM_SEED
+	ld	de, rand_seed
+	ld	b, 4
+	call	copy_b
+	ld	a, (PARAM_N)
+	ld	(n_players), a
+	ld	a, (PARAM_KIND)
+	ld	(as_crumble), a
+	ld	a, (PARAM_C)
+	ld	(as_fall), a
+	ld	a, (PARAM_Y2)
+	ld	(as_rebound), a
+	ld	hl, LIST
+	ld	de, players
+	call	dm_copy
+	call	after_shot
+	ld	hl, players
+	ld	de, LIST
+	call	dm_copy
+	ld	hl, rand_seed
+	ld	de, PARAM_SEED
+	ld	b, 4
+	call	copy_b
+	jp	done
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -1063,6 +1094,7 @@ kernel_start:
 	include	"fx.asm"
 	include	"flight.asm"
 	include	"explode.asm"
+	include	"after.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"
