@@ -31,7 +31,7 @@ h1 { font-family: var(--font-display); font-weight: 400; font-size: 44px; line-h
 .game { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
 @media (max-width: 860px) { .game { grid-template-columns: minmax(0, 1fr); } }
 .screen { position: relative; background: #000; border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
-.screen canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; aspect-ratio: 320 / 200; max-width: 100%; }
+.screen canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; max-width: 100%; }
 .screen canvas + canvas { position: absolute; inset: 10px; width: calc(100% - 20px); }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px; display: grid; gap: 14px; min-width: 0; }
 .label { font: 500 11px var(--font-mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
@@ -112,8 +112,8 @@ figcaption { font-size: 12px; color: var(--muted); }
   <section id="pane-game" role="tabpanel" aria-labelledby="tab-game">
     <div class="game">
       <div class="screen">
-        <canvas id="scr" width="320" height="200"></canvas>
-        <canvas id="ovl" width="320" height="200"></canvas>
+        <canvas id="scr" width="256" height="256" style="aspect-ratio:4/3"></canvas>
+        <canvas id="ovl" width="256" height="256" style="aspect-ratio:4/3"></canvas>
       </div>
       <div class="panel">
         <div>
@@ -149,6 +149,7 @@ figcaption { font-size: 12px; color: var(--muted); }
     <div class="sheet" id="sheet" style="margin-top:18px" hidden></div>
     <div class="panel setup" style="margin-top:18px">
       <div class="row">
+        <label>Экран<select id="profile"><option value="v06c" selected>Вектор-06Ц 256×256, 16 цветов</option><option value="dos">DOS 320×200, 256 цветов</option></select></label>
         <label>Сид матча<input type="number" id="seed" value="487264648"></label>
         <label>Игроков<select id="nplayers"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></label>
         <label>Раундов<input type="number" id="rounds" value="10" min="1" max="99" style="width:5em"></label>
@@ -169,7 +170,7 @@ figcaption { font-size: 12px; color: var(--muted); }
         <button id="b-new" class="fire" style="grid-column:auto;padding:8px 16px">Начать матч</button>
         <button id="b-rnd">Случайный сид</button>
       </div>
-      <p class="note">Весь матч считает модель, сверенная с настоящей игрой: перетасовка игроков, стены, фон, рельеф, расстановка, ветер, ход, все виды оружия, семь вариантов гибели, семь компьютерных игроков, результаты и магазин. При одном сиде и одних настройках матч компьютеров повторяется ход в ход. Настройки по умолчанию — из BOMB.CFG оригинала. Звука нет: в оригинале он ещё и расходует случайные числа, здесь считается выключенным.</p>
+      <p class="note">Экран «Вектор-06Ц» — та же модель в размерах и цветах Вектора: поле 250×226 точек, 16 цветов (фон, след, земля, рамка, мяч, огонь и десять танков), палитра из 256 цветов Вектора, яркость танка по здоровью — сменой палитры. Строки 0–23 оставлены под панель. Экран «DOS» — оригинал один в один. Весь матч считает модель, сверенная с настоящей игрой: перетасовка игроков, стены, фон, рельеф, расстановка, ветер, ход, все виды оружия, семь вариантов гибели, семь компьютерных игроков, результаты и магазин. При одном сиде и одних настройках матч компьютеров повторяется ход в ход. Настройки по умолчанию — из BOMB.CFG оригинала. Звука нет: в оригинале он ещё и расходует случайные числа, здесь считается выключенным.</p>
     </div>
   </section>
 
@@ -233,14 +234,21 @@ const WEAPONS = ['Lead Ball', 'Incinerator', 'Mark II Incinerator', '20 Kiloton 
   'Mark II Dirt', 'Pressured Dirt', 'High Pres. Dirt', 'Xplosive Dirt'];
 const $ = (id) => document.getElementById(id);
 
+// Вектор-06Ц: 16 цветов из 256 (R 3 бита, G 3 бита, B 2 бита). Индексы — как в PROFILE_V06C.
+const V332 = ([r, g, b]) => [r * 255 / 7 | 0, g * 255 / 7 | 0, b * 255 / 3 | 0];
+const VPAL = [[0, 0, 0], [2, 2, 2], [1, 5, 0], [5, 2, 2], [7, 7, 3], [7, 4, 0]];      // фон, след/звёзды, земля, рамка, мяч, огонь
+const isV = () => TW.profile().name === 'v06c';
 function paint(canvas, v, ps = null, mark = null) {
-  const ctx = canvas.getContext('2d'), img = ctx.createImageData(320, 200), d = img.data;
-  const tank = ps ? ps.map((p) => TW.tankRGB(p).map((x) => x * 255 / 63 | 0)) : null;          // 1062:07a9
+  const W = TW.W, H = TW.H, N = W * H, vec = isV(), t0 = TW.profile().tank0;
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  const ctx = canvas.getContext('2d'), img = ctx.createImageData(W, H), d = img.data;
+  // цвет танка: 1062:07a9 (яркость = здоровье); на Векторе — тот же расчёт, обрезанный до 3-3-2 бит
+  const tank = ps ? ps.map((p) => { const c = TW.tankRGB(p); return vec ? V332([c[0] >> 3, c[1] >> 3, c[2] >> 4]) : c.map((x) => x * 255 / 63 | 0); }) : null;
   const base = ps ? ps.map((p) => p.colors.map((dv) => (63 / dv | 0) * 255 / 63 | 0)) : null;
-  for (let i = 0; i < 64000; i++) {
-    const c = v[i]; let rgb = PAL[c] || [0, 0, 0];
-    if (tank && c >= 20 && c <= 29 && tank[c - 20]) rgb = tank[c - 20];
-    else if (base && c >= 90 && c <= 99 && base[99 - c]) rgb = base[99 - c].map((x) => x * .55 | 0);   // след 100−p
+  for (let i = 0; i < N; i++) {
+    const c = v[i]; let rgb = vec ? (c < 6 ? V332(VPAL[c]) : [0, 0, 0]) : PAL[c] || [0, 0, 0];
+    if (tank && c >= t0 && c < t0 + 10 && tank[c - t0]) rgb = tank[c - t0];
+    else if (!vec && base && c >= 90 && c <= 99 && base[99 - c]) rgb = base[99 - c].map((x) => x * .55 | 0);   // след 100−p
     if (mark) { const m = mark[i]; if (m === 1) rgb = [242, 184, 75]; else if (m === 2) rgb = [255, 70, 60]; else rgb = rgb.map((x) => x * .28 | 0); }
     d[4 * i] = rgb[0]; d[4 * i + 1] = rgb[1]; d[4 * i + 2] = rgb[2]; d[4 * i + 3] = 255;
   }
@@ -249,7 +257,7 @@ function paint(canvas, v, ps = null, mark = null) {
 
 // ---------------- Игра ----------------
 const KINDS = ['Человек', 'Random', ...TW.AI_PICKABLE, 'Birdy Bonker'];
-const G = { ps: [], v: new Uint8Array(64000), bg: new Uint8Array(64000), rng: null, fl: null, cur: 0, round: 0, rounds: 0, phase: 'idle', gen: 0, wait: null };
+const G = { ps: [], v: new Uint8Array(65536), bg: new Uint8Array(65536), rng: null, fl: null, cur: 0, round: 0, rounds: 0, phase: 'idle', gen: 0, wait: null };
 const css = (p) => `rgb(${p.colors.map((dv) => (63 / dv | 0) * 255 / 63 | 0).join(',')})`;
 const money = (p) => p.score - p.spent;
 const shownAngle = (p) => (p.facing > 0 ? p.angle : 180 - p.angle);
@@ -259,7 +267,7 @@ const speed = () => +$('speed').value;
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function log(t) { const el = $('log'); const d = document.createElement('div'); d.textContent = t; el.prepend(d); while (el.children.length > 60) el.lastChild.remove(); }
 function render() { paint($('scr'), G.v, G.ps); }
-function clearOvl() { $('ovl').getContext('2d').clearRect(0, 0, 320, 200); }
+function clearOvl() { const o = $('ovl'); if (o.width !== TW.W || o.height !== TW.H) { o.width = TW.W; o.height = TW.H; } o.getContext('2d').clearRect(0, 0, TW.W, TW.H); }
 const curP = () => G.ps[G.cur - 1];
 const humanTurn = () => G.phase === 'turn' && curP() && curP().ctrl !== 3;
 
@@ -294,8 +302,16 @@ function hud() {
   for (const id of ['b-al', 'b-ar', 'b-flip', 'b-pd', 'b-pu', 'b-p100', 'b-fire']) $(id).disabled = !hum;
 }
 
+function useProfile() {
+  const vec = $('profile').value === 'v06c';
+  TW.setProfile(vec ? TW.PROFILE_V06C : TW.PROFILE_DOS);
+  for (const id of ['scr', 'ovl']) $(id).style.aspectRatio = vec ? '4 / 3' : '320 / 200';   // у Вектора пиксель шире, чем выше
+  for (const o of $('bgkind').options) o.disabled = vec && +o.value >= 2 && +o.value <= 5;   // 16 цветов: только «нет» и «звёзды»
+  if (vec && $('bgkind').selectedOptions[0] && $('bgkind').selectedOptions[0].disabled) $('bgkind').value = '6';
+}
 function startMatch() {
   const gen = ++G.gen;
+  useProfile();
   const n = +$('nplayers').value, kinds = [...document.querySelectorAll('#plist select')].map((x) => x.value);
   G.rng = new TW.TPRandom(+$('seed').value >>> 0);
   G.rounds = Math.max(1, +$('rounds').value | 0); G.round = 0;
@@ -314,7 +330,8 @@ async function nextRound(gen) {
   if (gen !== G.gen) return;
   G.round++;
   TW.shufflePlayers(G.rng, G.ps);
-  const r = TW.roundStart(G.rng, G.ps, +$('walls').value, +$('bgkind').value, +$('windmode').value);
+  const bgc = +$('bgkind').value;
+  const r = TW.roundStart(G.rng, G.ps, +$('walls').value, isV() && bgc >= 2 ? 6 : bgc, +$('windmode').value);
   G.v = r.v; G.bg = r.bg; bgPalette(r.kind); G.kind = r.kind;
   G.fl = { rebound: r.rebound, crumble: +$('crumble').value | 0, fall: $('fall').checked, xkill: $('xkill').checked, sound: false, wind: r.wind, ballVisible: true, trail: $('trail').checked };
   G.cur = r.first;
@@ -358,14 +375,14 @@ async function shoot(gen) {
     paint($('scr'), before, G.ps);
     const per = 24 * speed();
     for (let i = 0; i < path.length; i += per) {
-      ov.clearRect(0, 0, 320, 200); ov.fillStyle = '#fff';
+      ov.clearRect(0, 0, TW.W, TW.H); ov.fillStyle = '#fff';
       for (let j = Math.max(0, i - 80); j <= i; j += 2) { ov.globalAlpha = .2 + .8 * (j - i + 80) / 80; ov.fillRect(path[j], path[j + 1], 1, 1); }
       await frame(); if (gen !== G.gen) return;
     }
     ov.globalAlpha = 1; clearOvl();
     if (r && (r.stop === 'terrain' || r.stop === 'tank')) {
       const R = TW.RADIUS[p.weapon] || ({ 6: 4, 7: 8, 8: 8, 9: 20, 10: 20, 12: 3, 17: 12 })[p.weapon] || 0;
-      for (let k = 1; R && k <= 6; k++) { ov.clearRect(0, 0, 320, 200); ov.fillStyle = `rgba(255,${120 + k * 16},40,${1 - k / 7})`; ov.beginPath(); ov.arc(r.x, r.y, R * k / 6, 0, 7); ov.fill(); await sleep(24 / speed()); }
+      for (let k = 1; R && k <= 6; k++) { ov.clearRect(0, 0, TW.W, TW.H); ov.fillStyle = `rgba(255,${120 + k * 16},40,${1 - k / 7})`; ov.beginPath(); ov.arc(r.x, r.y, R * k / 6, 0, 7); ov.fill(); await sleep(24 / speed()); }
       clearOvl(); if (gen !== G.gen) return;
     }
   }
@@ -429,6 +446,7 @@ function humanShop(p) {
   });
 }
 $('nplayers').onchange = plist; plist();
+$('profile').onchange = startMatch;
 $('weapon').onchange = () => { if (humanTurn()) { curP().weapon = +$('weapon').value; hud(); } };
 $('g-herb').onchange = () => act(9); $('g-vick').onchange = () => act(10);
 $('g-target').onchange = () => { if (humanTurn()) curP().target = +$('g-target').value; };
@@ -539,7 +557,7 @@ $('b-vall').onclick = async () => {
   $('b-vall').disabled = false;
 };
 function selectTab(name) {
-  if (name === 'verify') bgPalette(5); else if (G.fl) { bgPalette(G.kind ?? 5); render(); }
+  if (name === 'verify') { G.gen++; G.phase = 'idle'; TW.setProfile(TW.PROFILE_DOS); bgPalette(5); } else if ($('pane-game').hidden) queueMicrotask(startMatch);
   for (const [t, p] of [['tab-game', 'pane-game'], ['tab-verify', 'pane-verify']]) { const on = t === `tab-${name}`; $(t).setAttribute('aria-selected', on); $(p).hidden = !on; }
   if (name === 'verify') loadVerify();
   try { localStorage.setItem('tw-tab', name); } catch {}

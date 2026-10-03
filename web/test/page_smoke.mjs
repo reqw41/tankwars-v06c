@@ -8,9 +8,9 @@ const html = readFileSync(path.join(WEB, 'index.html'), 'utf8');
 let src = html.slice(html.indexOf('<script type="module">') + 22, html.lastIndexOf('</script>'));
 src = src.replace("'./tankwars.js'", JSON.stringify(pathToFileURL(path.join(WEB, 'tankwars.js')).href));
 const els = new Map(), created = [];
-const defaults = { seed: '487264648', nplayers: '4', rounds: '3', windmode: '2', walls: '1', bgkind: '6', crumble: '50', speed: '40' };
+const defaults = { profile: process.env.TW_PROFILE || 'v06c', seed: '487264648', nplayers: '4', rounds: '3', windmode: '2', walls: '1', bgkind: '6', crumble: '50', speed: '40' };
 const mkEl = (id) => {
-  const el = { id, value: defaults[id] ?? '', checked: true, hidden: false, disabled: false, textContent: '', style: {}, dataset: {}, children: [], _html: '',
+  const el = { id, value: defaults[id] ?? '', checked: true, hidden: false, disabled: false, textContent: '', style: {}, dataset: {}, children: [], _html: '', options: [], selectedOptions: [], width: 0, height: 0,
     getContext: () => new Proxy({}, { get: (t, k) => (k === 'createImageData' ? () => ({ data: new Uint8ClampedArray(256000) }) : () => {}), set: () => true }),
     setAttribute() {}, removeAttribute() {}, prepend(c) { this.children.unshift(c); }, append() {}, remove() {}, matches: () => false,
     querySelector: (q) => (q === '.case' ? created.find((e) => e.className === 'case') : mkEl('q')), querySelectorAll: () => [], click() { return this.onclick && this.onclick(); },

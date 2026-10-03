@@ -2,7 +2,32 @@
 // Побитный перенос scripts/ref/*.py; каждая функция сверена с настоящей игрой (web/test/run_fixtures.mjs).
 // Адреса в комментариях — Ghidra (re/bomb25_flat.exe). Экран — 320×200 байт (индексы цветов VGA).
 
-export const W = 320, H = 200, SCREEN = W * H;
+// ---------- профиль экрана: геометрия поля и классы цветов ----------
+// DOS — оригинал (всё сверено с настоящей игрой). V06C — Вектор-06Ц: 256×256, 16 цветов (см. docs/spec/v06c.md).
+export const PROFILE_DOS = { name: 'dos', W: 320, H: 200, X0: 11, Y0: 31, X1: 309, Y1: 189,
+  ground: 2, frame: 13, ball: 19, beam: 0xfe, tank0: 20,
+  passable: (c) => c === 0 || (c >= 30 && c <= 99),          // сквозь это падает земля (1062:027e)
+  fire: (i) => (0x82 + i) & 0xff,                             // кольца огня
+  tmp: (c) => c & 0xff,                                       // временные цвета анимаций (в конце стираются)
+  isTmp: (c, lo, hi) => c >= lo && c <= hi,
+  sky: (c) => c, trail: (shooter) => (100 - shooter) & 0xff,
+  terrain: { init: 150, lo: 20, hi: 140, min: 3, max: 155, margin: (n) => 60 - 7 * (n - 2) },
+  place: { rnd: 28, off: 5 }, bgKinds: 6 };
+// Вектор-06Ц: поле 250×226 (x 3..252, y 27..252), панель — строки 0..23.
+// Цвета: 0 фон, 1 след и звёзды (проходимый), 2 земля, 3 рамка, 4 мяч/белый, 5 огонь и луч, 6..15 танки игроков 1..10.
+export const PROFILE_V06C = { name: 'v06c', W: 256, H: 256, X0: 3, Y0: 27, X1: 252, Y1: 252,
+  ground: 2, frame: 3, ball: 4, beam: 5, tank0: 6,
+  passable: (c) => c <= 1,
+  fire: () => 5, tmp: () => 5, isTmp: (c) => c === 5,
+  sky: () => 1, trail: () => 1,
+  terrain: { init: 200, lo: 20, hi: 185, min: 3, max: 205, margin: (n) => 50 - 6 * (n - 2) },
+  place: { rnd: 24, off: 5 }, bgKinds: 2 };
+let P = PROFILE_DOS;
+export let W = 320, H = 200, SCREEN = W * H;
+export function setProfile(p) { P = p; W = p.W; H = p.H; SCREEN = W * H; VIEWPORT.splice(0, 4, p.X0, p.Y0, p.X1, p.Y1); }
+export const profile = () => P;
+const isTank = (c) => c >= P.tank0 && c < P.tank0 + 10;
+const tankColor = (idx) => P.tank0 + idx - 1;
 
 // ---------- данные из RTL (передаются через init) ----------
 let BARREL = null;   // a -> [dx, dy]  (1062:059f, Trunc(Cos/Sin(DegToRad(a))*8))
@@ -90,28 +115,29 @@ export function line(v, x1, y1, x2, y2, c, bg = null) {
   }
 }
 export function rect(v, x1, y1, x2, y2, c) { line(v, x2, y1, x2, y2, c); line(v, x1, y1, x1, y2, c); line(v, x1, y2, x2, y2, c); line(v, x1, y1, x2, y1, c); }
+const frameRects = (v) => { rect(v, P.X0 - 3, P.Y0 - 3, P.X1 + 3, P.Y1 + 3, P.frame); rect(v, P.X0 - 1, P.Y0 - 1, P.X1 + 1, P.Y1 + 1, P.frame); };
 export function drawFrame(v, rebound) {            // 2b39:0386
-  rect(v, 8, 28, 312, 192, 13); rect(v, 10, 30, 310, 190, 13);
-  if (!rebound) line(v, 11, 189, 309, 189, 2);
+  frameRects(v);
+  if (!rebound) line(v, P.X0, P.Y1, P.X1, P.Y1, P.ground);
 }
 
 // ---------- небо (Background 6) ----------
 export function skyBackground() {
   const v = new Uint8Array(SCREEN);
   for (let y = 31; y <= 189; y++) for (let x = 11; x <= 309; x++) v[y * W + x] = 30 + ((y - 30) >> 3);
-  rect(v, 8, 28, 312, 192, 13); rect(v, 10, 30, 310, 190, 13);
+  frameRects(v);
   return v;
 }
 
 // ---------- рельеф (2eef:0a4f..0dbc) ----------
 const P_STEER = 0.20000000000004547, P_FLIP = 0.10000000000002274;
 export function generateTerrain(rng, players) {
-  const cols = []; let d = 1 - 2 * rng.word(2); const m = 60 - 7 * (players - 2);
-  let h = rng.word(150), s = 0, x = 11;
-  const col = (xx, hh) => cols.push([xx, 190 - hh]);
+  const T = P.terrain, cols = []; let d = 1 - 2 * rng.word(2); const m = T.margin(players);
+  let h = rng.word(T.init), s = 0, x = P.X0;
+  const col = (xx, hh) => cols.push([xx, P.Y1 + 1 - hh]);
   const st = (hh) => (s > 0 ? hh + 1 : hh - 1);
-  while (x < 0x136) {
-    if (m + 11 > x || 0x135 - m < x) { col(x, h); x++; continue; }
+  while (x < P.X1 + 1) {
+    if (m + P.X0 > x || P.X1 - m < x) { col(x, h); x++; continue; }
     const a = Math.abs(s);
     if (s === 0) { col(x, h); x++; col(x, h); x++; col(x, h); }
     if (a === 1) { col(x, h); x++; col(x, h); x++; h = st(h); col(x, h); }
@@ -121,13 +147,13 @@ export function generateTerrain(rng, players) {
     if (rng.real() < P_STEER) s += d;
     if (rng.real() < P_FLIP || Math.abs(s) > 4) d = -d;
     s = Math.max(-4, Math.min(4, s));
-    if (h <= 20) d = 1; if (h >= 140) d = -1; if (h <= 3) s = 1; if (h >= 155) s = -1;
+    if (h <= T.lo) d = 1; if (h >= T.hi) d = -1; if (h <= T.min) s = 1; if (h >= T.max) s = -1;
     x++;
   }
   return { cols, hFinal: h };
 }
 export function renderTerrain(t, v) {
-  for (const [x, top] of t.cols) { const y0 = Math.min(top, 189), y1 = Math.max(top, 189); for (let y = y0; y <= y1; y++) if (y >= 0 && y < H && x >= 0 && x < W) v[y * W + x] = 2; }
+  for (const [x, top] of t.cols) { const y0 = Math.min(top, P.Y1), y1 = Math.max(top, P.Y1); for (let y = y0; y <= y1; y++) if (y >= 0 && y < H && x >= 0 && x < W) v[y * W + x] = P.ground; }
   return v;
 }
 
@@ -136,31 +162,31 @@ export const SPRITE = [[0,0],[1,0],[2,0],[3,0],[4,0],[-1,0],[-2,0],[-3,0],[-4,0]
   [0,-1],[-2,-1],[-3,-1],[-4,-1],[2,-1],[3,-1],[4,-1],
   [0,-2],[-1,-2],[-2,-2],[-3,-2],[1,-2],[2,-2],[3,-2],
   [0,-3],[-1,-3],[-2,-3],[-3,-3],[1,-3],[2,-3],[3,-3],[0,-4],[-1,-4],[1,-4]];
-const SUPPORT = (c) => c === 2 || c === 13;
+const SUPPORT = (c) => c === P.ground || c === P.frame;
 export function drawTank(v, x, y, c) { const b = off16(x, y); for (const [dx, dy] of SPRITE) poke(v, (b + dy * W + dx) & 0xffff, c); }
 export function eraseTank(v, bg, x, y) { const b = off16(x, y); for (const [dx, dy] of SPRITE) { const o = (b + dy * W + dx) & 0xffff; poke(v, o, peek(bg, o)); } }
 function barrelOf(a) { return BARREL[a >= 0 ? a % 361 : ((a % 360) + 360) % 360]; }
 export function drawTankBarrel(v, t) {
   if (!t.alive) return;
-  drawTank(v, t.x, t.y, t.idx + 19);
+  drawTank(v, t.x, t.y, tankColor(t.idx));
   const [dx, dy] = barrelOf(t.angle);
-  line(v, t.x, t.y, t.x + dx * t.facing, t.y - dy, t.idx + 19);
+  line(v, t.x, t.y, t.x + dx * t.facing, t.y - dy, tankColor(t.idx));
 }
 const sup = (v, x, y) => SUPPORT(peek(v, off16(x, y + 1)));
 export function placeTanks(rng, players, v, bg, rebound = false) {
   const ts = [];
   for (let i = 1; i <= players; i++) ts.push({ idx: i, x: 0, y: 0, angle: 90, power: 200, facing: 1, men: 100, alive: true, shield: 0, damp: 0, score: 0, energy: 1000, weapon: 1 });
-  const first = rng.word(28) + 16, last = 0x131 - rng.word(28);
+  const first = rng.word(P.place.rnd) + P.X0 + P.place.off, last = P.X1 - P.place.off + 1 - rng.word(P.place.rnd);
   ts[0].x = first; ts[players - 1].x = last;
   const q2 = trunc((last - first) / (players - 1));
   for (let i = 2; i < players; i++) ts[i - 1].x = (i - 1) * q2 + first;
   for (const t of ts) {
     t.angle = (t.idx === 1 || t.idx === players) ? 75 : 90;
-    t.facing = t.idx === players ? -1 : 1; t.y = 32;
+    t.facing = t.idx === players ? -1 : 1; t.y = P.Y0 + 1;
     let any = false; for (let dx = -4; dx <= 4; dx++) if (sup(v, t.x + dx, t.y)) any = true;
     if (!any) {
       for (;;) {
-        eraseTank(v, bg, t.x, t.y); t.y++; drawTank(v, t.x, t.y, t.idx + 19);
+        eraseTank(v, bg, t.x, t.y); t.y++; drawTank(v, t.x, t.y, tankColor(t.idx));
         let all = true; for (let dx = -4; dx <= 4; dx++) if (!sup(v, t.x + dx, t.y)) all = false;
         if (all) break;
       }
@@ -171,17 +197,17 @@ export function placeTanks(rng, players, v, bg, rebound = false) {
 }
 
 // ---------- осыпание (1062:027e) и падение танков (2b39:0020) ----------
-const fallable = (c) => c === 0 || (c >= 30 && c <= 99);
+const fallable = (c) => P.passable(c);
 export function crumble(v, bg) {
   const lst = [];
-  for (let bx = 0xEEC0; bx > 0; bx--) if (v[bx] === 2 && fallable(v[bx + W])) { v[bx] = bg[bx]; v[bx + W] = 2; lst.push(bx + W); }
+  for (let bx = (P.Y1 + 2) * W; bx > 0; bx--) if (v[bx] === P.ground && fallable(v[bx + W])) { v[bx] = bg[bx]; v[bx + W] = P.ground; lst.push(bx + W); }
   if (!lst.length) return 0;
   let passes = 0;
   for (;;) {
     let moved = false; passes++;
     for (let i = 0; i < lst.length; i++) {
       const e = lst[i]; if (e === 0) continue;
-      if (e + W < v.length && fallable(v[e + W])) { v[e] = bg[e]; v[e + W] = 2; lst[i] = e + W; moved = true; } else lst[i] = 0;
+      if (e + W < v.length && fallable(v[e + W])) { v[e] = bg[e]; v[e + W] = P.ground; lst[i] = e + W; moved = true; } else lst[i] = 0;
     }
     if (!moved) return passes;
   }
@@ -202,7 +228,7 @@ export function tanksFall(v, bg, tanks, rng, rebound) {
     line(v, t.x, t.y, t.x + bdx * t.facing, t.y - bdy, 0, bg);
     for (;;) {
       const ox = t.x, oy = t.y;
-      drawTank(v, ox, oy, t.idx + 19);
+      drawTank(v, ox, oy, tankColor(t.idx));
       t.y++;
       if (sup(v, t.x + 4, t.y)) t.x--;
       if (sup(v, t.x - 4, t.y)) t.x++;
@@ -261,15 +287,15 @@ function applyDamage(players, victim, shooter, dmg) {
 }
 export function explode(v, bg, players, x, y, hit, shooter, weapon, rng, sound) {
   if (!(weapon in RADIUS)) return null;
-  const r = RADIUS[weapon], cx = trunc(x - 11), cy = trunc(y - 31);
-  for (let i = 0; i <= r; i++) for (const dx of [1, -1, 0]) ring(v, cx + dx, cy, i, 0x82 + i);
+  const r = RADIUS[weapon], cx = trunc(x - P.X0), cy = trunc(y - P.Y0);
+  for (let i = 0; i <= r; i++) for (const dx of [1, -1, 0]) ring(v, cx + dx, cy, i, P.fire(i));
   if (sound && rng) {
     const T = (r + 1) * (r + 2) / 2;
     for (let i = 0; i < r + 1 + 2 * T; i++) rng.word(500);
     for (let i = 0; i < T; i++) rng.word(250);
   }
   for (let i = r; i >= 0; i--) for (const dx of [1, -1, 0]) ringRestore(v, bg, cx + dx, cy, i);
-  if (hit >= 20 && hit <= 29) applyDamage(players, players[hit - 20], shooter, 200);
+  if (isTank(hit)) applyDamage(players, players[hit - P.tank0], shooter, 200);
   for (const p of players) {
     if (!p.alive) continue;
     const ddx = x - p.x, ddy = y - p.y, d = Math.sqrt(ddx * ddx + ddy * ddy);
@@ -302,8 +328,8 @@ const CRI_RADIUS = { 5: 4, 6: 4, 7: 8, 8: 8, 9: 20, 10: 20 }, CRI_FLUENT = new S
 const DIR = { 1: [0, -1], 2: [1, -1], 3: [1, 0], 4: [1, 1], 5: [0, 1], 6: [-1, 1], 7: [-1, 0], 8: [-1, -1] };
 export function cri(v, bg, players, x, y, hit, shooter, weapon, rng, sound) {      // 6..10
   if (!(weapon in CRI_RADIUS)) return;
-  if (hit >= 20 && hit <= 29) {          // 318e:091c — урон со щита, перелив в men (16 бит) и очки
-    const dmg = rng.word(weapon * 6) + 1, vic = players[hit - 20];
+  if (isTank(hit)) {          // 318e:091c — урон со щита, перелив в men (16 бит) и очки
+    const dmg = rng.word(weapon * 6) + 1, vic = players[hit - P.tank0];
     vic.shield -= dmg;
     if (vic.shield < 0) {
       vic.men = ((vic.men + (vic.shield & 0xffff)) << 16) >> 16;
@@ -312,16 +338,16 @@ export function cri(v, bg, players, x, y, hit, shooter, weapon, rng, sound) {   
     }
     return;
   }
-  if (hit !== 2) return;
+  if (hit !== P.ground) return;
   const radius = CRI_RADIUS[weapon], fluent = CRI_FLUENT.has(weapon);
   let cx = trunc(x), cy = trunc(y);
-  while (![[-1, 0], [1, 0], [0, -1], [0, 1]].some(([dx, dy]) => atv(v, cx + dx, cy + dy) === 2)) cy++;
+  while (![[-1, 0], [1, 0], [0, -1], [0, 1]].some(([dx, dy]) => atv(v, cx + dx, cy + dy) === P.ground)) cy++;
   const pts = Array.from({ length: 22 }, () => [0, 0]);
   for (let i = 1; i <= radius; i++) pts[i] = [cx, cy];
   for (;;) {
     for (let i = 1; i <= radius; i++) {
       const dirs = [], [px, py] = pts[i];
-      for (let d = 1; d <= 8; d++) { if (d % 2 === 0 && !fluent) continue; const [dx, dy] = DIR[d]; if (atv(v, px + dx, py + dy) === 2) dirs.push(d); }
+      for (let d = 1; d <= 8; d++) { if (d % 2 === 0 && !fluent) continue; const [dx, dy] = DIR[d]; if (atv(v, px + dx, py + dy) === P.ground) dirs.push(d); }
       if (dirs.length) {
         const d = dirs[rng.word(dirs.length)], [dx, dy] = DIR[d], nx = px + dx, ny = py + dy;
         pts[i] = [nx, ny]; if (sound) rng.word(500); pixBg(v, bg, nx, ny);
@@ -342,7 +368,7 @@ const DIRT_RADIUS = { 13: 10, 14: 15, 15: 30, 16: 60 };
 export function dirtBall(v, x, y, weapon, vp = VIEWPORT) {                         // 13..16
   const r = DIRT_RADIUS[weapon], lx = x - vp[0], ly = y - vp[1], cy = trunc(ly);
   const centers = [trunc(lx + 1), trunc(lx - 1), trunc(lx)];
-  for (let i = 0; i <= r; i++) for (const cx of centers) ring(v, cx, cy, i, 2, vp);
+  for (let i = 0; i <= r; i++) for (const cx of centers) ring(v, cx, cy, i, P.ground, vp);
 }
 export function explosiveDirt(v, bg, x, y, rng, sound, percent, vp = VIEWPORT) {   // 17
   const n = rng.word(100) + 300, rows = rng.word(8) + 3;
@@ -352,24 +378,25 @@ export function explosiveDirt(v, bg, x, y, rng, sound, percent, vp = VIEWPORT) {
     pts.push([tx + jitter, ty - span + 2]);
   }
   for (const [px, py] of pts) {
-    if (vp[0] <= px + vp[0] && px + vp[0] <= vp[2] && vp[1] <= py + vp[1] && py + vp[1] <= vp[3]) { const X = px + vp[0], Y = py + vp[1]; if (X >= 0 && X < W && Y >= 0 && Y < H) v[Y * W + X] = 2; }
+    if (vp[0] <= px + vp[0] && px + vp[0] <= vp[2] && vp[1] <= py + vp[1] && py + vp[1] <= vp[3]) { const X = px + vp[0], Y = py + vp[1]; if (X >= 0 && X < W && Y >= 0 && Y < H) v[Y * W + X] = P.ground; }
     if (sound) rng.word(200);
   }
   if (rng.real() * 100.0 < percent * 2) crumble(v, bg);
 }
 
 // Laser 2583:140f..24c5 (оружие 5). shooter — объект танка; players — массив танков.
-const LASER_P = 0.20000000000004547, BEAM = 0xfe;
-const inField = (x, y) => x >= 11 && x <= 309 && y >= 31 && y <= 189;
+const LASER_P = 0.20000000000004547;
+const inField = (x, y) => x >= P.X0 && x <= P.X1 && y >= P.Y0 && y <= P.Y1;
 function trigOf(a) { return TRIG[a in TRIG ? a : ((a % 360) + 360) % 360]; }
 export function laser(v, bg, players, shooterIdx, rng, sound, rebound = false) {
   const t = players[shooterIdx - 1];
+  const BEAM = P.beam;
   let power = t.power; if (power === 0) return;
   if (power > t.energy) { power = t.energy; t.power = power; }
   t.energy -= power;
   const [bdx, bdy] = barrelOf(t.angle);
   line(v, t.x, t.y, t.x + bdx * t.facing, t.y - bdy, BEAM);
-  drawTank(v, t.x, t.y, shooterIdx + 19);
+  drawTank(v, t.x, t.y, tankColor(shooterIdx));
   let counter = 10 * power;
   const eff = t.facing > 0 ? t.angle : 180 - t.angle;
   if (rng.real() < LASER_P) t.men -= 1;
@@ -382,17 +409,17 @@ export function laser(v, bg, players, shooterIdx, rng, sound, rebound = false) {
     let done = false;
     X = q(X + dx); Y = q(Y + dy); counter -= 10;
     const c = vget(trunc(X), trunc(Y));
-    if (c === 2) {
+    if (c === P.ground) {
       for (let k = 1; k <= 15; k++) {
         const gx = trunc(q(X - q(rng.word(20) * dx))), gy = trunc(q(Y - q(rng.word(20) * dy)));
         if (sound) rng.word((500 * k) & 0xffff);
         const gc = gp(gx, gy);
-        if (inField(gx, gy) && !(gc >= 20 && gc <= 29) && gc !== BEAM) poke(v, off16(gx, gy), bg[off16(gx, gy)]);
+        if (inField(gx, gy) && !isTank(gc) && gc !== BEAM) poke(v, off16(gx, gy), bg[off16(gx, gy)]);
       }
     }
-    if (c > 19 && c < 30 && players[c - 20] && players[c - 20].men > 0) {
+    if (isTank(c) && players[c - P.tank0] && players[c - P.tank0].men > 0) {
       counter -= 10;
-      const vic = players[c - 20];
+      const vic = players[c - P.tank0];
       if (vic.shield <= 0) {
         const pts = [];
         for (let k = 1; k <= 15; k++) {
@@ -400,7 +427,7 @@ export function laser(v, bg, players, shooterIdx, rng, sound, rebound = false) {
           for (;;) {
             sx = trunc(q(q(X - rng.word(40)) + 20)); sy = trunc(q(q(Y - rng.word(40)) + 20));
             const gc = gp(sx, sy);
-            if (gc === c || gc < 20 || (gc !== BEAM && gc > 29)) break;
+            if (gc === c || (!isTank(gc) && gc !== BEAM)) break;
           }
           pts.push([sx, sy]);
           if (sound) rng.word((500 * k) & 0xffff);
@@ -416,16 +443,16 @@ export function laser(v, bg, players, shooterIdx, rng, sound, rebound = false) {
     if (sound) rng.word((12 * counter) & 0xffff);
     if (counter <= 0) done = true;
     if (rebound) {
-      if (dx < 0 && X <= 11 && dx !== 0) dx = -dx;
-      if (dx > 0 && X >= 309 && dx !== 0) dx = -dx;
-      if (dy < 0 && Y <= 31 && dy !== 0) dy = -dy;
-      if (dy > 0 && Y >= 189 && dy !== 0) dy = -dy;
-    } else if ((dx < 0 && X <= 11) || (dx > 0 && X >= 309) || (dy < 0 && Y <= 31) || (dy > 0 && Y >= 189)) done = true;
+      if (dx < 0 && X <= P.X0 && dx !== 0) dx = -dx;
+      if (dx > 0 && X >= P.X1 && dx !== 0) dx = -dx;
+      if (dy < 0 && Y <= P.Y0 && dy !== 0) dy = -dy;
+      if (dy > 0 && Y >= P.Y1 && dy !== 0) dy = -dy;
+    } else if ((dx < 0 && X <= P.X0) || (dx > 0 && X >= P.X1) || (dy < 0 && Y <= P.Y0) || (dy > 0 && Y >= P.Y1)) done = true;
     if (!done) poke(v, off16(trunc(X), trunc(Y)), BEAM);
     if (counter <= 0) done = true;
     if (done) break;
   }
-  for (let o = 64000; o > 0; o--) if (o < v.length && v[o] === BEAM) v[o] = bg[o];
+  for (let o = SCREEN; o > 0; o--) if (o < v.length && v[o] === BEAM) v[o] = bg[o];
 }
 
 // ---------- полёт снаряда 2583:01c0 (+ наведение 2583:06cf) ----------
@@ -433,7 +460,7 @@ const PI48 = real48ToFloat(new Uint8Array([0x82, 0x21, 0xa2, 0xda, 0x0f, 0x49]))
 const D180 = real48ToFloat(new Uint8Array([0x88, 0x00, 0x00, 0x00, 0x00, 0x34]));
 export const degToRad = (d) => q(q(q(d) / D180) * PI48);
 const DIAMOND = [[-1, 0], [0, -1], [0, 0], [0, 1], [1, 0]];
-const isHit = (c) => c === 2 || (c >= 20 && c <= 29);
+const isHit = (c) => c === P.ground || isTank(c);
 const HERB = 1.0100000000002183;
 export function flight(inp, getPixel, onStep = null) {
   // inp: angle, power, facing, tank_x, tank_y, wind, rebound, weapon, guided, men, target:[x,y]
@@ -458,16 +485,16 @@ export function flight(inp, getPixel, onStep = null) {
     const px = trunc(x), py = trunc(y);
     positions.push([px, py]);
     if (onStep) onStep(px, py, x, y);
-    const inBand = y < 189 && x < 309 && y > 33 && x > 11;
+    const inBand = y < P.Y1 && x < P.X1 && y > P.Y0 + 2 && x > P.X0;
     if (inBand) {
       hit = 0; let stopped = false;
       for (const [dx, dy] of DIAMOND) {
         const cp = getPixel(px + dx, py + dy);
         if (isHit(cp)) {
           hit = cp;
-          const tank = cp >= 20 && cp <= 29;
+          const tank = isTank(cp);
           let st = tank || sub === step || inp.power < fuse;
-          if (cp === 2 && inp.power === fuse) st = false;
+          if (cp === P.ground && inp.power === fuse) st = false;
           if (st) {
             if (tank && inp.weapon >= 12 && inp.weapon <= 16) vy = q(-vy * 1.2);
             else { stop = tank ? 'tank' : 'terrain'; stopped = true; break; }
@@ -476,13 +503,13 @@ export function flight(inp, getPixel, onStep = null) {
       }
       if (stopped) break;
     } else if (inp.rebound) {
-      if (vx < 0 && x < 10) vx = q(-vx); if (vx > 0 && x > 310) vx = q(-vx);
-      if (vy < 0 && y < 30) vy = q(-vy); if (vy > 0 && y > 190) vy = q(-vy);
+      if (vx < 0 && x < P.X0 - 1) vx = q(-vx); if (vx > 0 && x > P.X1 + 1) vx = q(-vx);
+      if (vy < 0 && y < P.Y0 - 1) vy = q(-vy); if (vy > 0 && y > P.Y1 + 1) vy = q(-vy);
     } else if (!guided) {
-      if (vx > 1 && x > 310 && inp.wind > 0) y = 200;
-      if (vx < 1 && x < 10 && inp.wind < 0) y = 200;
+      if (vx > 1 && x > P.X1 + 1 && inp.wind > 0) y = P.Y1 + 11;
+      if (vx < 1 && x < P.X0 - 1 && inp.wind < 0) y = P.Y1 + 11;
     }
-    if (y < -5000 || y > 193) { stop = 'bounds'; break; }
+    if (y < -5000 || y > P.Y1 + 4) { stop = 'bounds'; break; }
   }
   return { positions, stop, hit, x, y };
 }
@@ -549,7 +576,7 @@ export function flightDraw(v, bg, inp, shooter, ballVisible, trail, players = 1,
   if (vy !== 0) vy = q(-vy);
   const step = 10, fuse = 1000 - 2 * inp.men;
   let sub = players, pxPrev = -99, pyPrev = -99, guided = inp.guided || 0;     // DS:3EAC перед полётом = число игроков
-  const tcol = (100 - shooter) & 0xff;
+  const tcol = P.trail(shooter);
   const get = (X, Y) => (X >= 0 && X < W && Y >= 0 && Y < H ? v[Y * W + X] : 0);
   for (let i = 0; i < (inp.maxSteps || 200000); i++) {
     sub++; if (sub > step) sub = 0;
@@ -560,7 +587,7 @@ export function flightDraw(v, bg, inp, shooter, ballVisible, trail, players = 1,
       if ((guided === 2 || guided === 3) && Math.abs(tdx) <= 2) { vx = q(0); y = tdy > 0 ? q(y + 0.5) : q(y - 0.5); }
       if ((guided === 1 || guided === 3) && Math.abs(tdy) <= 2) { vy = q(0); const prod = q(tdx * vx); vx = q(vx * (prod >= 0 ? HERB : -HERB)); }
     }
-    if (pxPrev < 309 && pyPrev > 31 && pxPrev > 11) {
+    if (pxPrev < P.X1 && pyPrev > P.Y0 && pxPrev > P.X0) {
       const ix = trunc(pxPrev), iy = trunc(pyPrev);
       if (ballVisible) cross(v, bg, ix, iy);
       if (trail) { const o = off16(ix, iy); v[o] = tcol; bg[o] = tcol; }
@@ -568,31 +595,31 @@ export function flightDraw(v, bg, inp, shooter, ballVisible, trail, players = 1,
     pxPrev = x; pyPrev = y;
     const px = trunc(x), py = trunc(y);
     let stop = null, hit = 0;
-    if (y < 189 && x < 309 && y > 33 && x > 11) {
+    if (y < P.Y1 && x < P.X1 && y > P.Y0 + 2 && x > P.X0) {
       let done = false;                               // ромб обходится целиком (2583:0c52..0e1d)
       for (const [dx, dy] of DIAMOND) {
         const cp = get(px + dx, py + dy);
         if (!isHit(cp)) continue;
         hit = cp;
-        const tank = cp >= 20 && cp <= 29;
+        const tank = isTank(cp);
         if (tank || sub === step || inp.power < fuse) done = true;
-        if (cp === 2 && inp.power === fuse) done = false;
+        if (cp === P.ground && inp.power === fuse) done = false;
         if (tank && inp.weapon >= 12 && inp.weapon <= 16) { done = false; vy = q(q(-vy) * K12); guided = 0; }
       }
-      if (done) stop = hit >= 20 && hit <= 29 ? 'tank' : 'terrain';
+      if (done) stop = isTank(hit) ? 'tank' : 'terrain';
     } else if (inp.rebound) {
-      if (vx < 0 && x < 10) vx = q(-vx); if (vx > 0 && x > 310) vx = q(-vx);
-      if (vy < 0 && y < 30) vy = q(-vy); if (vy > 0 && y > 190) vy = q(-vy);
+      if (vx < 0 && x < P.X0 - 1) vx = q(-vx); if (vx > 0 && x > P.X1 + 1) vx = q(-vx);
+      if (vy < 0 && y < P.Y0 - 1) vy = q(-vy); if (vy > 0 && y > P.Y1 + 1) vy = q(-vy);
     } else if (!guided) {
-      if (vx > 1 && x > 310 && inp.wind > 0) y = 200;
-      if (vx < 1 && x < 10 && inp.wind < 0) y = 200;
+      if (vx > 1 && x > P.X1 + 1 && inp.wind > 0) y = P.Y1 + 11;
+      if (vx < 1 && x < P.X0 - 1 && inp.wind < 0) y = P.Y1 + 11;
     }
-    if (stop === null && (y < -5000 || y > 193)) stop = 'bounds';
+    if (stop === null && (y < -5000 || y > P.Y1 + 4)) stop = 'bounds';
     if (stop !== null) {
-      if (y > 0 && y < 200 && x > 0 && x < 320) cross(v, bg, trunc(x), trunc(y));
+      if (y > 0 && y < H && x > 0 && x < W) cross(v, bg, trunc(x), trunc(y));
       return { stop, x, y, hit };
     }
-    if (ballVisible && x < 309 && y > 31 && x > 11) cross(v, null, px, py, 19);
+    if (ballVisible && x < P.X1 && y > P.Y0 && x > P.X0) cross(v, null, px, py, P.ball);
     if (onFrame) onFrame(px, py);
   }
   return { stop: 'max', x, y, hit: 0 };
@@ -626,9 +653,10 @@ export function fire(v, bg, ps, shooter, rng, fl, onFrame = null) {
 // ---------- гибель танка (оверлей 285c), вариант Random(7) ----------
 function eraseTankBarrel(v, bg, t) { eraseTank(v, bg, t.x, t.y); const [bdx, bdy] = barrelOf(t.angle); line(v, t.x, t.y, t.x + bdx * t.facing, t.y - bdy, 0, bg); }
 const redrawAll = (v, ts) => { for (const t of ts) drawTankBarrel(v, t); };
-const gpVp = (v, x, y) => { const X = x + 11, Y = y + 31; return X >= 0 && X < W && Y >= 0 && Y < H ? v[Y * W + X] : 0; };
-const ppVp = (v, x, y, c) => { const X = x + 11, Y = y + 31; if (inVp(X, Y, VIEWPORT)) v[Y * W + X] = c; };
-function replaceColor(v, bg, lo, hi) { for (let o = 64000; o > 0; o--) if (o < v.length && v[o] >= lo && v[o] <= hi) v[o] = bg[o]; }
+const gpVp = (v, x, y) => { const X = x + P.X0, Y = y + P.Y0; return X >= 0 && X < W && Y >= 0 && Y < H ? v[Y * W + X] : 0; };
+const ppVp = (v, x, y, c) => { const X = x + P.X0, Y = y + P.Y0; if (inVp(X, Y, VIEWPORT)) v[Y * W + X] = c; };
+function replaceColor(v, bg, lo, hi) { for (let o = SCREEN; o > 0; o--) if (o < v.length && v[o] >= lo && v[o] <= hi) v[o] = bg[o]; }
+function replaceTmp(v, bg, lo, hi) { for (let o = SCREEN; o > 0; o--) if (o < v.length && P.isTmp(v[o], lo, hi)) v[o] = bg[o]; }
 const G0 = 0.006999999999997897, VX0 = 0.5, VY0 = 0.10000000000002274;
 const blastK = (n) => (n <= 2 ? 1 : n <= 5 ? 2 : n <= 7 ? 3 : n === 8 ? 4 : 5);
 function deathIntro(rng, sound) { for (let i = 0; i < 54; i++) { if (sound) rng.word(500); rng.word(0xffff); } }
@@ -636,7 +664,7 @@ function deathOutro(v, bg, ts, tx, ty, rng, sound, color, hi, twin) {
   let r6 = 0;
   for (let ae = 0; ae < 5; ae++) for (let b0 = 3; b0 < 6; b0++) {
     r6++;
-    const col = (10 * b0 + 100 + ae) & 0xff;
+    const col = P.tmp(10 * b0 + 100 + ae);
     for (const rr of [r6, r6 + 1]) {
       ring(v, tx, ty, rr, col); if (twin) ring(v, tx + 1, ty, rr, col);
       for (let k = 0; k < 5; k++) { if (sound) rng.word((1300 - 40 * r6) & 0xffff); rng.word(0xffff); }
@@ -647,19 +675,19 @@ function deathOutro(v, bg, ts, tx, ty, rng, sound, color, hi, twin) {
   for (let r = 30; r >= 0; r--) { ringRestore(v, bg, tx, ty, r); ringRestore(v, bg, tx + 1, ty, r); }
   redrawAll(v, ts);
   replaceColor(v, bg, color, color);
-  replaceColor(v, bg, 0x82, hi);
+  replaceTmp(v, bg, 0x82, hi);
 }
 function miniBlast(v, bg, px, py, rng, sound, call0) {
   const base = 10 * (rng.word(3) + 3), k = blastK(rng.word(10));
   for (let r = 0; r <= 4 * k; r++) {
     if (sound) rng.word(2500); if (call0) rng.word(0xffff);
-    const col = (base + 100 + trunc(r / k)) & 0xff;
+    const col = P.tmp(base + 100 + trunc(r / k));
     ring(v, px, py, r, col); ring(v, px + 1, py, r, col);
   }
   for (let r = 4 * k; r >= 0; r--) { if (sound) rng.word(2500); if (call0) rng.word(0xffff); ringRestore(v, bg, px, py, r); ringRestore(v, bg, px + 1, py, r); }
 }
 function death0(v, bg, ts, victim, rng, sound, wind, xkill) {          // 285c:0020
-  const t = ts[victim - 1], color = victim + 19, tx = t.x - 11, ty = t.y - 31;
+  const t = ts[victim - 1], color = tankColor(victim), tx = t.x - P.X0, ty = t.y - P.Y0;
   deathIntro(rng, sound);
   for (let f = 0; f < 11; f++) {
     if (sound) rng.word(500);
@@ -669,9 +697,9 @@ function death0(v, bg, ts, victim, rng, sound, wind, xkill) {          // 285c:0
       X = q(X + vx); Y = q(Y + vy); vy = q(vy + G0); vx = q(q(wind / 5000) + vx);
       px = trunc(X); py = trunc(Y);
       const c = gpVp(v, px, py);
-      if (c === 13 || c === 2) done = true;
-      if (xkill && c >= 20 && c <= 29 && ts[c - 20]) { const vic = ts[c - 20]; if (vic.shield > 0) done = true; else vic.men -= rng.word(10) + 5; }
-      if (py < 0 || py > 200 || px < 0 || px > 320) done = true;
+      if (c === P.frame || c === P.ground) done = true;
+      if (xkill && isTank(c) && ts[c - P.tank0]) { const vic = ts[c - P.tank0]; if (vic.shield > 0) done = true; else vic.men -= rng.word(10) + 5; }
+      if (py < 0 || py > H || px < 0 || px > W) done = true;
       ppVp(v, px, py, color);
       if (done) break;
     }
@@ -680,7 +708,7 @@ function death0(v, bg, ts, victim, rng, sound, wind, xkill) {          // 285c:0
   deathOutro(v, bg, ts, tx, ty, rng, sound, color, 0x9f, true);
 }
 function death2(v, bg, ts, victim, rng, sound, wind, xkill) {          // 285c:1da5
-  const t = ts[victim - 1], color = victim + 19, tx = t.x - 11, ty = t.y - 31;
+  const t = ts[victim - 1], color = tankColor(victim), tx = t.x - P.X0, ty = t.y - P.Y0;
   deathIntro(rng, sound);
   const F = [];
   for (let i = 0; i < 11; i++) { if (sound) rng.word(500); F.push({ X: q(tx), Y: q(ty), vx: q(VX0 - rng.real()), vy: q(VY0 - rng.real()), dead: false, end: [0, 0] }); }
@@ -691,9 +719,9 @@ function death2(v, bg, ts, victim, rng, sound, wind, xkill) {          // 285c:1
       f.X = q(f.X + f.vx); f.Y = q(f.Y + f.vy); f.vy = q(f.vy + G0); f.vx = q(q(wind / 5000) + f.vx);
       const px = trunc(f.X), py = trunc(f.Y); any = true;
       const c = gpVp(v, px, py);
-      if (c === 13 || c === 2) f.dead = true;
-      if (xkill && c >= 20 && c <= 29 && ts[c - 20]) { const vic = ts[c - 20]; if (vic.shield >= 1) f.dead = true; else vic.men -= rng.word(10) + 10; }
-      if (py < 0 || py > 0x9e || px < 0 || px > 0x12a) f.dead = true;
+      if (c === P.frame || c === P.ground) f.dead = true;
+      if (xkill && isTank(c) && ts[c - P.tank0]) { const vic = ts[c - P.tank0]; if (vic.shield >= 1) f.dead = true; else vic.men -= rng.word(10) + 10; }
+      if (py < 0 || py > P.Y1 - P.Y0 || px < 0 || px > P.X1 - P.X0) f.dead = true;
       ppVp(v, px, py, color);
       if (f.dead) f.end = [px, py];
     }
@@ -706,7 +734,7 @@ const vget16 = (v, x, y) => peek(v, off16(x, y)), vput16 = (v, x, y, c) => poke(
 function particleHit(v, ts, x, y, rng, xkill) {
   if (!xkill) return;
   const c = vget16(v, x, y);
-  if (c >= 20 && c <= 29 && ts[c - 20] && ts[c - 20].shield <= 0) ts[c - 20].men -= rng.word(3);
+  if (isTank(c) && ts[c - P.tank0] && ts[c - P.tank0].shield <= 0) ts[c - P.tank0].men -= rng.word(3);
 }
 const SHAPE = { 1: (x, y, a, b) => [x + b, y - a], 2: (x, y, a, b) => [x + b, y + a], 3: (x, y, a, b) => [x + a, y - b], 4: (x, y, a, b) => [x - a, y - b],
   5: (x, y, a, b) => [x + b + a, y - a], 6: (x, y, a, b) => [x + b - a, y - a], 7: (x, y, a, b) => [x + b + a, y + a], 8: (x, y, a, b) => [x + b - a, y + a] };
@@ -720,13 +748,13 @@ function deathParticles(v, bg, ts, victim, rng, sound, mode, xkill) {   // 285c:
       frames.push(pts);
     }
     for (const pts of frames) for (const p of pts) {
-      if (p[0] > 309) p[0] = 618 - p[0]; if (p[1] > 189) p[1] = 378 - p[1]; if (p[1] < 31) p[1] = 62 - p[1]; if (p[0] < 11) p[0] = 22 - p[0];
+      if (p[0] > P.X1) p[0] = 2 * P.X1 - p[0]; if (p[1] > P.Y1) p[1] = 2 * P.Y1 - p[1]; if (p[1] < P.Y0) p[1] = 2 * P.Y0 - p[1]; if (p[0] < P.X0) p[0] = 2 * P.X0 - p[0];
     }
     if (mode === 0) {
       for (let f = 1; f <= 5; f++) for (let i = 0; i < m; i++) {
         if (sound) rng.word(f === 1 ? 500 : (500 * f) & 0xffff);
         const [x, y] = frames[f - 1][i];
-        particleHit(v, ts, x, y, rng, xkill); vput16(v, x, y, rng.word(14) + 1);
+        particleHit(v, ts, x, y, rng, xkill); vput16(v, x, y, P.tmp(rng.word(14) + 1));
         if (f > 1) { const [px, py] = frames[f - 2][i]; vput16(v, px, py, bg[off16(px, py)]); }
       }
       for (const [x, y] of frames[4]) vput16(v, x, y, bg[off16(x, y)]);
@@ -735,12 +763,12 @@ function deathParticles(v, bg, ts, victim, rng, sound, mode, xkill) {   // 285c:
         if (sound) rng.word((500 * f) & 0xffff);
         const [x, y] = frames[f - 1][i];
         particleHit(v, ts, x, y, rng, xkill);
-        let col = rng.word(14) + 0xc9; if (col === 0xca) col = 2;
+        let col = rng.word(14) + 0xc9; col = col === 0xca ? P.ground : P.tmp(col);
         vput16(v, x, y, col);
       }
     }
   }
-  redrawAll(v, ts); eraseTankBarrel(v, bg, t); replaceColor(v, bg, 0xc9, 0xdc);
+  redrawAll(v, ts); eraseTankBarrel(v, bg, t); replaceTmp(v, bg, 0xc9, 0xdc);
 }
 function death4(v, bg, ts, victim, rng, sound) {                          // 285c:28d9
   const t = ts[victim - 1], waves = rng.word(30) + 30;
@@ -749,8 +777,8 @@ function death4(v, bg, ts, victim, rng, sound) {                          // 285
     for (let i = 0; i < n; i++) {
       const h = rng.word(10 * r), dx = trunc((rng.word(h + 10) - h / 2) - 5);
       let y = t.y - h, x = t.x + dx;
-      while (y > 189 || x < 11 || y < 31 || x > 309) { if (x > 309) x = 618 - x; if (y > 189) y = 378 - y; if (y < 31) y = 62 - y; if (x < 11) x = 22 - x; }
-      vput16(v, x, y, 2);
+      while (y > P.Y1 || x < P.X0 || y < P.Y0 || x > P.X1) { if (x > P.X1) x = 2 * P.X1 - x; if (y > P.Y1) y = 2 * P.Y1 - y; if (y < P.Y0) y = 2 * P.Y0 - y; if (x < P.X0) x = 2 * P.X0 - x; }
+      vput16(v, x, y, P.ground);
       if (sound) rng.word(1000);
     }
   }
@@ -759,7 +787,7 @@ function death4(v, bg, ts, victim, rng, sound) {                          // 285
 function death5(v, bg, ts, victim) { const t = ts[victim - 1]; t.men = -1; eraseTankBarrel(v, bg, t); }   // 285c:2b76
 function death6(v, bg, ts, victim, rng, sound) {                          // 285c:2c29
   const t = ts[victim - 1], n = rng.word(10), count = n <= 1 ? 1 : n <= 4 ? 2 : n <= 7 ? 3 : 4;
-  for (let j = 1; j <= count; j++) { explode(v, bg, ts, t.x, t.y, 2, 0, j, rng, sound); redrawAll(v, ts); }
+  for (let j = 1; j <= count; j++) { explode(v, bg, ts, t.x, t.y, P.ground, 0, j, rng, sound); redrawAll(v, ts); }
   t.men = -1;
 }
 export function death(variant, v, bg, ts, victim, rng, sound, wind = 0, xkill = false) {
@@ -797,19 +825,19 @@ export function turn(v, bg, ps, shooter, rng, fl) { const r = fire(v, bg, ps, sh
 
 // ---------- фон поля 2eef:0000 ----------
 export function drawBackground(kind, rng) {
-  const v = new Uint8Array(SCREEN), VP = VIEWPORT;
-  if (kind === 1) for (let i = 0; i < 500; i++) { const x = rng.word(299) + 11, y = rng.word(159) + 31, c = rng.word(20) + 30; v[y * W + x] = c; }
-  else if (kind === 2) for (let y = 31; y <= 190; y++) line(v, 11, y, 310, y, (y % 30) + 30);
-  else if (kind === 3) for (let r = 0; r <= 170; r++) { ring(v, 149, 79, r, (r % 30) + 30, VP); ring(v, 150, 79, r, (r % 30) + 30, VP); }
+  const v = new Uint8Array(SCREEN), VP = VIEWPORT, fw = P.X1 - P.X0 + 1, fh = P.Y1 - P.Y0 + 1, sky = (c) => P.sky(c);
+  if (kind === 1) for (let i = 0; i < 500; i++) { const x = rng.word(fw) + P.X0, y = rng.word(fh) + P.Y0, c = rng.word(20) + 30; v[y * W + x] = sky(c); }
+  else if (kind === 2) for (let y = P.Y0; y <= P.Y1 + 1; y++) line(v, P.X0, y, P.X1 + 1, y, sky((y % 30) + 30));
+  else if (kind === 3) { const cx = fw >> 1, cy = fh >> 1; for (let r = 0; r <= 170; r++) { ring(v, cx, cy, r, sky((r % 30) + 30), VP); ring(v, cx + 1, cy, r, sky((r % 30) + 30), VP); } }
   else if (kind === 4) {
-    let k = 0; const ray = (x, y) => { line(v, 160, 100, x, y, (k % 30) + 30); k++; };
+    let k = 0; const ray = (x, y) => { line(v, W >> 1, H >> 1, x, y, sky((k % 30) + 30)); k++; };
     for (let x = VP[0]; x <= VP[2]; x++) ray(x, VP[1]);
     for (let y = VP[1]; y <= VP[3]; y++) ray(VP[2], y);
     for (let x = VP[2]; x >= VP[0]; x--) ray(x, VP[3]);
     for (let y = VP[3]; y >= VP[1]; y--) ray(VP[0], y);
     for (let x = VP[0]; x <= (VP[2] + VP[0]) >> 1; x++) ray(x, VP[1]);
-  } else if (kind === 5) for (let y = 31; y <= 190; y++) line(v, 11, y, 310, y, ((y - 30) >> 3) + 30);
-  rect(v, 8, 28, 312, 192, 13); rect(v, 10, 30, 310, 190, 13);
+  } else if (kind === 5) for (let y = P.Y0; y <= P.Y1 + 1; y++) line(v, P.X0, y, P.X1 + 1, y, sky(((y - P.Y0 + 1) >> 3) + 30));
+  frameRects(v);
   return v;
 }
 
@@ -818,7 +846,7 @@ export function roundStart(rng, ps, wallsCfg, bgCfg, windMode) {
   let rebound = !(rng.real() > 0.5);
   if (wallsCfg === 0) rebound = false;
   if (wallsCfg === 2) rebound = true;
-  const kind = bgCfg <= 5 ? bgCfg : rng.word(6);
+  const kind = bgCfg < P.bgKinds ? bgCfg : rng.word(P.bgKinds);
   const bg = drawBackground(kind, rng), v = new Uint8Array(bg), n = ps.length;
   renderTerrain(generateTerrain(rng, n), v);
   const ts = placeTanks(rng, n, v, bg, rebound);
@@ -983,8 +1011,8 @@ function planRifleman(v, bg, ps, p, h, rng, rebound) {
       const dx = t.x - p.x, dy = t.y - p.y, dist = hyp(dx, dy);
       for (let i = 1; i <= trunc(dist); i++) {
         const X = p.x + trunc(q(q(dx / dist) * i)), Y = p.y + trunc(q(q(dy / dist) * i));
-        if (pxAt(scr, X, Y) === 2) s--;
-        if (X >= 0 && X < W && Y >= 0 && Y < H) scr[Y * W + X] = k + 19;
+        if (pxAt(scr, X, Y) === P.ground) s--;
+        if (X >= 0 && X < W && Y >= 0 && Y < H) scr[Y * W + X] = tankColor(k);
       }
     }
     score[k] = s;
@@ -1003,9 +1031,8 @@ function planRifleman(v, bg, ps, p, h, rng, rebound) {
   }
   h.planned = 1;
 }
-const CEILING = 28;
 function twangTrace(scr, ps, p, h, k, score) {
-  const t = ps[k - 1], dx = t.x - p.x, dy = p.y - t.y, top = t.y - CEILING;
+  const CEILING = P.Y0 - 3, t = ps[k - 1], dx = t.x - p.x, dy = p.y - t.y, top = t.y - CEILING;
   const a = q(Math.atan(Math.abs(q((dy + 2 * top) / dx))));
   h.facing = k < p.idx ? -1 : 1;
   const up = p.y - CEILING, tan = q(q(Math.sin(a)) / q(Math.cos(a))), ox = trunc(q((h.facing * up) / tan));
@@ -1013,8 +1040,8 @@ function twangTrace(scr, ps, p, h, k, score) {
     const dist = hyp(ex, ey);
     for (let s = 1; s <= trunc(dist); s++) {
       const X = trunc(q(x0 + q(q(ex / dist) * s))), Y = trunc(q(y0 + sy * q(q(ey / dist) * s)));
-      if (vget16(scr, X, Y) === 2) score[k] -= cost;
-      vput16(scr, X, Y, k + 19);
+      if (vget16(scr, X, Y) === P.ground) score[k] -= cost;
+      vput16(scr, X, Y, tankColor(k));
     }
   };
   seg(p.x, p.y, ox, up, -1, 3);
@@ -1035,7 +1062,7 @@ function planTwanger(v, bg, ps, p, h, rng) {
   }
   h.target = target; scr = new Uint8Array(v); score[target] = 1000;
   twangTrace(scr, ps, p, h, target, score);
-  const t = ps[target - 1], dx = t.x - p.x, dy = p.y - t.y, tp = t.y - CEILING;
+  const t = ps[target - 1], dx = t.x - p.x, dy = p.y - t.y, tp = t.y - (P.Y0 - 3);
   h.power = rng.word(51) + 950;
   h.angle = Math.abs(atanDeg(Math.abs(q((dy + 2 * tp) / dx))));
   h.facing = target < p.idx ? -1 : 1;

@@ -6,6 +6,8 @@
 - `node web/test/run_fixtures.mjs` — сверка со всеми эталонами настоящей игры из `tests/fixtures` (778/778).
 - `node web/test/replay_match.mjs` — повтор трёх матчей компьютеров целиком: на каждом событии (перетасовка, раунд,
   результаты, магазин) записи игроков и RandSeed равны оригиналу; 338 ходов.
+- Профили экрана: `PROFILE_DOS` (оригинал) и `PROFILE_V06C` (Вектор-06Ц 256×256, 16 цветов; `docs/spec/v06c.md`).
+  `node web/test/v06c_selfplay.mjs` — матчи на профиле Вектора: инварианты и золотые хеши `tests/fixtures/v06c/golden.json`.
 - `node web/test/page_smoke.mjs ["Тип,Тип,..."] [verify]` — страница без браузера (заглушка DOM): матч до конца, вкладка «Сверка».
 - `index.html` — полная игра (люди и компьютеры, матч из раундов, магазин) + вкладка «Сверка»
   (данные `data/verify.json`, сборка `build_verify.py`). Локально: `python3 -m http.server -d web`, http://localhost:8000.
