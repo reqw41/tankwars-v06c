@@ -15,7 +15,7 @@ PARAM_Y		equ	PARAM + 11
 PARAM_X2	equ	PARAM + 12
 PARAM_Y2	equ	PARAM + 13
 PARAM_C		equ	PARAM + 14
-LIST		equ	0x2000
+LIST		equ	0x4000
 RESULT		equ	0x7000
 STACK		equ	0x9F00
 
@@ -34,6 +34,7 @@ MODE_TEXT	equ	12
 MODE_CRUMBLE	equ	13
 MODE_REPLACE	equ	14
 MODE_PAL	equ	15
+MODE_UI		equ	16
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -44,6 +45,8 @@ KIND_RING	equ	7
 KIND_CLEAR	equ	8
 KIND_BARREL	equ	9
 KIND_CHAR	equ	10
+KIND_PANEL	equ	11
+KIND_CRUMBLE	equ	12
 
 PPI_CW		equ	0x00
 PPI_C		equ	0x01
@@ -87,6 +90,8 @@ entry:
 	jp	z, do_replace
 	cp	MODE_PAL
 	jp	z, do_pal
+	cp	MODE_UI
+	jp	z, do_ui
 	jp	done
 done:
 	halt
@@ -300,6 +305,10 @@ do_bench:
 	jp	z, bench_barrel
 	cp	KIND_CHAR
 	jp	z, bench_char
+	cp	KIND_PANEL
+	jp	z, bench_panel
+	cp	KIND_CRUMBLE
+	jp	z, bench_crumble
 	jp	done
 
 bench_random:
@@ -679,6 +688,83 @@ do_pal:
 	call	pal_apply
 	jp	done
 
+do_ui:
+	ld	a, (PARAM_KIND)
+	or	a
+	jp	z, do_panel
+	dec	a
+	jp	z, do_results
+	dec	a
+	jp	z, do_shop
+	jp	done
+
+do_panel:
+	ld	hl, LIST
+	ld	a, (hl)
+	ld	(ui_wind), a
+	inc	hl
+	ld	a, (hl)
+	ld	(ui_wind + 1), a
+	inc	hl
+	ld	(ui_p), hl
+	call	draw_panel
+	jp	done
+
+do_results:
+	ld	a, (LIST)
+	ld	(ui_round), a
+	ld	a, (LIST + 1)
+	ld	(ui_rounds), a
+	ld	a, (LIST + 2)
+	ld	(ui_n), a
+	ld	hl, LIST + 3
+	ld	(ui_ps), hl
+	call	draw_results
+	jp	done
+
+do_shop:
+	ld	hl, LIST
+	ld	a, (hl)
+	ld	(ui_cart), a
+	inc	hl
+	ld	a, (hl)
+	ld	(ui_cart + 1), a
+	inc	hl
+	ld	a, (hl)
+	ld	(ui_sel), a
+	inc	hl
+	ld	a, (hl)
+	ld	(ui_nmenu), a
+	inc	hl
+	ld	(ui_menu), hl
+	ld	a, (ui_nmenu)
+	ld	e, a
+	ld	d, 0
+	add	hl, de
+	add	hl, de
+	add	hl, de
+	add	hl, de
+	ld	(ui_p), hl
+	call	draw_shop
+	jp	done
+
+bench_panel:
+	ld	hl, LIST
+	xor	a
+	ld	(ui_wind), a
+	ld	(ui_wind + 1), a
+	ld	(ui_p), hl
+bench_panel_call:
+	call	draw_panel
+bench_panel_ret:
+	jp	done
+
+bench_crumble:
+bench_crumble_call:
+	call	crumble
+bench_crumble_ret:
+	jp	done
+
 copy_b:
 	ld	a, (hl)
 	ld	(de), a
@@ -699,6 +785,7 @@ copy_b:
 	include	"text.asm"
 	include	"crumble.asm"
 	include	"pal.asm"
+	include	"ui.asm"
 
 list_ptr:	dw	0
 res_ptr:	dw	0
@@ -721,3 +808,4 @@ rom_end:
 	display	"crumble=", /h, crumble, "-", /h, crumble_end, " bytes ", /d, crumble_end - crumble
 	display	"replace_tmp=", /h, replace_tmp, "-", /h, replace_tmp_end, " bytes ", /d, replace_tmp_end - replace_tmp
 	display	"pal_apply=", /h, pal_apply, "-", /h, pal_apply_end, " bytes ", /d, pal_apply_end - pal_apply
+	display	"draw_panel=", /h, draw_panel, "-", /h, draw_panel_end, " bytes ", /d, draw_panel_end - draw_panel

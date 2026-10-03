@@ -9,12 +9,13 @@ import { planesToScreen, firstPixelDiff, screenToPlanes } from '../tools/screen.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const ROM = path.join(ROOT, 'v06c/build/tw.rom');
 const SYM = path.join(ROOT, 'v06c/build/tw.sym');
-const PARAM = 0x0080, LIST = 0x2000, RESULT = 0x7000;
+const PARAM = 0x0080, LIST = 0x4000, RESULT = 0x7000;
 const MODE_RANDOM = 1, MODE_PIXELS = 2, MODE_LINES = 3, MODE_BENCH = 4;
 const MODE_ERASELN = 5, MODE_FRAME = 6, MODE_TANK = 7, MODE_CROSS = 8, MODE_RING = 9;
 const MODE_CLEAR = 10, MODE_BARREL = 11, MODE_TEXT = 12, MODE_CRUMBLE = 13, MODE_REPLACE = 14, MODE_PAL = 15;
+const MODE_UI = 16;
 const KIND_RANDOM = 1, KIND_PIXEL = 2, KIND_LINE = 3;
-const KIND_FRAME = 4, KIND_TANK = 5, KIND_CROSS = 6, KIND_RING = 7, KIND_CLEAR = 8, KIND_CHAR = 10;
+const KIND_FRAME = 4, KIND_TANK = 5, KIND_CROSS = 6, KIND_RING = 7, KIND_CLEAR = 8, KIND_CHAR = 10, KIND_PANEL = 11, KIND_CRUMBLE = 12;
 
 TW.setProfile(TW.PROFILE_V06C);
 const P = TW.PROFILE_V06C;
@@ -533,6 +534,125 @@ function testPal() {
   console.log(`OK  палитра: ${n} наборов 16 регистров`);
 }
 
+const PLY = 80;
+function i16b(n) { n = (n << 16) >> 16; return [n & 255, (n >> 8) & 255]; }
+function i32b(n) { n |= 0; return [n & 255, (n >> 8) & 255, (n >> 16) & 255, (n >>> 24) & 255]; }
+function packPlayer(p) {
+  const b = new Uint8Array(PLY);
+  const name = String(p.name ?? '');
+  for (let i = 0; i < Math.min(name.length, 16); i++) b[i] = name.charCodeAt(i);
+  b[16] = p.idx;
+  b[17] = p.facing & 255;
+  b.set(i16b(p.angle), 18);
+  b.set(i16b(p.power), 20);
+  b.set(i16b(p.men), 22);
+  b[24] = p.weapon;
+  b[25] = p.guided;
+  b.set(i16b(p.herb), 26);
+  b.set(i16b(p.vick), 28);
+  b.set(i16b(p.wins), 30);
+  b.set(i32b(p.score), 32);
+  b.set(i32b(p.spent), 36);
+  b.set(i16b(p.shield), 40);
+  b.set(i16b(p.damp), 42);
+  for (let i = 0; i < 18; i++) b.set(i16b(p.ammo[i] | 0), 44 + i * 2);
+  return b;
+}
+function mkPlayer(over = {}) {
+  const p = new TW.Player(over.idx ?? 1);
+  Object.assign(p, over);
+  if (over.ammo) p.ammo = over.ammo.slice();
+  return p;
+}
+
+function cmpScreen(got, exp, tag) {
+  const d = firstPixelDiff(got, exp);
+  if (d) fail(`${tag} (${d.x},${d.y}) emu=${d.got} oracle=${d.exp}`);
+}
+
+function testPanel() {
+  const cases = [
+    [mkPlayer({ idx: 1, name: 'Player 1', weapon: 1, ammo: new Array(18).fill(0), power: 200, angle: 90, facing: 1, men: 100 }), 0],
+    [mkPlayer({ idx: 2, name: 'Red', facing: -1, angle: 75, power: 1000, men: 50, weapon: 4, ammo: Object.assign(new Array(18).fill(0), { 4: 12 }), herb: 5, vick: 3, guided: 3 }), -50],
+    [mkPlayer({ idx: 3, name: 'ABCDEFGHIJKLMNOP', angle: 0, facing: 1, power: 0, men: -3, weapon: 0, ammo: new Array(18).fill(7) }), 123],
+    [mkPlayer({ idx: 4, name: '', weapon: 17, ammo: Object.assign(new Array(18).fill(0), { 17: 1 }), herb: 1, vick: 0, guided: 1, men: 0, angle: 1, facing: 1, power: 9 }), 1],
+    [mkPlayer({ idx: 1, name: 'X', angle: 100, facing: 1, power: 1234, men: 8, weapon: 11, ammo: new Array(18).fill(0) }), -1],
+  ];
+  let n = 0;
+  for (const item of cases) {
+    const p = item[0], wind = item[1];
+    const v = new Uint8Array(65536);
+    TW.drawPanel(v, p, wind);
+    const list = new Uint8Array(2 + PLY);
+    list.set(i16b(wind), 0);
+    list.set(packPlayer(p), 2);
+    const r = runMode(MODE_UI, [0], list);
+    cmpScreen(planesToScreen(r.mem), v, `панель #${n}`);
+    n++;
+  }
+  console.log(`OK  панель: ${n} состояний`);
+}
+
+function testResults() {
+  const mk = (n, extra = {}) => Array.from({ length: n }, (_, i) => mkPlayer({
+    idx: extra.idx?.[i] ?? i + 1,
+    name: extra.name?.[i] ?? ('P' + (i + 1)),
+    wins: extra.wins?.[i] ?? i,
+    score: extra.score?.[i] ?? (i + 1) * 1000,
+    spent: extra.spent?.[i] ?? i * 100,
+  }));
+  const cases = [
+    [mk(2), 1, 10],
+    [mk(4, { name: ['Ann', 'Bob', 'Cat', 'Dan'], wins: [3, 2, 2, 0], score: [9000, 8000, 100, -50], spent: [0, 500, 0, 10] }), 10, 10],
+    [mk(1, { name: ['Only'], wins: [0], score: [0], spent: [0] }), 3, 5],
+    [mk(3, { name: ['LongNamePlayerX', 'B', 'C'] }), 0, 2],
+    [mk(4, { score: [32767, -1000, 1, 99999], spent: [100, 0, 2, 50] }), 8, 8],
+  ];
+  let n = 0;
+  for (const [ps, round, rounds] of cases) {
+    const v = new Uint8Array(65536);
+    TW.drawResults(v, ps, round, rounds);
+    const list = new Uint8Array(3 + PLY * ps.length);
+    list[0] = round; list[1] = rounds; list[2] = ps.length;
+    for (let i = 0; i < ps.length; i++) list.set(packPlayer(ps[i]), 3 + i * PLY);
+    const r = runMode(MODE_UI, [1], list);
+    cmpScreen(planesToScreen(r.mem), v, `результаты #${n}`);
+    n++;
+  }
+  console.log(`OK  результаты: ${n} состояний`);
+}
+
+function testShop() {
+  const p0 = mkPlayer({ idx: 1, name: 'Buyer', score: 50000, spent: 1000, weapon: 1, ammo: Object.assign(new Array(18).fill(0), { 1: 3, 5: 10 }), herb: 2, vick: 0, shield: 4, damp: 0 });
+  const menuA = [[0, 1], [0, 5], [1, 0], [2, 0], [2, 1]];
+  const cases = [
+    { p: p0, menu: [], qty: [], cart: 0, sel: -1 },
+    { p: p0, menu: menuA, qty: [0, 0, 0, 0, 0], cart: 0, sel: 0 },
+    { p: p0, menu: menuA, qty: [1, 0, 2, 0, 0], cart: 3000, sel: 2 },
+    { p: p0, menu: menuA, qty: [0, 5, 0, 1, 0], cart: 15000, sel: menuA.length },
+    { p: mkPlayer({ idx: 3, name: 'Z', score: 0, spent: 0, ammo: new Array(18).fill(0) }), menu: [[0, 2], [1, 1]], qty: [0, 0], cart: 0, sel: 3 },
+  ];
+  let n = 0;
+  for (const c of cases) {
+    const v = new Uint8Array(65536);
+    TW.drawShop(v, c.p, c.menu, c.qty, c.cart, c.sel);
+    const list = new Uint8Array(4 + c.menu.length * 4 + PLY);
+    list.set(i16b(c.cart), 0);
+    list[2] = c.sel < 0 ? 255 : c.sel;
+    list[3] = c.menu.length;
+    for (let i = 0; i < c.menu.length; i++) {
+      list[4 + i * 4] = c.menu[i][0];
+      list[5 + i * 4] = c.menu[i][1];
+      list.set(i16b(c.qty[i] || 0), 6 + i * 4);
+    }
+    list.set(packPlayer(c.p), 4 + c.menu.length * 4);
+    const r = runMode(MODE_UI, [2], list);
+    cmpScreen(planesToScreen(r.mem), v, `магазин #${n}`);
+    n++;
+  }
+  console.log(`OK  магазин: ${n} состояний`);
+}
+
 function pokeBench(kind, fields) {
   boot();
   const b = new Uint8Array(16);
@@ -566,6 +686,12 @@ function sizes(L) {
     ['танк', L.draw_tank, L.draw_tank_end],
     ['заливка', L.fill_screen, L.fill_screen_end],
     ['кольцо', L.ring, L.ring_end],
+    ['ствол', L.draw_tank_barrel, L.draw_tank_barrel_end],
+    ['знак', L.draw_char, L.draw_char_end],
+    ['осыпание', L.crumble, L.crumble_end],
+    ['replaceTmp', L.replace_tmp, L.replace_tmp_end],
+    ['палитра', L.pal_apply, L.pal_apply_end],
+    ['экраны UI', L.draw_panel, L.draw_panel_end],
   ];
   for (const [name, a, b] of rows) {
     if (a == null || b == null) fail(`нет меток размера для ${name}`);
@@ -595,6 +721,9 @@ testText();
 testCrumble();
 testReplace();
 testPal();
+testPanel();
+testResults();
+testShop();
 console.log('--- замер ---');
 const sz = sizes(L);
 const tRandom = bench('Random(n=100)', L.random, L.bench_random_ret, KIND_RANDOM, { seed: 1, n: 100 });
@@ -609,6 +738,18 @@ const tCr = bench('крестик (100,100,3)', L.draw_cross, L.bench_cross_ret,
 const tRg = bench('кольцо r=30', L.ring, L.bench_ring_ret, KIND_RING, { x: 125, y: 113, x2: 30, c: 3 });
 const tCl = bench('очистка экрана', L.clear_screen, L.bench_clear_ret, KIND_CLEAR, {});
 const tCh = bench('знак A', L.draw_char, L.bench_char_ret, KIND_CHAR, {});
+const field = new Uint8Array(65536);
+TW.drawFrame(field, false);
+for (let x = 3; x <= 252; x++) {
+  const top = 80 + (x % 40);
+  for (let y = top; y <= 252; y++) field[y * 256 + x] = 1;
+}
+TW.ring(field, 125, 113, 30, 0);
+boot();
+poke(machine, 0xA000, screenToPlanes(field).subarray(0xA000));
+pokeBench(KIND_CRUMBLE, {});
+const rCb = runUntil(machine, { haltPc: L.bench_crumble_ret, countFromPc: L.crumble, maxInsns: 80_000_000 });
+console.log(`ТАКТЫ  осыпание рельеф+воронка r=30: cpu_cycles=${rCb.bodyCpu} (vcycles=${rCb.bodyV})`);
 console.log('--- таблица ---');
 console.log(`подпрограмма\tбайт\tтакты_cpu\tvcycles`);
 const row = (name, b, t) => console.log(`${name}\t${b}\t${t.cpu}\t${t.v}`);
@@ -622,5 +763,24 @@ row('крестик', L.draw_cross_end - L.draw_cross, tCr);
 row('кольцо r=30', L.ring_end - L.ring, tRg);
 row('очистка', L.fill_screen_end - L.fill_screen, tCl);
 row('знак A', L.draw_char_end - L.draw_char, tCh);
+console.log(`осыпание рельеф+r=30\t${L.crumble_end - L.crumble}\t${rCb.bodyCpu}\t${rCb.bodyV}`);
 console.log(`линия 200 на точку\t\t${(rL200.bodyV / 200).toFixed(1)} vcycles`);
+console.log(`кольцо r=30 на точку\t\t${(tRg.v / 172).toFixed(1)} vcycles`);
+function ringPts(r) {
+  const vp = TW.VIEWPORT;
+  let n = 0;
+  for (const [x, y] of TW.ellipsePoints(125 + vp[0], 113 + vp[1], r, r)) {
+    if (vp[0] <= x && x <= vp[2] && vp[1] <= y && y <= vp[3]) n++;
+  }
+  return n;
+}
+const n30 = ringPts(30);
+console.log('--- взрыв (6·Σ t(i), t(i)=t30·n(i)/n(30); n=число plot ellipsePoints в VIEWPORT) ---');
+for (const R of [10, 30, 60]) {
+  let s = 0;
+  const ns = [];
+  for (let i = 0; i <= R; i++) { const n = ringPts(i); ns.push(n); s += n; }
+  const v = 6 * s * tRg.v / n30;
+  console.log(`R=${R} n(30)=${n30} Σn=${s} vcycles=${Math.round(v)} с@3МГц=${(v / 3e6).toFixed(3)}`);
+}
 console.log('OK  сверка с эталоном PROFILE_V06C');
