@@ -93,14 +93,19 @@ function testRandom() {
 
 function testPixels() {
   const gen = new LCG(2026);
-  const n = 500;
-  const list = new Uint8Array(n * 3);
   const pts = [];
+  const add = (x, y, c) => pts.push([x, y, c]);
+  for (const [x, y] of [[0, 0], [255, 0], [0, 255], [255, 255], [0, 128], [255, 128], [128, 0], [128, 255], [7, 0], [8, 1], [1, 24], [2, 26], [253, 253], [252, 27], [3, 27]]) {
+    add(x, y, 7);
+  }
+  add(40, 50, 3);
+  while (pts.length < 500) add(gen.below(256), gen.below(256), gen.below(8));
+  const n = pts.length;
+  const list = new Uint8Array(n * 3);
   const v = new Uint8Array(P.W * P.H);
   for (let i = 0; i < n; i++) {
-    const x = gen.below(256), y = gen.below(256), c = gen.below(8);
+    const [x, y, c] = pts[i];
     list[i * 3] = x; list[i * 3 + 1] = y; list[i * 3 + 2] = c;
-    pts.push([x, y, c]);
     v[y * 256 + x] = c;
   }
   const extra = new Uint8Array(15);
