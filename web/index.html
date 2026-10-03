@@ -201,7 +201,33 @@ import * as TW from './tankwars.js';
 
 const [barrel, trig, palette6] = await Promise.all(['barrel', 'trig', 'palette'].map((n) => fetch(`./data/${n}.json`).then((r) => r.json())));
 TW.init({ barrel, trig });
-const PAL = palette6.map(([r, g, b]) => [r * 255 / 63 | 0, g * 255 / 63 | 0, b * 255 / 63 | 0]);
+// Палитра: стандартная палитра VGA режима 13h (игра не трогает землю 2 и рамку 13 — это её зелёный и светло-пурпурный),
+// поверх — то, что ставит сама игра: индекс 0 (2eef:0909), мяч 19, фон 30..59 по варианту (2eef:0000).
+function vgaDefault() {
+  const ega = [[0, 0, 0], [0, 0, 42], [0, 42, 0], [0, 42, 42], [42, 0, 0], [42, 0, 42], [42, 21, 0], [42, 42, 42], [21, 21, 21], [21, 21, 63], [21, 63, 21], [21, 63, 63], [63, 21, 21], [63, 21, 63], [63, 63, 21], [63, 63, 63]];
+  const gray = [0, 5, 8, 11, 14, 17, 20, 24, 28, 32, 36, 40, 45, 50, 56, 63].map((v) => [v, v, v]);
+  const pal = [...ega, ...gray];
+  for (const [hi, lo] of [[63, 0], [63, 31], [63, 45], [28, 0], [28, 14], [28, 20], [16, 0], [16, 8], [16, 11]]) {
+    const q4 = (k) => Math.round(lo + (hi - lo) * k / 4);
+    for (let h = 0; h < 24; h++) {
+      const seg = h >> 2, k = h & 3, up = q4(k), dn = q4(4 - k);
+      pal.push([[up, lo, hi], [hi, lo, dn], [hi, up, lo], [dn, hi, lo], [lo, hi, up], [lo, dn, hi]][seg]);
+    }
+  }
+  while (pal.length < 256) pal.push([0, 0, 0]);
+  return pal;
+}
+const PAL6 = vgaDefault();
+palette6.forEach((c, i) => { if (c[0] || c[1] || c[2]) PAL6[i] = c; });      // снимок стенда: 0, 17..21, небо 30..49
+const to8 = ([r, g, b]) => [r * 255 / 63 | 0, g * 255 / 63 | 0, b * 255 / 63 | 0];
+const PAL = PAL6.map(to8);
+function bgPalette(kind) {                      // 2eef:0000 — палитра фона
+  const set = (i, r, g, b) => { PAL[i] = to8([r, g, b]); };
+  for (let i = 0; i < 30; i++) set(30 + i, 0, 0, 0);
+  if (kind === 1) for (let i = 0; i < 10; i++) { set(30 + i, 5 * i, 5 * i, 5 * i); set(40 + i, 5 * i, 5 * i, 0); }
+  else if (kind >= 2 && kind <= 4) for (let i = 0; i < 10; i++) { set(30 + i, i * 7, (9 - i) * 7, 0); set(40 + i, (9 - i) * 7, 0, i * 7); set(50 + i, 0, i * 7, (9 - i) * 7); }
+  else if (kind === 5) for (let i = 0; i < 20; i++) set(30 + i, i, 0, 63 - i);
+}
 const WEAPONS = ['Lead Ball', 'Incinerator', 'Mark II Incinerator', '20 Kiloton Nuke', '5 Megaton Nuke', 'Laser',
   'CRI 4/D', 'CRI 8/ND', 'CRI 8/D', 'CRI 20/ND', 'CRI 20/D', 'Hand Grenade', 'Sonic Blaster', "Ball 'O' Dirt",
   'Mark II Dirt', 'Pressured Dirt', 'High Pres. Dirt', 'Xplosive Dirt'];
@@ -289,7 +315,7 @@ async function nextRound(gen) {
   G.round++;
   TW.shufflePlayers(G.rng, G.ps);
   const r = TW.roundStart(G.rng, G.ps, +$('walls').value, +$('bgkind').value, +$('windmode').value);
-  G.v = r.v; G.bg = r.bg;
+  G.v = r.v; G.bg = r.bg; bgPalette(r.kind); G.kind = r.kind;
   G.fl = { rebound: r.rebound, crumble: +$('crumble').value | 0, fall: $('fall').checked, xkill: $('xkill').checked, sound: false, wind: r.wind, ballVisible: true, trail: $('trail').checked };
   G.cur = r.first;
   log(`Раунд ${G.round}: ветер ${r.wind}${r.rebound ? ', стены отражают' : ''}`);
@@ -513,6 +539,7 @@ $('b-vall').onclick = async () => {
   $('b-vall').disabled = false;
 };
 function selectTab(name) {
+  if (name === 'verify') bgPalette(5); else if (G.fl) { bgPalette(G.kind ?? 5); render(); }
   for (const [t, p] of [['tab-game', 'pane-game'], ['tab-verify', 'pane-verify']]) { const on = t === `tab-${name}`; $(t).setAttribute('aria-selected', on); $(p).hidden = !on; }
   if (name === 'verify') loadVerify();
   try { localStorage.setItem('tw-tab', name); } catch {}
