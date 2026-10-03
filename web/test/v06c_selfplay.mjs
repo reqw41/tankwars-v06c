@@ -12,26 +12,38 @@ TW.init({ barrel: json(path.join(ROOT, 'web/data/barrel.json')), trig: json(path
 TW.setProfile(TW.PROFILE_V06C);
 const P = TW.PROFILE_V06C, GOLD = path.join(ROOT, 'tests/fixtures/v06c/golden.json');
 const sha = (u8) => createHash('sha1').update(u8).digest('hex').slice(0, 16);
-const NAMES = ['Lobber', 'Rifleman', 'Twanger', 'Windless Wit', 'Mr. Stupid', 'Lob & Shoot', 'Rifleman', 'Lobber', 'Twanger', 'Windless Wit'];
-const CASES = [[2, 1], [3, 0x1234], [4, 487264648], [5, 77], [6, 0xC0FFEE], [8, 31337], [10, 2026], [10, 0xDEADBEEF], [4, 5], [7, 999]];
+const NAMES = ['Lobber', 'Rifleman', 'Twanger', 'Windless Wit', 'Mr. Stupid', 'Lob & Shoot'];
+const CASES = [[2, 1], [3, 0x1234], [4, 487264648], [4, 77], [3, 0xC0FFEE], [4, 31337], [2, 2026], [4, 0xDEADBEEF], [4, 5], [3, 999], [4, 123456], [4, 42]];
 const ROUNDS = 4;
 const out = [], problems = [];
 let turns = 0;
 for (const [n, seed] of CASES) {
   const rng = new TW.TPRandom(seed);
   const ps = Array.from({ length: n }, (_, i) => { const p = TW.newPlayer(i + 1, ROUNDS); p.ctrl = 3; p.name = NAMES[(i + seed) % NAMES.length]; p.strategy = TW.pickStrategy(p.name, rng); return p; });
-  const cfg = { walls: 1, bg: 6, windMode: 2, crumble: 50, fall: true, xkill: true, sound: false, ballVisible: true, trail: true };
+  let colDiff = 0;
+  const cfg = { walls: 1, bg: 0, windMode: 2, crumble: 50, fall: true, xkill: true, sound: false, ballVisible: true, trail: false,
+    onTurn: (ph, cur, r) => { if (ph !== 'turn_end') return; const a = new Uint8Array(r.v), b = new Uint8Array(r.v); TW.crumble(a, r.bg); TW.crumbleColumns(b, r.bg); for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) { colDiff++; break; } } };
   const rounds = [];
   for (let r = 1; r <= ROUNDS; r++) {
     TW.shufflePlayers(rng, ps);
     const res = TW.playRound(rng, ps, cfg);
     turns += res.turns;
-    // инварианты: только 16 цветов; панель (строки 0..23) не тронута; временный цвет огня убран; живые танки внутри поля
+    // инварианты: только 8 цветов; панель (строки 0..23) не тронута; временного цвета не осталось; буфер фона пуст;
+    // рамка цела; живые танки внутри поля; осыпание по столбцам совпадает с осыпанием со списком
     const hist = new Array(256).fill(0); for (const c of res.v) hist[c]++;
-    if (hist.slice(16).some(Boolean)) problems.push(`${n}/${seed} r${r}: цвет вне 0..15`);
-    if (res.v.subarray(0, 24 * 256).some(Boolean)) problems.push(`${n}/${seed} r${r}: запись в панель`);
-    if (hist[5] || hist[4]) problems.push(`${n}/${seed} r${r}: остался огонь/мяч (${hist[5]}/${hist[4]})`);
-    for (const p of ps) if (p.alive && !(p.x >= P.X0 + 4 && p.x <= P.X1 - 4 && p.y >= P.Y0 && p.y <= P.Y1)) problems.push(`${n}/${seed} r${r}: танк вне поля ${p.x},${p.y}`);
+    const tag = `${n}/${seed} r${r}`;
+    if (hist.slice(8).some(Boolean)) problems.push(`${tag}: цвет вне 0..7`);
+    if (res.v.subarray(0, 24 * 256).some(Boolean)) problems.push(`${tag}: запись в панель`);
+    if (hist[3]) problems.push(`${tag}: остался временный цвет (${hist[3]})`);
+    if (res.bg.some(Boolean)) problems.push(`${tag}: буфер фона не пуст`);
+    let hole = 0;
+    for (const [x1, y1, x2, y2] of [[P.X0 - 3, P.Y0 - 3, P.X1 + 3, P.Y1 + 3], [P.X0 - 1, P.Y0 - 1, P.X1 + 1, P.Y1 + 1]]) {
+      for (let x = x1; x <= x2; x++) for (const y of [y1, y2]) if (res.v[y * 256 + x] !== P.frame) hole++;
+      for (let y = y1; y <= y2; y++) for (const x of [x1, x2]) if (res.v[y * 256 + x] !== P.frame) hole++;
+    }
+    if (hole) problems.push(`${tag}: рамка повреждена (${hole})`);
+    if (colDiff) problems.push(`${tag}: осыпание по столбцам расходится`);
+    for (const p of ps) if (p.alive && !(p.x >= P.X0 + 4 && p.x <= P.X1 - 4 && p.y >= P.Y0 && p.y <= P.Y1)) problems.push(`${tag}: танк вне поля ${p.x},${p.y}`);
     if (res.turns >= 5000) problems.push(`${n}/${seed} r${r}: раунд не кончился`);
     if (res.winner) TW.winnerBonus(res.winner, n);
     TW.results(rng, ps, true);

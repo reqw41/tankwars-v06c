@@ -5,7 +5,7 @@
 // ---------- профиль экрана: геометрия поля и классы цветов ----------
 // DOS — оригинал (всё сверено с настоящей игрой). V06C — Вектор-06Ц: 256×256, 16 цветов (см. docs/spec/v06c.md).
 export const PROFILE_DOS = { name: 'dos', W: 320, H: 200, X0: 11, Y0: 31, X1: 309, Y1: 189,
-  ground: 2, frame: 13, ball: 19, beam: 0xfe, tank0: 20,
+  ground: 2, frame: 13, ball: 19, beam: 0xfe, tank0: 20, nTank: 10, maxPlayers: 10,
   passable: (c) => c === 0 || (c >= 30 && c <= 99),          // сквозь это падает земля (1062:027e)
   fire: (i) => (0x82 + i) & 0xff,                             // кольца огня
   tmp: (c) => c & 0xff,                                       // временные цвета анимаций (в конце стираются)
@@ -13,20 +13,24 @@ export const PROFILE_DOS = { name: 'dos', W: 320, H: 200, X0: 11, Y0: 31, X1: 30
   sky: (c) => c, trail: (shooter) => (100 - shooter) & 0xff,
   terrain: { init: 150, lo: 20, hi: 140, min: 3, max: 155, margin: (n) => 60 - 7 * (n - 2) },
   place: { rnd: 28, off: 5 }, bgKinds: 6 };
-// Вектор-06Ц: поле 250×226 (x 3..252, y 27..252), панель — строки 0..23.
-// Цвета: 0 фон, 1 след и звёзды (проходимый), 2 земля, 3 рамка, 4 мяч/белый, 5 огонь и луч, 6..15 танки игроков 1..10.
+// Вектор-06Ц: 3 плоскости (24 КБ экрана, 40 КБ под программу), 8 цветов, до 4 игроков. Поле 250×226 (x 3..252, y 27..252).
+// Цвета: 0 фон, 1 земля, 2 рамка и текст, 3 временный (мяч, огонь, луч, искры), 4..7 танки игроков 1..4.
+// Буфера фона нет: фон всегда чёрный (noBg), следа и звёзд нет; ИИ считает землю на луче, не рисуя (aiNoDraw);
+// искры гибели считаются покадрово, без общего списка (stream).
+const X = 0x7fff;
 export const PROFILE_V06C = { name: 'v06c', W: 256, H: 256, X0: 3, Y0: 27, X1: 252, Y1: 252,
-  ground: 2, frame: 3, ball: 4, beam: 5, tank0: 6,
-  passable: (c) => c <= 1,
-  fire: () => 5, tmp: () => 5, isTmp: (c) => c === 5,
-  sky: () => 1, trail: () => 1,
+  ground: 1, frame: 2, ball: 3, beam: 3, tank0: 4, nTank: 4, maxPlayers: 4,
+  passable: (c) => c === 0,
+  fire: () => 3, tmp: () => 3, isTmp: (c) => c === 3,
+  sky: () => 0, trail: null, noBg: true, aiNoDraw: true, stream: true,
+  playerColors: [[1, X, X], [1, 1, X], [X, 1, 1], [1, X, 1]],          // красный, жёлтый, голубой, пурпурный
   terrain: { init: 200, lo: 20, hi: 185, min: 3, max: 205, margin: (n) => 50 - 6 * (n - 2) },
-  place: { rnd: 24, off: 5 }, bgKinds: 2 };
+  place: { rnd: 24, off: 5 }, bgKinds: 1 };
 let P = PROFILE_DOS;
 export let W = 320, H = 200, SCREEN = W * H;
 export function setProfile(p) { P = p; W = p.W; H = p.H; SCREEN = W * H; VIEWPORT.splice(0, 4, p.X0, p.Y0, p.X1, p.Y1); }
 export const profile = () => P;
-const isTank = (c) => c >= P.tank0 && c < P.tank0 + 10;
+const isTank = (c) => c >= P.tank0 && c < P.tank0 + P.nTank;
 const tankColor = (idx) => P.tank0 + idx - 1;
 
 // ---------- данные из RTL (передаются через init) ----------
@@ -210,6 +214,19 @@ export function crumble(v, bg) {
       if (e + W < v.length && fallable(v[e + W])) { v[e] = bg[e]; v[e + W] = P.ground; lst[i] = e + W; moved = true; } else lst[i] = 0;
     }
     if (!moved) return passes;
+  }
+}
+// То же без списка падающих точек: в каждом столбце вся земля над пустотой съезжает вниз до опоры.
+// Эквивалентность с crumble проверяется в web/test/v06c_selfplay.mjs и run_fixtures.mjs.
+export function crumbleColumns(v, bg) {
+  for (let x = 0; x < W; x++) {
+    let floor = -1;                                        // нижняя свободная строка под текущим «пролётом»
+    for (let y = H - 1; y >= 0; y--) {
+      const o = y * W + x, c = v[o];
+      if (fallable(c)) { if (floor < 0) floor = y; }
+      else if (c === P.ground && floor >= 0 && y <= P.Y1 + 1 && o > 0) { v[o] = bg[o]; v[floor * W + x] = P.ground; floor--; }
+      else floor = -1;
+    }
   }
 }
 export function crumbleGate(v, bg, rng, percent, rebound) {      // 2b39:03da
@@ -555,7 +572,7 @@ const COLOR_DIV = [[1, 0x7fff, 0x7fff], [0x7fff, 1, 0x7fff], [0x7fff, 0x7fff, 1]
 export function newPlayer(idx, rounds) {
   const p = new Player(idx);
   p.ammo[0] = 100; p.ammo[1] = rounds * 3; p.ammo[11] = Math.min(999, rounds * 10);
-  p.colors = COLOR_DIV[idx - 1].slice();
+  p.colors = (P.playerColors || COLOR_DIV)[idx - 1].slice();
   return p;
 }
 // 1062:07a9 — цвет танка в палитре (0..63 на компонент)
@@ -576,7 +593,8 @@ export function flightDraw(v, bg, inp, shooter, ballVisible, trail, players = 1,
   if (vy !== 0) vy = q(-vy);
   const step = 10, fuse = 1000 - 2 * inp.men;
   let sub = players, pxPrev = -99, pyPrev = -99, guided = inp.guided || 0;     // DS:3EAC перед полётом = число игроков
-  const tcol = P.trail(shooter);
+  const tcol = P.trail ? P.trail(shooter) : 0;
+  if (!P.trail) trail = false;
   const get = (X, Y) => (X >= 0 && X < W && Y >= 0 && Y < H ? v[Y * W + X] : 0);
   for (let i = 0; i < (inp.maxSteps || 200000); i++) {
     sub++; if (sub > step) sub = 0;
@@ -742,30 +760,31 @@ function deathParticles(v, bg, ts, victim, rng, sound, mode, xkill) {   // 285c:
   const t = ts[victim - 1], bursts = rng.word(5) + 5;
   for (let n = 0; n < bursts; n++) {
     const m = rng.word(390) + 2, kind = rng.word(8) + 1, frames = [];
-    for (let f = 1; f <= 5; f++) {
+    const gen = (f) => {
       const pts = [];
       for (let i = 0; i < m; i++) { const a = rng.word(10 * f), b = trunc((rng.word(a + 10) - a / 2) - 5); pts.push(SHAPE[kind](t.x, t.y, a, b)); }
-      frames.push(pts);
-    }
-    for (const pts of frames) for (const p of pts) {
-      if (p[0] > P.X1) p[0] = 2 * P.X1 - p[0]; if (p[1] > P.Y1) p[1] = 2 * P.Y1 - p[1]; if (p[1] < P.Y0) p[1] = 2 * P.Y0 - p[1]; if (p[0] < P.X0) p[0] = 2 * P.X0 - p[0];
-    }
+      for (const p of pts) {
+        if (p[0] > P.X1) p[0] = 2 * P.X1 - p[0]; if (p[1] > P.Y1) p[1] = 2 * P.Y1 - p[1]; if (p[1] < P.Y0) p[1] = 2 * P.Y0 - p[1]; if (p[0] < P.X0) p[0] = 2 * P.X0 - p[0];
+      }
+      return pts;
+    };
+    if (!P.stream) for (let f = 1; f <= 5; f++) frames.push(gen(f));      // оригинал: сначала все 5 кадров, потом рисование
     if (mode === 0) {
-      for (let f = 1; f <= 5; f++) for (let i = 0; i < m; i++) {
+      for (let f = 1; f <= 5; f++) { if (P.stream) frames[f - 1] = gen(f); for (let i = 0; i < m; i++) {
         if (sound) rng.word(f === 1 ? 500 : (500 * f) & 0xffff);
         const [x, y] = frames[f - 1][i];
         particleHit(v, ts, x, y, rng, xkill); vput16(v, x, y, P.tmp(rng.word(14) + 1));
         if (f > 1) { const [px, py] = frames[f - 2][i]; vput16(v, px, py, bg[off16(px, py)]); }
-      }
+      } }
       for (const [x, y] of frames[4]) vput16(v, x, y, bg[off16(x, y)]);
     } else {
-      for (let f = 1; f <= 5; f++) for (let i = 0; i < m; i++) {
+      for (let f = 1; f <= 5; f++) { if (P.stream) frames[f - 1] = gen(f); for (let i = 0; i < m; i++) {
         if (sound) rng.word((500 * f) & 0xffff);
         const [x, y] = frames[f - 1][i];
         particleHit(v, ts, x, y, rng, xkill);
         let col = rng.word(14) + 0xc9; col = col === 0xca ? P.ground : P.tmp(col);
         vput16(v, x, y, col);
-      }
+      } }
     }
   }
   redrawAll(v, ts); eraseTankBarrel(v, bg, t); replaceTmp(v, bg, 0xc9, 0xdc);
@@ -846,8 +865,8 @@ export function roundStart(rng, ps, wallsCfg, bgCfg, windMode) {
   let rebound = !(rng.real() > 0.5);
   if (wallsCfg === 0) rebound = false;
   if (wallsCfg === 2) rebound = true;
-  const kind = bgCfg < P.bgKinds ? bgCfg : rng.word(P.bgKinds);
-  const bg = drawBackground(kind, rng), v = new Uint8Array(bg), n = ps.length;
+  const kind = P.noBg ? 0 : bgCfg < P.bgKinds ? bgCfg : rng.word(P.bgKinds);
+  const v = drawBackground(kind, rng), bg = P.noBg ? new Uint8Array(SCREEN) : new Uint8Array(v), n = ps.length;   // noBg: «фон» — нули, рамка только на экране
   renderTerrain(generateTerrain(rng, n), v);
   const ts = placeTanks(rng, n, v, bg, rebound);
   ps.forEach((p, i) => { const t = ts[i]; Object.assign(p, { idx: i + 1, x: t.x, y: t.y, angle: t.angle, power: t.power, facing: t.facing, men: t.men, alive: true }); if (p.hist) p.hist.n = 0; });   // 2eef:0909: счётчик истории ИИ = 0 (сами выстрелы остаются)
@@ -1012,7 +1031,7 @@ function planRifleman(v, bg, ps, p, h, rng, rebound) {
       for (let i = 1; i <= trunc(dist); i++) {
         const X = p.x + trunc(q(q(dx / dist) * i)), Y = p.y + trunc(q(q(dy / dist) * i));
         if (pxAt(scr, X, Y) === P.ground) s--;
-        if (X >= 0 && X < W && Y >= 0 && Y < H) scr[Y * W + X] = tankColor(k);
+        if (!P.aiNoDraw && X >= 0 && X < W && Y >= 0 && Y < H) scr[Y * W + X] = tankColor(k);
       }
     }
     score[k] = s;
@@ -1041,7 +1060,7 @@ function twangTrace(scr, ps, p, h, k, score) {
     for (let s = 1; s <= trunc(dist); s++) {
       const X = trunc(q(x0 + q(q(ex / dist) * s))), Y = trunc(q(y0 + sy * q(q(ey / dist) * s)));
       if (vget16(scr, X, Y) === P.ground) score[k] -= cost;
-      vput16(scr, X, Y, tankColor(k));
+      if (!P.aiNoDraw) vput16(scr, X, Y, tankColor(k));
     }
   };
   seg(p.x, p.y, ox, up, -1, 3);

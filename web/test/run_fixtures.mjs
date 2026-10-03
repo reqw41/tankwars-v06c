@@ -234,6 +234,19 @@ for (const m of ['a', 'b', 'c']) {
   });
 }
 
+// --- осыпание по столбцам (вариант для порта, без списка) = осыпание оригинала ---
+{
+  const cases = [];
+  for (const c of json(FX('t03/crumble/index.json'))) cases.push({ label: 'crumble-' + c.name, v: FX(`t03/crumble/${c.name}.pre.z`), bg: FX(`t03/crumble/${c.name}.bg.z`) });
+  for (const d of ['turns_ai2', 'turns_ai6']) for (const c of json(FX(`t05/${d}/index.json`))) cases.push({ label: `${d}-${c.name}`, v: FX(`t05/${d}/${c.name}.post.z`), bg: FX(`t05/${d}/${c.name}.bgpost.z`) });
+  for (const d of ['explosion', 'explosion_direct']) for (const c of json(FX(`t03/${d}/index.json`))) cases.push({ label: `${d}-${c.name}`, v: FX(`t03/${d}/${c.name}.post.z`), bg: FX(`t03/${d}/${c.name}.bg.z`) });
+  section('осыпание по столбцам = осыпание со списком', cases, (c) => {
+    const a = z(c.v), b = z(c.v), bg = z(c.bg);
+    TW.crumble(a, bg); TW.crumbleColumns(b, bg);
+    return vdiff(a, b) === 0 || 'различий ' + vdiff(a, b);
+  });
+}
+
 let fail = 0, total = 0, okAll = 0;
 for (const [name, ok, n, bad] of results) {
   total += n; okAll += ok; if (ok !== n) fail++;
