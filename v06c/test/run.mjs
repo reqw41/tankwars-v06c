@@ -13,7 +13,7 @@ const PARAM = 0x0080, LIST = 0x4000, RESULT = 0x7000;
 const MODE_RANDOM = 1, MODE_PIXELS = 2, MODE_LINES = 3, MODE_BENCH = 4;
 const MODE_ERASELN = 5, MODE_FRAME = 6, MODE_TANK = 7, MODE_CROSS = 8, MODE_RING = 9;
 const MODE_CLEAR = 10, MODE_BARREL = 11, MODE_TEXT = 12, MODE_CRUMBLE = 13, MODE_REPLACE = 14, MODE_PAL = 15;
-const MODE_UI = 16;
+const MODE_UI = 16, MODE_DISC = 17, KIND_DISC = 13;
 const KIND_RANDOM = 1, KIND_PIXEL = 2, KIND_LINE = 3;
 const KIND_FRAME = 4, KIND_TANK = 5, KIND_CROSS = 6, KIND_RING = 7, KIND_CLEAR = 8, KIND_CHAR = 10, KIND_PANEL = 11, KIND_CRUMBLE = 12;
 
@@ -287,6 +287,27 @@ function testCross() {
 }
 
 function i16bytes(n) { n = (n << 16) >> 16; return [n & 255, (n >> 8) & 255]; }
+
+// Закрашенный круг: disc() эталона — огонь и воронка взрыва, шар грязи. Радиусы только из игры.
+function testDisc() {
+  const gen = new LCG(0xD15C);
+  const RAD = [2, 10, 15, 30, 60], ops = [];
+  const add = (cx, cy, r, c) => ops.push([cx, cy, r, c]);       // cx, cy — в координатах поля, как у disc()
+  for (const r of RAD) { add(125, 113, r, 3); add(125, 113, r, 0); }
+  add(0, 0, 60, 3); add(249, 225, 60, 1); add(0, 225, 30, 3); add(249, 0, 30, 1); add(1, 100, 15, 3); add(248, 100, 10, 1); add(100, 1, 2, 3);
+  while (ops.length < 300) add(gen.below(250), gen.below(226), RAD[gen.below(5)], [3, 1, 0, 0][gen.below(4)]);
+  const n = ops.length, list = new Uint8Array(n * 4), v = new Uint8Array(P.W * P.H), bg = new Uint8Array(P.W * P.H);
+  ops.forEach(([cx, cy, r, c], i) => {
+    list.set([cx + P.X0, cy + P.Y0, r, c], i * 4);
+    TW.disc(v, bg, cx, cy, r, c === 0 ? null : c);
+  });
+  const extra = new Uint8Array(15);
+  extra[1] = n & 255; extra[2] = n >> 8;
+  const r = runMode(MODE_DISC, extra, list);
+  const d = firstPixelDiff(planesToScreen(r.mem), v);
+  if (d) fail(`круг пиксель (${d.x},${d.y}) emu=${d.got} oracle=${d.exp}`);
+  console.log(`OK  закрашенный круг: ${n}, экран совпал`);
+}
 
 function testRing() {
   const gen = new LCG(0xE11);
@@ -727,6 +748,7 @@ testCross();
 testRing();
 testClear();
 testBarrel();
+testDisc();
 testText();
 testCrumble();
 testReplace();
@@ -746,6 +768,10 @@ const tFr = bench('рамка rebound=0', L.draw_frame, L.bench_frame_ret, KIND_
 const tTk = bench('танк (128,128,4)', L.draw_tank, L.bench_tank_ret, KIND_TANK, { x: 128, y: 128, c: 4 });
 const tCr = bench('крестик (100,100,3)', L.draw_cross, L.bench_cross_ret, KIND_CROSS, { x: 100, y: 100, c: 3 });
 const tRg = bench('кольцо r=30', L.ring, L.bench_ring_ret, KIND_RING, { x: 125, y: 113, x2: 30, c: 3 });
+const discT = {};
+for (const r of [2, 10, 15, 30, 60]) discT[r] = bench(`круг r=${r}`, L.disc, L.bench_disc_ret, KIND_DISC, { x: 128, y: 140, x2: r, c: 3 });
+for (const r of [10, 30, 60]) console.log(`ВЗРЫВ кругом R=${r}: огонь + стирание = ${2 * discT[r].v} vcycles = ${(2 * discT[r].v / 3e6).toFixed(3)} с при 3 МГц`);
+console.log(`БАЙТЫ  круг: ${L.disc_end - L.disc}`);
 const tCl = bench('очистка экрана', L.clear_screen, L.bench_clear_ret, KIND_CLEAR, {});
 const tCh = bench('знак A', L.draw_char, L.bench_char_ret, KIND_CHAR, {});
 const field = new Uint8Array(65536);

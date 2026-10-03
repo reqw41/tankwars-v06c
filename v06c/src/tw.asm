@@ -35,6 +35,7 @@ MODE_CRUMBLE	equ	13
 MODE_REPLACE	equ	14
 MODE_PAL	equ	15
 MODE_UI		equ	16
+MODE_DISC	equ	17
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -47,6 +48,7 @@ KIND_BARREL	equ	9
 KIND_CHAR	equ	10
 KIND_PANEL	equ	11
 KIND_CRUMBLE	equ	12
+KIND_DISC	equ	13
 
 PPI_CW		equ	0x00
 PPI_C		equ	0x01
@@ -92,6 +94,8 @@ entry:
 	jp	z, do_pal
 	cp	MODE_UI
 	jp	z, do_ui
+	cp	MODE_DISC
+	jp	z, do_disc
 	jp	done
 done:
 	halt
@@ -299,6 +303,8 @@ do_bench:
 	jp	z, bench_cross
 	cp	KIND_RING
 	jp	z, bench_ring
+	cp	KIND_DISC
+	jp	z, bench_disc
 	cp	KIND_CLEAR
 	jp	z, bench_clear
 	cp	KIND_BARREL
@@ -479,6 +485,50 @@ drg_lp:
 	ld	(list_ptr), hl
 	call	ring
 	jp	drg_lp
+
+; список: x, y (экран), r, c — по 4 байта
+do_disc:
+	ld	hl, (PARAM_COUNT)
+	ld	(left), hl
+	ld	hl, LIST
+	ld	(list_ptr), hl
+ddk_lp:
+	ld	hl, (left)
+	ld	a, h
+	or	l
+	jp	z, done
+	dec	hl
+	ld	(left), hl
+	ld	hl, (list_ptr)
+	ld	a, (hl)
+	ld	(dk_x), a
+	inc	hl
+	ld	a, (hl)
+	ld	(dk_y), a
+	inc	hl
+	ld	a, (hl)
+	ld	(dk_r), a
+	inc	hl
+	ld	a, (hl)
+	ld	(dk_c), a
+	inc	hl
+	ld	(list_ptr), hl
+	call	disc
+	jp	ddk_lp
+
+bench_disc:
+	ld	a, (PARAM_X)
+	ld	(dk_x), a
+	ld	a, (PARAM_Y)
+	ld	(dk_y), a
+	ld	a, (PARAM_X2)
+	ld	(dk_r), a
+	ld	a, (PARAM_C)
+	ld	(dk_c), a
+bench_disc_call:
+	call	disc
+bench_disc_ret:
+	jp	done
 
 do_clear:
 	ld	a, (PARAM_KIND)
@@ -782,6 +832,7 @@ kernel_start:
 	include	"sprite.asm"
 	include	"fill.asm"
 	include	"ring.asm"
+	include	"disc.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"
@@ -811,6 +862,7 @@ rom_end:
 	display	"replace_tmp=", /h, replace_tmp, "-", /h, replace_tmp_end, " bytes ", /d, replace_tmp_end - replace_tmp
 	display	"pal_apply=", /h, pal_apply, "-", /h, pal_apply_end, " bytes ", /d, pal_apply_end - pal_apply
 	display	"draw_panel=", /h, draw_panel, "-", /h, draw_panel_end, " bytes ", /d, draw_panel_end - draw_panel
+	display	"disc=", /h, disc, "-", /h, disc_end, " bytes ", /d, disc_end - disc
 	display	"stand=", /d, kernel_start - 0x0100
 	display	"kernel=", /d, kernel_end - kernel_start
 	display	"rom=", /d, rom_end - 0x0100

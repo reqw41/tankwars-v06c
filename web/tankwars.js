@@ -24,7 +24,7 @@ export const PROFILE_V06C = { name: 'v06c', W: 256, H: 256, X0: 3, Y0: 27, X1: 2
   ground: 1, frame: 2, ball: 3, beam: 3, tank0: 4, nTank: 4, maxPlayers: 4,
   passable: (c) => c === 0,
   fire: () => 3, tmp: () => 3, isTmp: (c) => c === 3,
-  sky: () => 0, trail: null, noBg: true, aiNoDraw: true, stream: true, fixed: true, clip: true,
+  sky: () => 0, trail: null, noBg: true, aiNoDraw: true, stream: true, fixed: true, clip: true, disc: true,
   playerColors: [[1, X, X], [1, 1, X], [X, 1, 1], [1, X, 1]],          // красный, жёлтый, голубой, пурпурный
   terrain: { init: 200, lo: 20, hi: 185, min: 3, max: 205, margin: (n) => 50 - 6 * (n - 2) },
   place: { rnd: 24, off: 5 }, bgKinds: 1 };
@@ -308,6 +308,18 @@ export function ringRestore(v, bg, cx, cy, r, vp = VIEWPORT, clip = true) {
   for (const [x, y] of ellipsePoints(cx + vp[0], cy + vp[1], r, r)) if (!clip || inVp(x, y, vp)) { const o = (y * W + x) & 0xffff; poke(v, o, peek(bg, o)); }
 }
 
+// Закрашенный круг строками: строка y — от самой левой до самой правой точки внешнего кольца радиуса r, плюс по
+// точке с каждой стороны. Это ровно объединение колец i = 0..r в трёх центрах cx-1, cx, cx+1, которыми оригинал
+// рисует огонь, воронку и шар грязи (проверено для r = 0..61, work/disc_check.mjs). color = null — стереть (взять из bg).
+export function disc(v, bg, cx, cy, r, color, vp = VIEWPORT) {
+  const rows = new Map();
+  for (const [x, y] of ellipsePoints(cx + vp[0], cy + vp[1], r, r)) { const e = rows.get(y); if (!e) rows.set(y, [x, x]); else { if (x < e[0]) e[0] = x; if (x > e[1]) e[1] = x; } }
+  for (const [y, [a, b]] of rows) {
+    if (y < vp[1] || y > vp[3]) continue;
+    for (let x = Math.max(a - 1, vp[0]); x <= Math.min(b + 1, vp[2]); x++) { const o = (y * W + x) & 0xffff; poke(v, o, color === null ? peek(bg, o) : color); }
+  }
+}
+
 // ---------- обычный взрыв 318e:00e0 (оружие 1,2,3,4,11) ----------
 export const RADIUS = { 1: 10, 2: 15, 3: 30, 4: 60, 11: 2 };
 const K15 = 1.5, K18 = 1.7999999999992724, K07 = 0.6999999999998181;
@@ -321,13 +333,15 @@ function applyDamage(players, victim, shooter, dmg) {
 export function explode(v, bg, players, x, y, hit, shooter, weapon, rng, sound) {
   if (!(weapon in RADIUS)) return null;
   const r = RADIUS[weapon], cx = worldSub(x, P.X0), cy = worldSub(y, P.Y0);
-  for (let i = 0; i <= r; i++) for (const dx of [1, -1, 0]) ring(v, cx + dx, cy, i, P.fire(i));
+  if (P.disc) disc(v, bg, cx, cy, r, P.fire(r));                    // Вектор: огонь — один закрашенный круг
+  else for (let i = 0; i <= r; i++) for (const dx of [1, -1, 0]) ring(v, cx + dx, cy, i, P.fire(i));
   if (sound && rng) {
     const T = (r + 1) * (r + 2) / 2;
     for (let i = 0; i < r + 1 + 2 * T; i++) rng.word(500);
     for (let i = 0; i < T; i++) rng.word(250);
   }
-  for (let i = r; i >= 0; i--) for (const dx of [1, -1, 0]) ringRestore(v, bg, cx + dx, cy, i);
+  if (P.disc) disc(v, bg, cx, cy, r, null);                         // и одно стирание
+  else for (let i = r; i >= 0; i--) for (const dx of [1, -1, 0]) ringRestore(v, bg, cx + dx, cy, i);
   if (isTank(hit)) applyDamage(players, players[hit - P.tank0], shooter, 200);
   for (const p of players) {
     if (!p.alive) continue;
@@ -418,7 +432,8 @@ export function dirtBall(v, x, y, weapon, vp = VIEWPORT) {                      
     cy = trunc(ly);
     centers = [trunc(lx + 1), trunc(lx - 1), trunc(lx)];
   }
-  for (let i = 0; i <= r; i++) for (const cx of centers) ring(v, cx, cy, i, P.ground, vp);
+  if (P.disc) disc(v, null, centers[2], cy, r, P.ground, vp);
+  else for (let i = 0; i <= r; i++) for (const cx of centers) ring(v, cx, cy, i, P.ground, vp);
 }
 export function explosiveDirt(v, bg, x, y, rng, sound, percent, vp = VIEWPORT) {   // 17
   const n = rng.word(100) + 300, rows = rng.word(8) + 3;
