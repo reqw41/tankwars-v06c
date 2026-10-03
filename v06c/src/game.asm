@@ -614,6 +614,7 @@ gm_p:		dw	0
 	include	"hud.asm"
 	include	"aiplan.asm"
 	include	"ailob.asm"
+	include	"aiwit.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"
