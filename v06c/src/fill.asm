@@ -35,6 +35,9 @@ fill_8k:
 	add	hl, sp
 	ld	(fl_save), hl
 	ld	hl, (fl_end)
+	ifdef	GAME
+	di			; стек стоит на экране: прерывание испортило бы плоскость
+	endif
 	ld	sp, hl
 	ld	b, 0
 f8_lp:
@@ -58,6 +61,9 @@ f8_lp:
 	jp	nz, f8_lp
 	ld	hl, (fl_save)
 	ld	sp, hl
+	ifdef	GAME
+	ei
+	endif
 	ret
 
 clear_screen:

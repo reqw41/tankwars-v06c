@@ -32,3 +32,24 @@ if [ "$sz" -gt $((0x7000 - 0x100)) ]; then
 	rm -f v06c/build/tw.rom
 	exit 1
 fi
+
+# игровой образ (v06c/src/game.asm) — те же модули с главным циклом
+out=$($ASM --i8080 --fullpath -i v06c/src \
+	--lst=v06c/build/game.lst --sym=v06c/build/game.sym \
+	v06c/src/game.asm 2>&1) || {
+	echo "$out"
+	echo "СБОРКА ИГРЫ ПРОВАЛЕНА"
+	exit 1
+}
+if echo "$out" | grep -Eiq 'warning:|warnings: [1-9]'; then
+	echo "$out"
+	echo "ЕСТЬ ПРЕДУПРЕЖДЕНИЯ sjasmplus (игра) — провал"
+	exit 1
+fi
+python3 v06c/tools/check_i8080.py v06c/build/game.lst
+gsz=$(wc -c < v06c/build/game.rom | tr -d ' ')
+echo "OK: v06c/build/game.rom ($gsz Б)"
+if [ "$gsz" -gt $((0x9E00 - 0x100)) ]; then
+	echo "ИГРА ($gsz Б) ДОСТАЁТ ДО СТЕКА — провал"
+	exit 1
+fi
