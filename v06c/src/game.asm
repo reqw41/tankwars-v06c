@@ -731,6 +731,7 @@ gm_p:		dw	0
 	include	"action.asm"
 	include	"death.asm"
 	include	"turn.asm"
+	include	"laser.asm"
 	include	"aistep.asm"
 	include	"hud.asm"
 	include	"aiplan.asm"

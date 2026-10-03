@@ -2,7 +2,7 @@
 ; Вход: tn_shooter (место 1..n), tn_xkill (0/1); состояние раунда: rs_rebound, rs_wind (round.asm),
 ;       as_crumble, as_fall (after.asm); n_players, players, RandSeed.
 ; Выход: изменённые записи и экран; fl_stop, fl_x, fl_y — чем кончился выстрел (для истории ИИ).
-; Не сделано: лазер (оружие 5) и полёт с наведением — в играбельную версию не входят.
+; Не сделано: полёт с наведением и особое оружие 6..17 (стреляют как обычный снаряд).
 
 turn:
 	call	fire
@@ -113,7 +113,10 @@ fire:
 	ld	a, (hl)
 	ld	(tn_w), a
 	cp	5
-	ret	z			; лазер не сделан
+	jp	nz, fr_ball
+	ld	a, (tn_shooter)	; лазер: запас не тратится, выстрел без снаряда
+	jp	laser
+fr_ball:
 	; запас оружия − 1
 	add	a, a
 	add	a, PL_AMMO

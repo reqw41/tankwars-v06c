@@ -29,7 +29,8 @@ for (let i = 0; i < N; i++) {
   for (const p of ps) { TW.drawTankBarrel(v, p); p.men = [100, 60, 12, 3, 100][master.word(5)]; p.shield = master.word(5) ? 0 : master.word(250); p.score = master.word(30000); p.damp = master.word(4) ? 0 : master.word(30);
     for (const w of [2, 3, 4]) p.ammo[w] = 3; }
   const shooter = 1 + master.word(n), s = ps[shooter - 1];
-  s.weapon = [1, 1, 2, 3, 4, 11, 0][master.word(7)];
+  s.weapon = process.env.LASER ? 5 : [1, 1, 2, 3, 4, 11, 0, 5][master.word(8)];
+  if (s.weapon === 5) s.ammo[5] = [1000, 300, 150, 101][master.word(4)];
   // прицел: часть выстрелов — в сторону соседа с подходящей мощностью, часть — случайные
   const tgt = ps[(shooter % n)];
   if (master.word(3)) { s.facing = tgt.x > s.x ? 1 : -1; s.angle = 30 + master.word(50); s.power = Math.min(1000, 60 + Math.abs(tgt.x - s.x) * 2 + master.word(60)); }
@@ -48,7 +49,7 @@ for (let i = 0; i < N; i++) {
   const res = TW.turn(v, bg, ps, shooter, rng, fl);
   const r = runUntil(machine, { haltPc: null, maxInsns: 3_000_000_000 });
   const tag = `#${i} игроков=${n} стрелок=${shooter} оружие=${s.weapon} угол=${s.angle} мощность=${s.power} напр=${s.facing} ветер=${fl.wind} стены=${+fl.rebound} осыпание=${fl.crumble} падение=${+fl.fall} xkill=${+fl.xkill} seed=0x${seed.toString(16)}`;
-  if (r.mem[RESULT] !== STOP[res.stop]) { console.error(`FAIL ${tag}: остановка 8080=${r.mem[RESULT]} эталон=${STOP[res.stop]} (${res.stop})`); process.exit(1); }
+  if (res && r.mem[RESULT] !== STOP[res.stop]) { console.error(`FAIL ${tag}: остановка 8080=${r.mem[RESULT]} эталон=${STOP[res.stop]} (${res.stop})`); process.exit(1); }
   for (let k = 0; k < n; k++) {
     const g = r.mem.slice(LIST + k * PL_SIZE, LIST + (k + 1) * PL_SIZE), w = packPlayer(ps[k]);
     if (viewKey(g) !== viewKey(w)) { const a = viewPlayer(g), b = viewPlayer(w), diff = Object.keys(b).filter((q) => String(a[q]) !== String(b[q]));
@@ -58,6 +59,6 @@ for (let i = 0; i < N; i++) {
   if (seedGot !== rng.seed) { console.error(`FAIL ${tag}: RandSeed 8080=0x${seedGot.toString(16)} эталон=0x${rng.seed.toString(16)}`); process.exit(1); }
   const g = planesToScreen(r.mem), all = []; for (let k = 0; k < 65536 && all.length < 10; k++) if (g[k] !== v[k]) all.push(`(${k & 255},${k >> 8}) 8080=${g[k]} эталон=${v[k]}`);
   if (all.length) { console.error(`FAIL ${tag}: экран: ${all.join(' ')}`); process.exit(1); }
-  cases++; cyc += r.vcycles; worst = Math.max(worst, r.vcycles); deaths += alive0 - ps.filter((p) => p.alive).length; if (res.stop === 'tank' || res.stop === 'terrain') hits++;
+  cases++; cyc += r.vcycles; worst = Math.max(worst, r.vcycles); deaths += alive0 - ps.filter((p) => p.alive).length; if (res && (res.stop === 'tank' || res.stop === 'terrain')) hits++;
 }
 console.log(`OK  ход целиком: ${cases} ходов (остановка, записи, RandSeed, экран) совпали; попаданий ${hits}, гибелей ${deaths}; байт ${L.turn_end - L.turn}; в среднем ${(cyc / cases / 3e6).toFixed(2)} с, худший ${(worst / 3e6).toFixed(2)} с при 3 МГц`);
