@@ -45,6 +45,7 @@ MODE_FLIGHT	equ	23
 MODE_ROUND	equ	24
 MODE_EXPLODE	equ	25
 MODE_AFTER	equ	26
+MODE_ACTION	equ	27
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -121,6 +122,8 @@ entry:
 	jp	z, do_explode
 	cp	MODE_AFTER
 	jp	z, do_after
+	cp	MODE_ACTION
+	jp	z, do_action
 	jp	done
 done:
 	halt
@@ -975,6 +978,57 @@ do_after:
 	call	copy_b
 	jp	done
 
+; действия: LIST = записи игроков; PARAM_N = число игроков; PARAM_C = место игрока; PARAM_COUNT = число кодов;
+; коды — в RESULT (на входе): 1..10 — apply_code, 20 — auto_switch, 21 — needs_switch (ответ 0/1 пишется на место кода).
+do_action:
+	ld	a, (PARAM_N)
+	ld	(n_players), a
+	ld	a, (PARAM_C)
+	ld	(ac_place), a
+	ld	hl, LIST
+	ld	de, players
+	call	dm_copy
+	ld	hl, (PARAM_COUNT)
+	ld	(left), hl
+	ld	hl, RESULT
+	ld	(res_ptr), hl
+dac_lp:
+	ld	hl, (left)
+	ld	a, h
+	or	l
+	jp	z, dac_end
+	dec	hl
+	ld	(left), hl
+	ld	hl, (res_ptr)
+	ld	a, (hl)
+	cp	20
+	jp	z, dac_auto
+	cp	21
+	jp	z, dac_need
+	call	apply_code
+	jp	dac_nx
+dac_auto:
+	call	auto_switch
+	jp	dac_nx
+dac_need:
+	call	needs_switch
+	ld	a, 0
+	jp	nc, dac_n1
+	inc	a
+dac_n1:
+	ld	hl, (res_ptr)
+	ld	(hl), a
+dac_nx:
+	ld	hl, (res_ptr)
+	inc	hl
+	ld	(res_ptr), hl
+	jp	dac_lp
+dac_end:
+	ld	hl, players
+	ld	de, LIST
+	call	dm_copy
+	jp	done
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -1095,6 +1149,7 @@ kernel_start:
 	include	"flight.asm"
 	include	"explode.asm"
 	include	"after.asm"
+	include	"action.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"
