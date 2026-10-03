@@ -50,6 +50,7 @@ MODE_DEATH	equ	28
 MODE_SHOP	equ	29
 MODE_TURN	equ	30
 MODE_AISTEP	equ	31
+MODE_HUD		equ	32
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -136,6 +137,8 @@ entry:
 	jp	z, do_turn
 	cp	MODE_AISTEP
 	jp	z, do_aistep
+	cp	MODE_HUD
+	jp	z, do_hud
 	jp	done
 done:
 	halt
@@ -1181,6 +1184,30 @@ das_e:
 	call	dm_copy
 	jp	done
 
+; панель и результаты по записям: LIST = записи игроков; PARAM_N = число игроков; PARAM_KIND: 1 — show_panel
+; (PARAM_C = место, PARAM_SEED = ветер, слово), 2 — show_results (PARAM_X = раунд, PARAM_Y = раундов). Экран загружает стенд.
+do_hud:
+	ld	a, (PARAM_N)
+	ld	(n_players), a
+	ld	hl, LIST
+	ld	de, players
+	call	dm_copy
+	ld	a, (PARAM_KIND)
+	dec	a
+	jp	nz, dhd_res
+	ld	hl, (PARAM_SEED)
+	ld	(rs_wind), hl
+	ld	a, (PARAM_C)
+	call	show_panel
+	jp	done
+dhd_res:
+	ld	a, (PARAM_X)
+	ld	(hd_round), a
+	ld	a, (PARAM_Y)
+	ld	(hd_rounds), a
+	call	show_results
+	jp	done
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -1305,6 +1332,7 @@ kernel_start:
 	include	"death.asm"
 	include	"turn.asm"
 	include	"aistep.asm"
+	include	"hud.asm"
 	include	"shop.asm"
 	include	"barrel.asm"
 	include	"text.asm"
