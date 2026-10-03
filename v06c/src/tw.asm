@@ -29,6 +29,7 @@ MODE_TANK	equ	7
 MODE_CROSS	equ	8
 MODE_RING	equ	9
 MODE_CLEAR	equ	10
+MODE_BARREL	equ	11
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -37,6 +38,7 @@ KIND_TANK	equ	5
 KIND_CROSS	equ	6
 KIND_RING	equ	7
 KIND_CLEAR	equ	8
+KIND_BARREL	equ	9
 
 PPI_CW		equ	0x00
 PPI_C		equ	0x01
@@ -70,6 +72,8 @@ entry:
 	jp	z, do_ring
 	cp	MODE_CLEAR
 	jp	z, do_clear
+	cp	MODE_BARREL
+	jp	z, do_barrel
 	jp	done
 done:
 	halt
@@ -279,6 +283,8 @@ do_bench:
 	jp	z, bench_ring
 	cp	KIND_CLEAR
 	jp	z, bench_clear
+	cp	KIND_BARREL
+	jp	z, bench_barrel
 	jp	done
 
 bench_random:
@@ -517,6 +523,70 @@ bench_clear_call:
 bench_clear_ret:
 	jp	done
 
+do_barrel:
+	ld	hl, (PARAM_COUNT)
+	ld	(left), hl
+	ld	hl, LIST
+	ld	(list_ptr), hl
+dbb_lp:
+	ld	hl, (left)
+	ld	a, h
+	or	l
+	jp	z, done
+	dec	hl
+	ld	(left), hl
+	ld	hl, (list_ptr)
+	ld	a, (hl)
+	ld	(tb_x), a
+	inc	hl
+	ld	a, (hl)
+	ld	(tb_y), a
+	inc	hl
+	ld	a, (hl)
+	ld	(tb_idx), a
+	inc	hl
+	ld	a, (hl)
+	ld	(tb_angle), a
+	inc	hl
+	ld	a, (hl)
+	ld	(tb_angle + 1), a
+	inc	hl
+	ld	a, (hl)
+	ld	(tb_facing), a
+	inc	hl
+	ld	a, (hl)
+	ld	(tb_alive), a
+	inc	hl
+	ld	a, (hl)
+	inc	hl
+	ld	(list_ptr), hl
+	or	a
+	jp	nz, dbb_er
+	call	draw_tank_barrel
+	jp	dbb_lp
+dbb_er:
+	call	erase_tank_barrel
+	jp	dbb_lp
+
+bench_barrel:
+	ld	a, (PARAM_X)
+	ld	(tb_x), a
+	ld	a, (PARAM_Y)
+	ld	(tb_y), a
+	ld	a, 1
+	ld	(tb_idx), a
+	ld	a, 45
+	ld	(tb_angle), a
+	xor	a
+	ld	(tb_angle + 1), a
+	ld	a, 1
+	ld	(tb_facing), a
+	ld	(tb_alive), a
+bench_barrel_call:
+	call	draw_tank_barrel
+bench_barrel_ret:
+	jp	done
+
 copy_b:
 	ld	a, (hl)
 	ld	(de), a
@@ -533,6 +603,7 @@ copy_b:
 	include	"sprite.asm"
 	include	"fill.asm"
 	include	"ring.asm"
+	include	"barrel.asm"
 
 list_ptr:	dw	0
 res_ptr:	dw	0
@@ -550,3 +621,4 @@ rom_end:
 	display	"draw_tank=", /h, draw_tank, "-", /h, draw_tank_end, " bytes ", /d, draw_tank_end - draw_tank
 	display	"fill_screen=", /h, fill_screen, "-", /h, fill_screen_end, " bytes ", /d, fill_screen_end - fill_screen
 	display	"ring=", /h, ring, "-", /h, ring_end, " bytes ", /d, ring_end - ring
+	display	"draw_tank_barrel=", /h, draw_tank_barrel, "-", /h, draw_tank_barrel_end, " bytes ", /d, draw_tank_barrel_end - draw_tank_barrel

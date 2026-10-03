@@ -11,12 +11,16 @@ const ROM = path.join(ROOT, 'v06c/build/tw.rom');
 const SYM = path.join(ROOT, 'v06c/build/tw.sym');
 const PARAM = 0x0080, LIST = 0x2000, RESULT = 0x7000;
 const MODE_RANDOM = 1, MODE_PIXELS = 2, MODE_LINES = 3, MODE_BENCH = 4;
-const MODE_ERASELN = 5, MODE_FRAME = 6, MODE_TANK = 7, MODE_CROSS = 8, MODE_RING = 9, MODE_CLEAR = 10;
+const MODE_ERASELN = 5, MODE_FRAME = 6, MODE_TANK = 7, MODE_CROSS = 8, MODE_RING = 9, MODE_CLEAR = 10, MODE_BARREL = 11;
 const KIND_RANDOM = 1, KIND_PIXEL = 2, KIND_LINE = 3;
 const KIND_FRAME = 4, KIND_TANK = 5, KIND_CROSS = 6, KIND_RING = 7, KIND_CLEAR = 8;
 
 TW.setProfile(TW.PROFILE_V06C);
 const P = TW.PROFILE_V06C;
+TW.init({
+  barrel: JSON.parse(fs.readFileSync(path.join(ROOT, 'web/data/barrel.json'), 'utf8')),
+  trig: JSON.parse(fs.readFileSync(path.join(ROOT, 'web/data/trig.json'), 'utf8')),
+});
 
 function u16(n) { return [(n) & 255, (n >> 8) & 255]; }
 function u32(n) {
@@ -343,6 +347,46 @@ function testClear() {
   console.log('OK  очистка строк 0..23');
 }
 
+function testBarrel() {
+  const gen = new LCG(0xBA11);
+  const ops = [];
+  const add = (x, y, idx, angle, facing, alive, er) => ops.push({ x, y, idx, angle, facing, alive, er });
+  add(40, 80, 1, 0, 1, 1, 0);
+  add(80, 80, 2, 45, 1, 1, 0);
+  add(120, 80, 3, 90, 1, 1, 0);
+  add(200, 80, 4, 0, -1, 1, 0);
+  add(40, 120, 1, 45, -1, 1, 0);
+  add(80, 120, 2, 90, -1, 1, 0);
+  add(3, 40, 1, 75, 1, 1, 0);
+  add(252, 40, 4, 75, -1, 1, 0);
+  add(100, 100, 1, 45, 1, 0, 0);
+  add(60, 90, 2, 45, 1, 1, 0);
+  add(60, 90, 2, 45, 1, 1, 1);
+  while (ops.length < 200) {
+    add(10 + gen.below(230), 40 + gen.below(180), 1 + gen.below(4), gen.below(91), gen.below(2) ? 1 : -1, gen.below(10) ? 1 : 0, gen.below(2));
+  }
+  const n = ops.length;
+  const list = new Uint8Array(n * 8);
+  const v = new Uint8Array(P.W * P.H);
+  const bg = new Uint8Array(P.W * P.H);
+  for (let i = 0; i < n; i++) {
+    const t = ops[i];
+    list[i * 8] = t.x; list[i * 8 + 1] = t.y; list[i * 8 + 2] = t.idx;
+    list[i * 8 + 3] = t.angle & 255; list[i * 8 + 4] = (t.angle >> 8) & 255;
+    list[i * 8 + 5] = t.facing & 255; list[i * 8 + 6] = t.alive; list[i * 8 + 7] = t.er;
+    const rec = { alive: !!t.alive, x: t.x, y: t.y, idx: t.idx, angle: t.angle, facing: t.facing };
+    if (t.er) TW.eraseTankBarrel(v, bg, rec);
+    else TW.drawTankBarrel(v, rec);
+  }
+  const extra = new Uint8Array(15);
+  extra[1] = n & 255; extra[2] = n >> 8;
+  const r = runMode(MODE_BARREL, extra, list);
+  const got = planesToScreen(r.mem);
+  const d = firstPixelDiff(got, v);
+  if (d) fail(`ствол (${d.x},${d.y}) emu=${d.got} oracle=${d.exp}`);
+  console.log(`OK  танк со стволом: ${n}, экран совпал`);
+}
+
 function pokeBench(kind, fields) {
   boot();
   const b = new Uint8Array(16);
@@ -400,6 +444,7 @@ testTank();
 testCross();
 testRing();
 testClear();
+testBarrel();
 console.log('--- замер ---');
 const sz = sizes(L);
 const tRandom = bench('Random(n=100)', L.random, L.bench_random_ret, KIND_RANDOM, { seed: 1, n: 100 });
