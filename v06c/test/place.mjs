@@ -43,6 +43,6 @@ for (const seed of seeds) for (const players of [2, 3, 4]) {
   if (d) { console.error(`FAIL ${tag}: точка (${d.x},${d.y}) на экране 8080=${d.got} эталон=${d.exp}`); process.exit(1); }
   cases++; if (r.vcycles > worst) worst = r.vcycles;
 }
-const LIMIT = 6_000_000;      // Q12: падение танка без пошаговой перерисовки
+const LIMIT = 6_000_000;      // расстановка без пошаговой перерисовки танка, рельеф столбцами прямо в плоскость
 if (worst > LIMIT) { console.error(`FAIL скорость: худший случай ${worst} vcycles, надо не больше ${LIMIT} (экран и числа при этом совпали)`); process.exit(1); }
 console.log(`OK  расстановка: ${cases} случаев (танки, RandSeed, весь экран) совпали; байт ${L.place_end - L.render_terrain}; такты до ${worst} vcycles`);

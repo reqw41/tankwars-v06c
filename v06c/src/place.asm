@@ -8,34 +8,35 @@
 ; Все вызываемые подпрограммы портят AF, BC, DE, HL — счётчики и координаты в ячейках памяти.
 
 render_terrain:
-	ld	a, 1
-	ld	(ln_c), a			; цвет земли
+	; Столбец земли от top до 252 — прямо в плоскость A000 (цвет 1). Поле перед этим очищено (round_start), поэтому
+	; плоскости C000 и E000 в этих точках уже нулевые. 38 тактов на точку вместо 400 через line.
 	xor	a
 	ld	(rt_x), a			; x = 0
 	ld	hl, terr_top
 rte_lp:
 	ld	a, (hl)				; top = terr_top[x]
-	cp	0xFF
-	jp	z, rte_next
 	cp	253
-	jp	nc, rte_next			; top > 252 — не рисуем
-	ld	(rt_top), a
-	ld	a, (rt_x)
-	ld	(ln_x1), a			; x1 = x2 = x
-	ld	(ln_x2), a
-	xor	a
-	ld	(ln_x1 + 1), a
-	ld	(ln_x2 + 1), a
-	ld	a, (rt_top)
-	ld	(ln_y1), a			; y1 = top
-	xor	a
-	ld	(ln_y1 + 1), a
-	ld	a, 252
-	ld	(ln_y2), a			; y2 = 252
-	xor	a
-	ld	(ln_y2 + 1), a
+	jp	nc, rte_next			; 0xFF или top > 252 — не рисуем
 	push	hl
-	call	line
+	ld	b, a
+	ld	a, 253
+	sub	b
+	ld	b, a				; B = число точек: 253 − top
+	ld	a, (rt_x)
+	ld	d, a
+	ld	e, 252
+	push	bc
+	call	fl_addr				; HL = байт точки (x, 252), C = маска; DE цел
+	ld	a, c
+	pop	bc
+rte_px:
+	ld	c, a
+	or	(hl)
+	ld	(hl), a
+	ld	a, c
+	inc	l				; строка выше
+	dec	b
+	jp	nz, rte_px
 	pop	hl
 rte_next:
 	inc	hl
@@ -174,15 +175,95 @@ any_lp:
 	ld	a, (pt_dx)
 	cp	5
 	jp	nz, any_lp
-	; спуск: стереть, y+1, нарисовать корпус; все dx sup — выход
-drop_lp:
-	ld	a, (pt_x)
-	ld	d, a
-	ld	a, (pt_y)
-	ld	e, a
-	call	erase_tank
+	; быстрый спуск: ищем y_конец, начиная с y = 29, без рисования
+	ld	a, 29
+	ld	(pt_y), a
+pt_find:
+	ld	a, -4
+	ld	(pt_dx), a
+pt_all:
+	call	pt_supx
+	jp	nc, pt_down		; этот dx без опоры — y ещё не конец
+	ld	hl, pt_dx
+	inc	(hl)
+	ld	a, (pt_dx)
+	cp	5
+	jp	nz, pt_all
+	; все девять столбцов с опорой — pt_y = y_конец
+	jp	pt_trail
+pt_down:
 	ld	hl, pt_y
 	inc	(hl)
+	jp	pt_find
+pt_trail:
+	; шагов = y_конец - 28; один шаг — стереть по-старому (в столбцах dx=+-1 дырка)
+	ld	a, (pt_y)
+	sub	28
+	cp	1
+	jp	z, pt_one
+	; след — девять вертикальных отрезков цветом 0 от верх(dx) до y_конец-1
+	ld	a, -4
+	ld	(pt_dx), a
+pt_seg:
+	ld	hl, pt_dx
+	ld	a, (pt_x)
+	add	a, (hl)
+	ld	d, a			; D = x + dx
+	ld	a, (pt_dx)
+	add	a, 4			; индекс 0..8 в таблице верхов
+	ld	c, a
+	ld	b, 0
+	ld	hl, pt_top
+	add	hl, bc
+	ld	b, (hl)			; B = верх(dx)
+	ld	a, (pt_y)
+	dec	a
+	ld	e, a			; E = y_конец - 1 (нижняя точка отрезка)
+	sub	b
+	inc	a
+	ld	(pt_cnt), a		; число точек
+	call	fl_addr			; HL = байт нижней точки, C = маска; DE цел
+	ld	a, (pt_cnt)
+	ld	d, a
+	ld	a, c
+	cpl
+	ld	c, a			; C = что оставить
+	ld	e, l
+	call	pt_vclr			; плоскость A000
+	ld	a, h
+	add	a, 0x20
+	ld	h, a
+	ld	l, e
+	call	pt_vclr			; C000
+	ld	a, h
+	add	a, 0x20
+	ld	h, a
+	ld	l, e
+	call	pt_vclr			; E000
+	ld	hl, pt_dx
+	inc	(hl)
+	ld	a, (pt_dx)
+	cp	5
+	jp	nz, pt_seg
+	jp	pt_draw
+; D точек вверх от (HL) очистить по маске C (правка архитектора: отрезок прямо в плоскости вместо line)
+pt_vclr:
+	ld	b, d
+pt_vc1:
+	ld	a, (hl)
+	and	c
+	ld	(hl), a
+	inc	l
+	dec	b
+	jp	nz, pt_vc1
+	ret
+pt_one:
+	ld	a, (pt_x)
+	ld	d, a
+	ld	a, 28
+	ld	e, a
+	call	erase_tank
+pt_draw:
 	ld	a, (pt_x)
 	ld	d, a
 	ld	a, (pt_y)
@@ -190,16 +271,6 @@ drop_lp:
 	ld	a, (pt_i)
 	add	a, 3
 	call	draw_tank
-	ld	a, -4
-	ld	(pt_dx), a
-all_lp:
-	call	pt_supx
-	jp	nc, drop_lp
-	ld	hl, pt_dx
-	inc	(hl)
-	ld	a, (pt_dx)
-	cp	5
-	jp	nz, all_lp
 	; танк со стволом + рамка
 	ld	a, (pt_x)
 	ld	(tb_x), a
@@ -294,3 +365,4 @@ pt_y:		db	0
 pt_angle:	db	0
 pt_facing:	db	0
 pt_dx:		db	0
+pt_top:		db	27, 25, 25, 24, 24, 24, 25, 25, 27	; верх(dx) для dx = -4..4
