@@ -107,6 +107,8 @@ gm_turn:
 	call	show_panel
 	ld	a, (rs_rebound)
 	ld	(ap_rebound), a
+	ld	hl, 5000		; не больше 5000 шагов, как в эталоне: без запасов компьютер стреляет впустую
+	ld	(gm_steps), hl
 gm_ai:
 	ld	a, (g_cur)
 	call	computer_step
@@ -117,7 +119,12 @@ gm_ai:
 	ld	(ac_place), a
 	ld	a, (gm_code)
 	call	apply_code
-	jp	gm_ai
+	ld	hl, (gm_steps)
+	dec	hl
+	ld	(gm_steps), hl
+	ld	a, h
+	or	l
+	jp	nz, gm_ai
 gm_ai_fire:
 	ld	a, (g_cur)
 	call	show_panel
@@ -706,6 +713,7 @@ gk_rep:		db	0
 gm_code:	db	0
 gm_i:		db	0
 gm_sh:		db	0
+gm_steps:	dw	0
 gm_k:		db	0
 gm_p:		dw	0
 
