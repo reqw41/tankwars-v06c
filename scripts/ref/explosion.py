@@ -161,7 +161,7 @@ def explode(v: bytearray, bg: bytes, players: List[Player], x: float, y: float, 
     def apply(victim: Player, dmg: int):
         victim.shield -= dmg
         if victim.shield < 0:
-            if victim.idx != shooter:
+            if victim.idx != shooter and shooter in by_idx:   # shooter 0 — «призрак» гибели (285c:2c29)
                 by_idx[shooter].score -= victim.shield * 10
             victim.men += victim.shield
             victim.shield = 0
