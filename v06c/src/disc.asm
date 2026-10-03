@@ -1,6 +1,7 @@
 ; Закрашенный круг строками — disc() эталона: огонь и воронка взрыва, шар грязи.
 ; Строка dy: от cx-(w+1) до cx+(w+1), w — полуширина внешнего кольца из таблицы (disc_tab.inc); обрезка по полю.
-; Вход: dk_x, dk_y — центр в координатах экрана (байты), dk_r — радиус (только из таблицы), dk_c — цвет 0..7.
+; Вход: dk_x, dk_y — центр в координатах экрана (знаковые слова: центр может быть за полем), dk_r — радиус (только из
+; таблицы), dk_c — цвет 0..7, dk_el/dk_er — добавка слева и справа: 1,1 — взрыв и грязь; 0,1 — круги гибели танка.
 ; Заливка идёт байтами: левый неполный байт, целые байты, правый неполный — по каждой из трёх плоскостей.
 
 DK_X0		equ	3
@@ -29,23 +30,41 @@ dk_find:
 	ld	(dk_dy), a
 dk_loop:
 	ld	hl, (dk_tp)
-	ld	c, (hl)
-	inc	c			; полуширина + 1
+	ld	c, (hl)			; полуширина внешнего кольца в строке dy
 	inc	hl
 	ld	(dk_tp), hl
-	ld	a, (dk_x)
-	ld	b, a
-	sub	c
-	jp	c, dk_x1min
+	; x1 = max(cx - (w + el), X0)
+	ld	a, (dk_el)
+	add	a, c
+	cpl
+	ld	e, a
+	ld	d, 0xFF
+	inc	de			; DE = -(w + el)
+	ld	hl, (dk_x)
+	add	hl, de
+	ld	a, h
+	or	a
+	jp	m, dk_x1min		; отрицательное
+	jp	nz, dk_next		; левее поля быть не может: x1 > 255 — строки нет
+	ld	a, l
 	cp	DK_X0
 	jp	nc, dk_x1ok
 dk_x1min:
 	ld	a, DK_X0
 dk_x1ok:
 	ld	(dk_x1), a
-	ld	a, b
+	; x2 = min(cx + (w + er), X1)
+	ld	a, (dk_er)
 	add	a, c
-	jp	c, dk_x2max
+	ld	e, a
+	ld	d, 0
+	ld	hl, (dk_x)
+	add	hl, de
+	ld	a, h
+	or	a
+	jp	m, dk_next		; весь отрезок левее экрана
+	jp	nz, dk_x2max
+	ld	a, l
 	cp	DK_X1 + 1
 	jp	c, dk_x2ok
 dk_x2max:
@@ -57,31 +76,25 @@ dk_x2ok:
 	ld	c, a
 	ld	a, b
 	cp	c
-	jp	c, dk_next		; пустой отрезок (центр за полем)
+	jp	c, dk_next		; пустой отрезок
 	; строка cy + dy
 	ld	a, (dk_dy)
-	ld	b, a
-	ld	a, (dk_y)
-	add	a, b
-	jp	c, dk_up
-	cp	DK_Y1 + 1
-	jp	nc, dk_up
-	cp	DK_Y0
-	jp	c, dk_up
-	call	hspan
-dk_up:
+	ld	e, a
+	ld	d, 0
+	ld	hl, (dk_y)
+	add	hl, de
+	call	dk_row
+	; строка cy - dy (кроме dy = 0)
 	ld	a, (dk_dy)
 	or	a
 	jp	z, dk_next
-	ld	b, a
-	ld	a, (dk_y)
-	sub	b
-	jp	c, dk_next
-	cp	DK_Y0
-	jp	c, dk_next
-	cp	DK_Y1 + 1
-	jp	nc, dk_next
-	call	hspan
+	cpl
+	ld	e, a
+	ld	d, 0xFF
+	inc	de
+	ld	hl, (dk_y)
+	add	hl, de
+	call	dk_row
 dk_next:
 	ld	a, (dk_r)
 	ld	b, a
@@ -91,6 +104,18 @@ dk_next:
 	inc	a
 	ld	(dk_dy), a
 	jp	dk_loop
+
+; HL — строка (знаковое слово); рисует отрезок, если строка в поле
+dk_row:
+	ld	a, h
+	or	a
+	ret	nz
+	ld	a, l
+	cp	DK_Y0
+	ret	c
+	cp	DK_Y1 + 1
+	ret	nc
+	; провал в hspan
 
 ; Горизонтальный отрезок dk_x1..dk_x2 в строке A цветом dk_c.
 hspan:
@@ -210,8 +235,10 @@ hs_rmask:	db	0x80, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC, 0xFE, 0xFF
 	include	"disc_tab.inc"
 disc_end:
 
-dk_x:		db	0
-dk_y:		db	0
+dk_x:		dw	0
+dk_y:		dw	0
+dk_el:		db	1
+dk_er:		db	1
 dk_r:		db	0
 dk_c:		db	0
 dk_x1:		db	0

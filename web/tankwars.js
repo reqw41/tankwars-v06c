@@ -302,21 +302,25 @@ export function ellipsePoints(x, y, rx, ry) {
 export const VIEWPORT = [11, 31, 309, 189];
 const inVp = (x, y, vp) => vp[0] <= x && x <= vp[2] && vp[1] <= y && y <= vp[3];
 export function ring(v, cx, cy, r, color, vp = VIEWPORT, clip = true) {
+  if (P.disc) throw new Error('ring(): в профиле Вектора кольца не рисуются, только disc()');
   for (const [x, y] of ellipsePoints(cx + vp[0], cy + vp[1], r, r)) if (!clip || inVp(x, y, vp)) poke(v, (y * W + x) & 0xffff, color);
 }
 export function ringRestore(v, bg, cx, cy, r, vp = VIEWPORT, clip = true) {
+  if (P.disc) throw new Error('ringRestore(): в профиле Вектора кольца не рисуются, только disc()');
   for (const [x, y] of ellipsePoints(cx + vp[0], cy + vp[1], r, r)) if (!clip || inVp(x, y, vp)) { const o = (y * W + x) & 0xffff; poke(v, o, peek(bg, o)); }
 }
 
 // Закрашенный круг строками: строка y — от самой левой до самой правой точки внешнего кольца радиуса r, плюс по
 // точке с каждой стороны. Это ровно объединение колец i = 0..r в трёх центрах cx-1, cx, cx+1, которыми оригинал
 // рисует огонь, воронку и шар грязи (проверено для r = 0..61, work/disc_check.mjs). color = null — стереть (взять из bg).
-export function disc(v, bg, cx, cy, r, color, vp = VIEWPORT) {
+// el, er — сколько точек добавить слева и справа: 1 и 1 — три центра; 0 и 1 — два центра cx, cx+1 (гибель танка,
+// work/disc2_check.mjs).
+export function disc(v, bg, cx, cy, r, color, vp = VIEWPORT, el = 1, er = 1) {
   const rows = new Map();
   for (const [x, y] of ellipsePoints(cx + vp[0], cy + vp[1], r, r)) { const e = rows.get(y); if (!e) rows.set(y, [x, x]); else { if (x < e[0]) e[0] = x; if (x > e[1]) e[1] = x; } }
   for (const [y, [a, b]] of rows) {
     if (y < vp[1] || y > vp[3]) continue;
-    for (let x = Math.max(a - 1, vp[0]); x <= Math.min(b + 1, vp[2]); x++) { const o = (y * W + x) & 0xffff; poke(v, o, color === null ? peek(bg, o) : color); }
+    for (let x = Math.max(a - el, vp[0]); x <= Math.min(b + er, vp[2]); x++) { const o = (y * W + x) & 0xffff; poke(v, o, color === null ? peek(bg, o) : color); }
   }
 }
 
@@ -954,13 +958,15 @@ function deathOutro(v, bg, ts, tx, ty, rng, sound, color, hi, twin) {
     r6++;
     const col = P.tmp(10 * b0 + 100 + ae);
     for (const rr of [r6, r6 + 1]) {
-      ring(v, tx, ty, rr, col); if (twin) ring(v, tx + 1, ty, rr, col);
+      if (!P.disc) { ring(v, tx, ty, rr, col); if (twin) ring(v, tx + 1, ty, rr, col); }
       for (let k = 0; k < 5; k++) { if (sound) rng.word((1300 - 40 * r6) & 0xffff); rng.word(0xffff); }
     }
     r6++;
   }
   for (let ae = 4; ae >= 0; ae--) for (let k = 4 - ae; k >= 0; k--) { if (sound) rng.word(200); rng.word(63); rng.word(63); rng.word(63); }
-  for (let r = 30; r >= 0; r--) { ringRestore(v, bg, tx, ty, r); ringRestore(v, bg, tx + 1, ty, r); }
+  // Вектор: кольца 1..30 (цвет 3) и их стирание в двух центрах сводятся к одному кругу радиуса 30 — заливка и стирание
+  if (P.disc) { disc(v, bg, tx, ty, 30, P.tmp(0), VIEWPORT, 0, 1); disc(v, bg, tx, ty, 30, null, VIEWPORT, 0, 1); }
+  else for (let r = 30; r >= 0; r--) { ringRestore(v, bg, tx, ty, r); ringRestore(v, bg, tx + 1, ty, r); }
   redrawAll(v, ts);
   replaceColor(v, bg, color, color);
   replaceTmp(v, bg, 0x82, hi);
@@ -970,9 +976,11 @@ function miniBlast(v, bg, px, py, rng, sound, call0) {
   for (let r = 0; r <= 4 * k; r++) {
     if (sound) rng.word(2500); if (call0) rng.word(0xffff);
     const col = P.tmp(base + 100 + trunc(r / k));
-    ring(v, px, py, r, col); ring(v, px + 1, py, r, col);
+    if (!P.disc) { ring(v, px, py, r, col); ring(v, px + 1, py, r, col); }
   }
-  for (let r = 4 * k; r >= 0; r--) { if (sound) rng.word(2500); if (call0) rng.word(0xffff); ringRestore(v, bg, px, py, r); ringRestore(v, bg, px + 1, py, r); }
+  if (P.disc) disc(v, bg, px, py, 4 * k, P.tmp(0), VIEWPORT, 0, 1);      // Вектор: кольца 0..4k в двух центрах = один круг
+  for (let r = 4 * k; r >= 0; r--) { if (sound) rng.word(2500); if (call0) rng.word(0xffff); if (!P.disc) { ringRestore(v, bg, px, py, r); ringRestore(v, bg, px + 1, py, r); } }
+  if (P.disc) disc(v, bg, px, py, 4 * k, null, VIEWPORT, 0, 1);
 }
 function death0(v, bg, ts, victim, rng, sound, wind, xkill) {          // 285c:0020
   const t = ts[victim - 1], color = tankColor(victim), tx = t.x - P.X0, ty = t.y - P.Y0;

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as TW from '../../web/tankwars.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-export const DISC_RADII = [2, 10, 15, 30, 60];           // взрывы 11, 1, 2, 3, 4 и шары грязи 13..16
+export const DISC_RADII = [2, 4, 8, 10, 12, 15, 16, 20, 30, 60];   // взрывы и шары грязи: 2, 10, 15, 30, 60; гибель танка: 4, 8, 12, 16, 20, 30
 let out = '; Сгенерировано v06c/tools/disc2tab.mjs из ellipsePoints эталона. Не править руками.\n';
 out += 'dk_tabs:\n' + DISC_RADII.map((r) => `\tdb\t${r}\n\tdw\tdk_t${r}\n`).join('') + '\tdb\t0xFF\n';
 for (const r of DISC_RADII) {

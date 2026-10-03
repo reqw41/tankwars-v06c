@@ -58,6 +58,12 @@ function runMode(mode, extra, listBytes) {
   return runUntil(machine, { haltPc: null, maxInsns: 50_000_000 });
 }
 
+// Кольцо нулём по точкам ellipsePoints эталона — только для подготовки экранов (в профиле Вектора ring() запрещён).
+function ringZero(v, cx, cy, r) {
+  const vp = TW.VIEWPORT;
+  for (const [x, y] of TW.ellipsePoints(cx + vp[0], cy + vp[1], r, r)) if (vp[0] <= x && x <= vp[2] && vp[1] <= y && y <= vp[3]) v[y * 256 + x] = 0;
+}
+
 function fail(msg) {
   console.error('FAIL', msg);
   process.exit(1);
@@ -288,59 +294,26 @@ function testCross() {
 
 function i16bytes(n) { n = (n << 16) >> 16; return [n & 255, (n >> 8) & 255]; }
 
-// Закрашенный круг: disc() эталона — огонь и воронка взрыва, шар грязи. Радиусы только из игры.
+// Закрашенный круг: disc() эталона — огонь и воронка взрыва, шар грязи (три центра), круги гибели (два центра).
 function testDisc() {
   const gen = new LCG(0xD15C);
-  const RAD = [2, 10, 15, 30, 60], ops = [];
-  const add = (cx, cy, r, c) => ops.push([cx, cy, r, c]);       // cx, cy — в координатах поля, как у disc()
-  for (const r of RAD) { add(125, 113, r, 3); add(125, 113, r, 0); }
+  const RAD = [2, 4, 8, 10, 12, 15, 16, 20, 30, 60], ops = [];
+  const add = (cx, cy, r, c, el = 1, er = 1) => ops.push([cx, cy, r, c, el, er]);   // cx, cy — в координатах поля, как у disc()
+  for (const r of RAD) { add(125, 113, r, 3); add(125, 113, r, 0); add(60, 60, r, 1, 0, 1); }
   add(0, 0, 60, 3); add(249, 225, 60, 1); add(0, 225, 30, 3); add(249, 0, 30, 1); add(1, 100, 15, 3); add(248, 100, 10, 1); add(100, 1, 2, 3);
-  while (ops.length < 300) add(gen.below(250), gen.below(226), RAD[gen.below(5)], [3, 1, 0, 0][gen.below(4)]);
-  const n = ops.length, list = new Uint8Array(n * 4), v = new Uint8Array(P.W * P.H), bg = new Uint8Array(P.W * P.H);
-  ops.forEach(([cx, cy, r, c], i) => {
-    list.set([cx + P.X0, cy + P.Y0, r, c], i * 4);
-    TW.disc(v, bg, cx, cy, r, c === 0 ? null : c);
+  add(-3, 100, 20, 3, 0, 1); add(260, 100, 20, 1, 0, 1); add(100, -20, 30, 3, 0, 1); add(100, 250, 30, 1, 0, 1); add(-40, -40, 60, 3); add(300, 300, 60, 3); add(-70, 50, 60, 3);
+  while (ops.length < 400) { const two = gen.below(2); add(gen.below(290) - 20, gen.below(266) - 20, RAD[gen.below(10)], [3, 1, 0, 0][gen.below(4)], two ? 0 : 1, 1); }
+  const n = ops.length, list = new Uint8Array(n * 8), v = new Uint8Array(P.W * P.H), bg = new Uint8Array(P.W * P.H);
+  ops.forEach(([cx, cy, r, c, el, er], i) => {
+    list.set([...i16bytes(cx + P.X0), ...i16bytes(cy + P.Y0), el, er, r, c], i * 8);
+    TW.disc(v, bg, cx, cy, r, c === 0 ? null : c, TW.VIEWPORT, el, er);
   });
   const extra = new Uint8Array(15);
   extra[1] = n & 255; extra[2] = n >> 8;
   const r = runMode(MODE_DISC, extra, list);
   const d = firstPixelDiff(planesToScreen(r.mem), v);
   if (d) fail(`круг пиксель (${d.x},${d.y}) emu=${d.got} oracle=${d.exp}`);
-  console.log(`OK  закрашенный круг: ${n}, экран совпал`);
-}
-
-function testRing() {
-  const gen = new LCG(0xE11);
-  const ops = [];
-  const add = (cx, cy, r, c) => ops.push([cx, cy, r, c]);
-  add(125, 113, 0, 3);
-  add(125, 113, 1, 3);
-  add(0, 0, 10, 3);
-  add(249, 225, 30, 3);
-  add(-5, 100, 20, 3);
-  add(125, 113, 61, 3);
-  add(1, 1, 5, 0);
-  while (ops.length < 200) add(gen.below(280) - 20, gen.below(250) - 10, gen.below(62), gen.below(2) ? 3 : 0);
-  const n = ops.length;
-  const list = new Uint8Array(n * 6);
-  const v = new Uint8Array(P.W * P.H);
-  const bg = new Uint8Array(P.W * P.H);
-  for (let i = 0; i < n; i++) {
-    const [cx, cy, r, c] = ops[i];
-    const xb = i16bytes(cx), yb = i16bytes(cy);
-    list[i * 6] = xb[0]; list[i * 6 + 1] = xb[1];
-    list[i * 6 + 2] = yb[0]; list[i * 6 + 3] = yb[1];
-    list[i * 6 + 4] = r; list[i * 6 + 5] = c;
-    if (c) TW.ring(v, cx, cy, r, c);
-    else TW.ringRestore(v, bg, cx, cy, r);
-  }
-  const extra = new Uint8Array(15);
-  extra[1] = n & 255; extra[2] = n >> 8;
-  const r = runMode(MODE_RING, extra, list);
-  const got = planesToScreen(r.mem);
-  const d = firstPixelDiff(got, v);
-  if (d) fail(`кольцо пиксель (${d.x},${d.y}) emu=${d.got} oracle=${d.exp}`);
-  console.log(`OK  кольцо эллипса: ${n}, экран совпал`);
+  console.log(`OK  закрашенный круг: ${n} (три и два центра, центры за полем), экран совпал`);
 }
 
 function testClear() {
@@ -462,7 +435,7 @@ function testCrumble() {
     const top = 80 + (x % 40);
     for (let y = top; y <= 252; y++) field[y * 256 + x] = 1;
   }
-  TW.ring(field, 125, 113, 30, 0);
+  ringZero(field, 125, 113, 30);
   cases.push(field);
   const gen = new LCG(0xC8B1);
   while (cases.length < 200) {
@@ -472,7 +445,7 @@ function testCrumble() {
       const top = 40 + gen.below(160);
       for (let y = top; y <= 252; y++) v[y * 256 + x] = 1;
     }
-    if (gen.below(2)) TW.ring(v, 20 + gen.below(200), 40 + gen.below(160), gen.below(40), 0);
+    if (gen.below(2)) ringZero(v, 20 + gen.below(200), 40 + gen.below(160), gen.below(40));
     cases.push(v);
   }
   const bg = new Uint8Array(65536);
@@ -706,7 +679,7 @@ function sizes(L) {
     ['рамка', L.draw_frame, L.draw_frame_end],
     ['танк', L.draw_tank, L.draw_tank_end],
     ['заливка', L.fill_screen, L.fill_screen_end],
-    ['кольцо', L.ring, L.ring_end],
+    ['круг', L.disc, L.disc_end],
     ['ствол', L.draw_tank_barrel, L.draw_tank_barrel_end],
     ['знак', L.draw_char, L.draw_char_end],
     ['осыпание', L.crumble, L.crumble_end],
@@ -745,7 +718,6 @@ testEraseLines();
 testFrame();
 testTank();
 testCross();
-testRing();
 testClear();
 testBarrel();
 testDisc();
@@ -767,7 +739,6 @@ console.log(`ТАКТЫ  линия 200 точек (5,40)-(204,40): cpu_cycles=$
 const tFr = bench('рамка rebound=0', L.draw_frame, L.bench_frame_ret, KIND_FRAME, { c: 0 });
 const tTk = bench('танк (128,128,4)', L.draw_tank, L.bench_tank_ret, KIND_TANK, { x: 128, y: 128, c: 4 });
 const tCr = bench('крестик (100,100,3)', L.draw_cross, L.bench_cross_ret, KIND_CROSS, { x: 100, y: 100, c: 3 });
-const tRg = bench('кольцо r=30', L.ring, L.bench_ring_ret, KIND_RING, { x: 125, y: 113, x2: 30, c: 3 });
 const discT = {};
 for (const r of [2, 10, 15, 30, 60]) discT[r] = bench(`круг r=${r}`, L.disc, L.bench_disc_ret, KIND_DISC, { x: 128, y: 140, x2: r, c: 3 });
 for (const r of [10, 30, 60]) console.log(`ВЗРЫВ кругом R=${r}: огонь + стирание = ${2 * discT[r].v} vcycles = ${(2 * discT[r].v / 3e6).toFixed(3)} с при 3 МГц`);
@@ -780,7 +751,7 @@ for (let x = 3; x <= 252; x++) {
   const top = 80 + (x % 40);
   for (let y = top; y <= 252; y++) field[y * 256 + x] = 1;
 }
-TW.ring(field, 125, 113, 30, 0);
+ringZero(field, 125, 113, 30);
 boot();
 poke(machine, 0xA000, screenToPlanes(field).subarray(0xA000));
 pokeBench(KIND_CRUMBLE, {});
@@ -796,37 +767,13 @@ console.log(`линия 200\t${sz.line}\t${rL200.bodyCpu}\t${rL200.bodyV}`);
 row('рамка', L.draw_frame_end - L.draw_frame, tFr);
 row('танк', L.draw_tank_end - L.draw_tank, tTk);
 row('крестик', L.draw_cross_end - L.draw_cross, tCr);
-row('кольцо r=30', L.ring_end - L.ring, tRg);
 row('очистка', L.fill_screen_end - L.fill_screen, tCl);
 row('знак A', L.draw_char_end - L.draw_char, tCh);
 console.log(`осыпание рельеф+r=30\t${L.crumble_end - L.crumble}\t${rCb.bodyCpu}\t${rCb.bodyV}`);
 console.log(`линия 200 на точку\t\t${(rL200.bodyV / 200).toFixed(1)} vcycles`);
-console.log(`кольцо r=30 на точку\t\t${(tRg.v / 172).toFixed(1)} vcycles`);
-function ringPts(r) {
-  const vp = TW.VIEWPORT;
-  let n = 0;
-  for (const [x, y] of TW.ellipsePoints(125 + vp[0], 113 + vp[1], r, r)) {
-    if (vp[0] <= x && x <= vp[2] && vp[1] <= y && y <= vp[3]) n++;
-  }
-  return n;
-}
-const ringT = [];
-for (let r = 0; r <= 60; r++) {
-  pokeBench(KIND_RING, { x: 125, y: 113, x2: r, c: 3 });
-  const rr = runUntil(machine, { haltPc: L.bench_ring_ret, countFromPc: L.ring, maxInsns: 20_000_000 });
-  ringT[r] = rr.bodyV;
-}
-console.log('--- взрыв (6·Σ t(i) замером каждого радиуса) ---');
-for (const R of [10, 30, 60]) {
-  let sN = 0, sT = 0;
-  for (let i = 0; i <= R; i++) { sN += ringPts(i); sT += ringT[i]; }
-  const v = 6 * sT;
-  console.log(`R=${R} n(30)=${ringPts(30)} Σn=${sN} vcycles=${v} с@3МГц=${(v / 3e6).toFixed(3)}`);
-}
 console.log(`таблица_v6\tточка\t${tPix.v}\t250`);
 console.log(`таблица_v6\tтанк\t${tTk.v}\t6000`);
 console.log(`таблица_v6\tкрестик\t${tCr.v}\t1200`);
-console.log(`таблица_v6\tкольцо_на_точку\t${(tRg.v / 172).toFixed(1)}\t150`);
 console.log(`таблица_v6\tзнак\t${tCh.v}\t1500`);
 console.log(`таблица_v6\tочистка\t${tCl.v}\t350000`);
 console.log(`таблица_v6\tрамка\t${tFr.v}\t150000`);

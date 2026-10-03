@@ -78,8 +78,6 @@ entry:
 	jp	z, do_tank
 	cp	MODE_CROSS
 	jp	z, do_cross
-	cp	MODE_RING
-	jp	z, do_ring
 	cp	MODE_CLEAR
 	jp	z, do_clear
 	cp	MODE_BARREL
@@ -301,8 +299,6 @@ do_bench:
 	jp	z, bench_tank
 	cp	KIND_CROSS
 	jp	z, bench_cross
-	cp	KIND_RING
-	jp	z, bench_ring
 	cp	KIND_DISC
 	jp	z, bench_disc
 	cp	KIND_CLEAR
@@ -451,42 +447,7 @@ dc_lp:
 	call	draw_cross
 	jp	dc_lp
 
-do_ring:
-	ld	hl, (PARAM_COUNT)
-	ld	(left), hl
-	ld	hl, LIST
-	ld	(list_ptr), hl
-drg_lp:
-	ld	hl, (left)
-	ld	a, h
-	or	l
-	jp	z, done
-	dec	hl
-	ld	(left), hl
-	ld	hl, (list_ptr)
-	ld	a, (hl)
-	ld	(ring_cx), a
-	inc	hl
-	ld	a, (hl)
-	ld	(ring_cx + 1), a
-	inc	hl
-	ld	a, (hl)
-	ld	(ring_cy), a
-	inc	hl
-	ld	a, (hl)
-	ld	(ring_cy + 1), a
-	inc	hl
-	ld	a, (hl)
-	ld	(ring_r), a
-	inc	hl
-	ld	a, (hl)
-	ld	(ring_c), a
-	inc	hl
-	ld	(list_ptr), hl
-	call	ring
-	jp	drg_lp
-
-; список: x, y (экран), r, c — по 4 байта
+; список: x (слово), y (слово) — экран, r, c, el, er — по 8 байт
 do_disc:
 	ld	hl, (PARAM_COUNT)
 	ld	(left), hl
@@ -500,31 +461,34 @@ ddk_lp:
 	dec	hl
 	ld	(left), hl
 	ld	hl, (list_ptr)
+	ld	de, dk_x
+	ld	b, 8
+ddk_cp:
 	ld	a, (hl)
-	ld	(dk_x), a
+	ld	(de), a
 	inc	hl
-	ld	a, (hl)
-	ld	(dk_y), a
-	inc	hl
-	ld	a, (hl)
-	ld	(dk_r), a
-	inc	hl
-	ld	a, (hl)
-	ld	(dk_c), a
-	inc	hl
+	inc	de
+	dec	b
+	jp	nz, ddk_cp
 	ld	(list_ptr), hl
 	call	disc
 	jp	ddk_lp
 
 bench_disc:
 	ld	a, (PARAM_X)
-	ld	(dk_x), a
+	ld	l, a
+	ld	h, 0
+	ld	(dk_x), hl
 	ld	a, (PARAM_Y)
-	ld	(dk_y), a
+	ld	l, a
+	ld	(dk_y), hl
 	ld	a, (PARAM_X2)
 	ld	(dk_r), a
 	ld	a, (PARAM_C)
 	ld	(dk_c), a
+	ld	a, 1
+	ld	(dk_el), a
+	ld	(dk_er), a
 bench_disc_call:
 	call	disc
 bench_disc_ret:
@@ -571,24 +535,6 @@ bench_cross:
 bench_cross_call:
 	call	draw_cross
 bench_cross_ret:
-	jp	done
-
-bench_ring:
-	ld	a, (PARAM_X)
-	ld	(ring_cx), a
-	xor	a
-	ld	(ring_cx + 1), a
-	ld	a, (PARAM_Y)
-	ld	(ring_cy), a
-	xor	a
-	ld	(ring_cy + 1), a
-	ld	a, (PARAM_X2)
-	ld	(ring_r), a
-	ld	a, (PARAM_C)
-	ld	(ring_c), a
-bench_ring_call:
-	call	ring
-bench_ring_ret:
 	jp	done
 
 bench_clear:
@@ -831,7 +777,6 @@ kernel_start:
 	include	"frame.asm"
 	include	"sprite.asm"
 	include	"fill.asm"
-	include	"ring.asm"
 	include	"disc.asm"
 	include	"barrel.asm"
 	include	"text.asm"
@@ -855,7 +800,6 @@ rom_end:
 	display	"draw_frame=", /h, draw_frame, "-", /h, draw_frame_end, " bytes ", /d, draw_frame_end - draw_frame
 	display	"draw_tank=", /h, draw_tank, "-", /h, draw_tank_end, " bytes ", /d, draw_tank_end - draw_tank
 	display	"fill_screen=", /h, fill_screen, "-", /h, fill_screen_end, " bytes ", /d, fill_screen_end - fill_screen
-	display	"ring=", /h, ring, "-", /h, ring_end, " bytes ", /d, ring_end - ring
 	display	"draw_tank_barrel=", /h, draw_tank_barrel, "-", /h, draw_tank_barrel_end, " bytes ", /d, draw_tank_barrel_end - draw_tank_barrel
 	display	"draw_char=", /h, draw_char, "-", /h, draw_char_end, " bytes ", /d, draw_char_end - draw_char
 	display	"crumble=", /h, crumble, "-", /h, crumble_end, " bytes ", /d, crumble_end - crumble
