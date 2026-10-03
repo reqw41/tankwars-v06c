@@ -39,6 +39,7 @@ MODE_DISC	equ	17
 MODE_SHOW	equ	18
 MODE_TERRAIN	equ	19
 MODE_FX		equ	20
+MODE_PLACE	equ	21
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -103,6 +104,8 @@ entry:
 	jp	z, do_terrain
 	cp	MODE_FX
 	jp	z, do_fx
+	cp	MODE_PLACE
+	jp	z, do_place
 	jp	done
 done:
 	halt
@@ -795,6 +798,29 @@ dfx_out:
 	jp	dfx_lp
 fx_op:	db	0
 
+; начало раунда без стен и ветра: очистка, рамка, рельеф, отрисовка рельефа, расстановка.
+; PARAM_SEED -> rand_seed, PARAM_KIND = число игроков, PARAM_C = стены отражают (0/1); seed пишется обратно.
+do_place:
+	ld	hl, PARAM_SEED
+	ld	de, rand_seed
+	ld	b, 4
+	call	copy_b
+	call	clear_screen
+	ld	a, 1
+	call	draw_frame		; как drawBackground(0): две рамки без нижней линии земли
+	ld	a, (PARAM_KIND)
+	call	gen_terrain
+	call	render_terrain
+	ld	a, (PARAM_C)
+	ld	(pl_rebound), a
+	ld	a, (PARAM_KIND)
+	call	place_tanks
+	ld	hl, rand_seed
+	ld	de, PARAM_SEED
+	ld	b, 4
+	call	copy_b
+	jp	done
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -907,6 +933,7 @@ kernel_start:
 	include	"fill.asm"
 	include	"disc.asm"
 	include	"terrain.asm"
+	include	"place.asm"
 	include	"fx.asm"
 	include	"barrel.asm"
 	include	"text.asm"
