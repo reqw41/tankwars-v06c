@@ -1,4 +1,4 @@
-; Обычный взрыв — explode() эталона web/tankwars.js (PROFILE_V06C): оружие 1, 2, 3, 4, 11.
+; Обычный взрыв — explode() эталона web/tankwars.js (PROFILE_V06C): оружие 1, 2, 3, 4, 11; шар грязи 13..16 — dirtBall().
 ; Вход: ex_x, ex_y (Q16.16, точка остановки снаряда), ex_hit (цвет попадания), ex_shooter (место стрелка 1..n,
 ;       0 — «ничей» взрыв при гибели), ex_weapon; записи игроков — players, n_players.
 ; Что делает: огонь и воронка закрашенным кругом; прямое попадание в танк — 200; каждому живому игроку урон по
@@ -6,6 +6,35 @@
 ; если d < 0.7r: + 150. Урон снимается со щита, остаток — со здоровья, стрелку за остаток по 10 очков.
 
 explode:
+	ld	a, (ex_weapon)
+	cp	13
+	jp	c, ex_norm
+	cp	17
+	jp	nc, ex_norm
+	; грязь 13..16 — dirtBall() эталона: круг земли того же радиуса, что у оружия 1..4, урона нет
+	sub	13
+	ld	e, a
+	ld	d, 0
+	ld	hl, ex_dirt
+	add	hl, de
+	ld	a, (hl)
+	ld	(dk_r), a
+	ld	hl, ex_x
+	ld	de, -3
+	call	ex_ctr
+	ld	(dk_x), hl
+	ld	hl, ex_y
+	ld	de, -27
+	call	ex_ctr
+	ld	(dk_y), hl
+	ld	a, 1
+	ld	(dk_el), a
+	ld	(dk_er), a
+	ld	(dk_c), a
+	jp	disc
+ex_dirt:
+	db	10, 15, 30, 60
+ex_norm:
 	ld	a, (ex_weapon)
 	ld	hl, ex_rtab
 	ld	c, 0
