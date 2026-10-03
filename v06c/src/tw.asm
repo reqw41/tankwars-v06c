@@ -47,6 +47,7 @@ MODE_EXPLODE	equ	25
 MODE_AFTER	equ	26
 MODE_ACTION	equ	27
 MODE_DEATH	equ	28
+MODE_SHOP	equ	29
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -127,6 +128,8 @@ entry:
 	jp	z, do_action
 	cp	MODE_DEATH
 	jp	z, do_death
+	cp	MODE_SHOP
+	jp	z, do_shop_ai
 	jp	done
 done:
 	halt
@@ -1058,6 +1061,31 @@ do_death:
 	call	copy_b
 	jp	done
 
+; магазин ИИ: LIST = записи игроков; PARAM_N = число игроков; ai_shop вызывается для каждого места 1..n по порядку.
+do_shop_ai:
+	ld	a, (PARAM_N)
+	ld	(n_players), a
+	ld	hl, LIST
+	ld	de, players
+	call	dm_copy
+	ld	a, 1
+dsa_lp:
+	ld	(dsa_i), a
+	call	ai_shop
+	ld	a, (n_players)
+	ld	b, a
+	ld	a, (dsa_i)
+	cp	b
+	jp	z, dsa_end
+	inc	a
+	jp	dsa_lp
+dsa_end:
+	ld	hl, players
+	ld	de, LIST
+	call	dm_copy
+	jp	done
+dsa_i:	db	0
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -1180,6 +1208,7 @@ kernel_start:
 	include	"after.asm"
 	include	"action.asm"
 	include	"death.asm"
+	include	"shop.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"
