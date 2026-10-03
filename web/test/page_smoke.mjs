@@ -32,9 +32,10 @@ document.getElementById('nplayers').value = String(kinds.length);
 document.getElementById('b-new').onclick();
 const t0 = Date.now();
 const E = (id) => document.getElementById(id);
-let shots = 0;
+let shots = 0, aborted = 0;
 while (!/Итог матча/.test(E('sheet').innerHTML)) {
   await new Promise((r) => setTimeout(r, 5));
+  if (process.env.TW_ABORT && !E('b-lot').disabled && aborted < 3 && shots >= 2 * (aborted + 1)) { E(aborted % 2 ? 'b-draw' : 'b-lot').onclick(); aborted++; }
   // «человек»: пара нажатий и огонь; на листах результатов и магазина — «дальше»/«готово»
   if (!E('b-fire').disabled && E('turn').textContent.startsWith('Игрок')) { E('b-al').onclick(); E('b-pu').onclick(); E('b-p100').onclick(); E('b-fire').onclick(); shots++; }
   for (const id of ['b-next', 'b-done']) { const b = E(id); if (b.onclick && new RegExp(`id="${id}"`).test(E('sheet').innerHTML)) { const f = b.onclick; b.onclick = null; f(); } } if (Date.now() - t0 > 120000) { console.log('ТАЙМАУТ'); process.exit(1); } }

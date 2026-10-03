@@ -141,6 +141,11 @@ figcaption { font-size: 12px; color: var(--muted); }
           <button id="b-pu" title="Мощность +1 (↑)">+ мощн.</button>
           <button class="fire" id="b-fire">Огонь (пробел)</button>
         </div>
+        <div class="row">
+          <span class="label">Прервать раунд:</span>
+          <button id="b-draw" title="Раунд без победителя">ничья</button>
+          <button id="b-lot" title="Победа случайному из живых">победа по жребию</button>
+        </div>
         <div class="players" id="players"></div>
         <div class="log" id="log"></div>
         <div class="keys"><kbd>←</kbd><kbd>→</kbd> угол, <kbd>↑</kbd><kbd>↓</kbd> мощность, <kbd>PgUp</kbd><kbd>PgDn</kbd> ±100, <kbd>Tab</kbd> или <kbd>W</kbd> оружие, <kbd>I</kbd> разворот, <kbd>H</kbd><kbd>V</kbd> наведение, <kbd>Пробел</kbd> огонь — как в оригинале</div>
@@ -300,6 +305,7 @@ function hud() {
     <i style="background:${css(t)}"></i><span>${esc(t.name)}${t.ctrl === 3 ? '' : ' (вы)'}</span><b>${Math.max(t.men, 0)} · ${t.score} оч. · ${t.wins} поб.</b>
     <div class="bar"><span style="width:${Math.max(0, Math.min(100, t.men))}%"></span></div></div>`).join('');
   for (const id of ['b-al', 'b-ar', 'b-flip', 'b-pd', 'b-pu', 'b-p100', 'b-fire']) $(id).disabled = !hum;
+  for (const id of ['b-draw', 'b-lot']) $(id).disabled = !(G.phase === 'turn' || G.phase === 'busy');
 }
 
 function useProfile() {
@@ -458,6 +464,15 @@ $('b-pd').onclick = () => act(3); $('b-pu').onclick = () => act(4);
 const bigPower = (d) => { if (humanTurn()) { curP().power += d > 0 ? 99 : -99; act(d > 0 ? 4 : 3); } };       // PgUp/PgDn: ±99 и код 4/3
 $('b-p100').onclick = () => bigPower(1);
 $('b-fire').onclick = () => act(5);
+function abort(random) {
+  if (G.phase !== 'turn' && G.phase !== 'busy') return;
+  const gen = ++G.gen;                                                // остановить текущий ход и анимацию
+  clearOvl();
+  const w = TW.abortRound(G.rng, G.ps, random);
+  log(`Раунд ${G.round} прерван: ${w ? 'жребий выбрал ' + w.name : 'ничья'}`);
+  endRound(gen, w);
+}
+$('b-draw').onclick = () => abort(false); $('b-lot').onclick = () => abort(true);
 $('b-new').onclick = startMatch;
 $('b-rnd').onclick = () => { $('seed').value = (Math.random() * 2 ** 32) >>> 0; startMatch(); };
 document.addEventListener('keydown', (e) => {

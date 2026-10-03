@@ -1577,6 +1577,15 @@ export function autoSwitchWeapon(p) {                                 // 2583:27
   if (p.ammo[p.weapon] !== 0) return;
   for (let g = 0; g < 40; g++) { p.weapon = p.weapon >= 17 ? 0 : p.weapon + 1; if (p.ammo[p.weapon] > 0) break; }
 }
+// Прерывание раунда по желанию игроков (в оригинале такого нет; решение для Вектора, docs/spec/v06c.md).
+// random = false — ничья: победителя нет, случайные числа не тратятся.
+// random = true  — победа случайному из живых: Random(число живых), счёт по порядку мест.
+// Дальше раунд завершается как обычно: бонус победителю (если он есть), результаты, магазин.
+export function abortRound(rng, ps, random) {
+  if (!random) return null;
+  const alive = ps.filter((t) => t.alive);
+  return alive.length ? alive[rng.word(alive.length)] : null;
+}
 export function playRound(rng, ps, cfg, maxTurns = 5000) {
   const r = roundStart(rng, ps, cfg.walls, cfg.bg, cfg.windMode);
   const fl = { rebound: r.rebound, crumble: cfg.crumble, fall: cfg.fall, xkill: cfg.xkill, sound: cfg.sound, wind: r.wind, ballVisible: cfg.ballVisible, trail: cfg.trail };
