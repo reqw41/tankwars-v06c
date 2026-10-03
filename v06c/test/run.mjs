@@ -11,9 +11,9 @@ const ROM = path.join(ROOT, 'v06c/build/tw.rom');
 const SYM = path.join(ROOT, 'v06c/build/tw.sym');
 const PARAM = 0x0080, LIST = 0x2000, RESULT = 0x7000;
 const MODE_RANDOM = 1, MODE_PIXELS = 2, MODE_LINES = 3, MODE_BENCH = 4;
-const MODE_ERASELN = 5, MODE_FRAME = 6, MODE_TANK = 7, MODE_CROSS = 8, MODE_RING = 9, MODE_CLEAR = 10, MODE_BARREL = 11;
+const MODE_ERASELN = 5, MODE_FRAME = 6, MODE_TANK = 7, MODE_CROSS = 8, MODE_RING = 9, MODE_CLEAR = 10, MODE_BARREL = 11, MODE_TEXT = 12;
 const KIND_RANDOM = 1, KIND_PIXEL = 2, KIND_LINE = 3;
-const KIND_FRAME = 4, KIND_TANK = 5, KIND_CROSS = 6, KIND_RING = 7, KIND_CLEAR = 8;
+const KIND_FRAME = 4, KIND_TANK = 5, KIND_CROSS = 6, KIND_RING = 7, KIND_CLEAR = 8, KIND_CHAR = 10;
 
 TW.setProfile(TW.PROFILE_V06C);
 const P = TW.PROFILE_V06C;
@@ -387,6 +387,39 @@ function testBarrel() {
   console.log(`OK  танк со стволом: ${n}, экран совпал`);
 }
 
+function testText() {
+  const gen = new LCG(0x7E87);
+  const strs = [];
+  const add = (col, row, color, s) => strs.push({ col, row, color, s });
+  add(0, 0, 2, '');
+  add(0, 1, 2, 'A');
+  add(0, 2, 2, '????????????????????????????????'); // 32
+  add(0, 3, 2, 'hello'); // lower → upper
+  add(0, 4, 4, 'PLAYER 1');
+  add(31, 31, 2, 'Z');
+  add(-1, 0, 2, 'X'); // skipped by both
+  while (strs.length < 200) {
+    const n = gen.below(33);
+    let s = '';
+    for (let i = 0; i < n; i++) s += String.fromCharCode(32 + gen.below(64));
+    add(gen.below(40) - 4, gen.below(36) - 2, 1 + gen.below(7), s);
+  }
+  const chunks = [];
+  const v = new Uint8Array(P.W * P.H);
+  for (const t of strs) {
+    chunks.push(t.col & 255, t.row & 255, t.color, t.s.length);
+    for (let i = 0; i < t.s.length; i++) chunks.push(t.s.charCodeAt(i) & 255);
+    TW.drawText(v, t.col, t.row, t.s, t.color);
+  }
+  const extra = new Uint8Array(15);
+  extra[1] = strs.length & 255; extra[2] = strs.length >> 8;
+  const r = runMode(MODE_TEXT, extra, Uint8Array.from(chunks));
+  const got = planesToScreen(r.mem);
+  const d = firstPixelDiff(got, v);
+  if (d) fail(`текст (${d.x},${d.y}) emu=${d.got} oracle=${d.exp}`);
+  console.log(`OK  знак/строка: ${strs.length}, экран совпал`);
+}
+
 function pokeBench(kind, fields) {
   boot();
   const b = new Uint8Array(16);
@@ -445,6 +478,7 @@ testCross();
 testRing();
 testClear();
 testBarrel();
+testText();
 console.log('--- замер ---');
 const sz = sizes(L);
 const tRandom = bench('Random(n=100)', L.random, L.bench_random_ret, KIND_RANDOM, { seed: 1, n: 100 });
@@ -458,6 +492,7 @@ const tTk = bench('танк (128,128,4)', L.draw_tank, L.bench_tank_ret, KIND_TA
 const tCr = bench('крестик (100,100,3)', L.draw_cross, L.bench_cross_ret, KIND_CROSS, { x: 100, y: 100, c: 3 });
 const tRg = bench('кольцо r=30', L.ring, L.bench_ring_ret, KIND_RING, { x: 125, y: 113, x2: 30, c: 3 });
 const tCl = bench('очистка экрана', L.clear_screen, L.bench_clear_ret, KIND_CLEAR, {});
+const tCh = bench('знак A', L.draw_char, L.bench_char_ret, KIND_CHAR, {});
 console.log('--- таблица ---');
 console.log(`подпрограмма\tбайт\tтакты_cpu\tvcycles`);
 const row = (name, b, t) => console.log(`${name}\t${b}\t${t.cpu}\t${t.v}`);
@@ -470,5 +505,6 @@ row('танк', L.draw_tank_end - L.draw_tank, tTk);
 row('крестик', L.draw_cross_end - L.draw_cross, tCr);
 row('кольцо r=30', L.ring_end - L.ring, tRg);
 row('очистка', L.fill_screen_end - L.fill_screen, tCl);
+row('знак A', L.draw_char_end - L.draw_char, tCh);
 console.log(`линия 200 на точку\t\t${(rL200.bodyV / 200).toFixed(1)} vcycles`);
 console.log('OK  сверка с эталоном PROFILE_V06C');

@@ -30,6 +30,7 @@ MODE_CROSS	equ	8
 MODE_RING	equ	9
 MODE_CLEAR	equ	10
 MODE_BARREL	equ	11
+MODE_TEXT	equ	12
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -39,6 +40,7 @@ KIND_CROSS	equ	6
 KIND_RING	equ	7
 KIND_CLEAR	equ	8
 KIND_BARREL	equ	9
+KIND_CHAR	equ	10
 
 PPI_CW		equ	0x00
 PPI_C		equ	0x01
@@ -74,6 +76,8 @@ entry:
 	jp	z, do_clear
 	cp	MODE_BARREL
 	jp	z, do_barrel
+	cp	MODE_TEXT
+	jp	z, do_text
 	jp	done
 done:
 	halt
@@ -285,6 +289,8 @@ do_bench:
 	jp	z, bench_clear
 	cp	KIND_BARREL
 	jp	z, bench_barrel
+	cp	KIND_CHAR
+	jp	z, bench_char
 	jp	done
 
 bench_random:
@@ -587,6 +593,58 @@ bench_barrel_call:
 bench_barrel_ret:
 	jp	done
 
+do_text:
+	ld	hl, (PARAM_COUNT)
+	ld	(left), hl
+	ld	hl, LIST
+	ld	(list_ptr), hl
+dtx_lp:
+	ld	hl, (left)
+	ld	a, h
+	or	l
+	jp	z, done
+	dec	hl
+	ld	(left), hl
+	ld	hl, (list_ptr)
+	ld	a, (hl)
+	ld	(ch_col), a
+	inc	hl
+	ld	a, (hl)
+	ld	(ch_row), a
+	inc	hl
+	ld	a, (hl)
+	ld	(ch_c), a
+	inc	hl
+	ld	b, (hl)
+	inc	hl
+	ex	de, hl
+	ld	a, b
+	or	a
+	jp	z, dtx_empty
+	call	draw_text
+	jp	dtx_adv
+dtx_empty:
+	ex	de, hl
+	ld	(list_ptr), hl
+	jp	dtx_lp
+dtx_adv:
+	ex	de, hl
+	ld	(list_ptr), hl
+	jp	dtx_lp
+
+bench_char:
+	xor	a
+	ld	(ch_col), a
+	ld	(ch_row), a
+	ld	a, 'A'
+	ld	(ch), a
+	ld	a, 2
+	ld	(ch_c), a
+bench_char_call:
+	call	draw_char
+bench_char_ret:
+	jp	done
+
 copy_b:
 	ld	a, (hl)
 	ld	(de), a
@@ -604,6 +662,7 @@ copy_b:
 	include	"fill.asm"
 	include	"ring.asm"
 	include	"barrel.asm"
+	include	"text.asm"
 
 list_ptr:	dw	0
 res_ptr:	dw	0
@@ -622,3 +681,4 @@ rom_end:
 	display	"fill_screen=", /h, fill_screen, "-", /h, fill_screen_end, " bytes ", /d, fill_screen_end - fill_screen
 	display	"ring=", /h, ring, "-", /h, ring_end, " bytes ", /d, ring_end - ring
 	display	"draw_tank_barrel=", /h, draw_tank_barrel, "-", /h, draw_tank_barrel_end, " bytes ", /d, draw_tank_barrel_end - draw_tank_barrel
+	display	"draw_char=", /h, draw_char, "-", /h, draw_char_end, " bytes ", /d, draw_char_end - draw_char
