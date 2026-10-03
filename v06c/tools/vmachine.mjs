@@ -19,7 +19,7 @@ export function createVector(romPath) {
     floppy = new (ctx.Floppy().FD1793)(), io = new ctx.IO(keyboard, timer, memory, ay, floppy), cpu = new ctx.I8080(memory, io);
   const v06c = new ctx.Vector06c(cpu, memory, io, ay, { advance() {}, sample: 0, reset() {} });
   v06c.bmp = new Uint32Array(576 * 288); v06c.displayFrame = () => {}; v06c.check_breakpoint = () => false; v06c.dbg = null;
-  const rom = new Uint8Array(fs.readFileSync(romPath));
+  const rom = typeof romPath === 'string' ? new Uint8Array(fs.readFileSync(romPath)) : romPath;      // путь или готовый образ
   const img = new Uint8Array(0x10000); img.set(rom, 0x100);
   memory.init_from_array(img, 0); memory.detach_boot && memory.detach_boot();
   cpu.pc = 0x100; cpu.sp = 0xA000; cpu.iff = false;

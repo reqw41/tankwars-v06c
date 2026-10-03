@@ -13,21 +13,26 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const json = (p) => JSON.parse(fs.readFileSync(path.join(ROOT, p), 'utf8'));
 TW.init({ barrel: json('web/data/barrel.json'), trig: json('web/data/trig.json') });
 TW.setProfile(TW.PROFILE_V06C);
-const L = parseSym(path.join(ROOT, 'v06c/build/game.sym'));
-const ROM = path.join(ROOT, 'v06c/build/game.rom');
-const M = +process.argv[2] || 6, PNG = process.argv[3];
+const BUILD = process.env.BUILD || 'v06c/build';      // BUILD=work/snap — прогон на снимке сборки
+const L = parseSym(path.join(ROOT, BUILD, 'game.sym'));
+const ROM = new Uint8Array(fs.readFileSync(path.join(ROOT, BUILD, 'game.rom')));     // читаем один раз: пересборка во время прогона не мешает
+// GOLD=номера — матчи компьютеров из tests/fixtures/v06c/golden.json (те же игроки, начальные числа, 4 раунда)
+const GOLD = process.env.GOLD ? json('tests/fixtures/v06c/golden.json') : null, GOLD_IDS = (process.env.GOLD || '').split(',').map(Number);
+const GOLD_NAMES = ['Lobber', 'Rifleman', 'Twanger', 'Windless Wit', 'Mr. Stupid', 'Lob & Shoot'];
+const M = GOLD ? GOLD_IDS.length : +process.argv[2] || 6, PNG = process.argv[3];
 const KEY = { 1: [0, 0x10], 2: [0, 0x40], 3: [0, 0x80], 4: [0, 0x20], 5: [7, 0x80], 6: [5, 0x02], 7: [6, 0x02], 8: [6, 0x80], 11: [1, 0x04], 12: [1, 0x02] };
-const PH = { title: 0, input: 1, busy: 2, results: 3, ready: 4 };
+const PH = { title: 0, input: 1, busy: 2, results: 3, ready: 4, shop: 5 };
 const AI = [null, 'Mr. Stupid', 'Lobber', 'Rifleman', 'Lob & Shoot', 'Windless Wit', 'Twanger', 'Birdy Bonker'];
 const KINDS = (process.env.KINDS || '0,2,3,4,5,6').split(',').map(Number);
 const master = new TW.TPRandom(27182);
 const u32 = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
-let aiTurns = 0, turns = 0, rounds = 0, keys = 0, frames = 0, worst = 0, panelChecked = 0;
+let shopChecked = 0, goldRounds = 0, aiTurns = 0, turns = 0, rounds = 0, keys = 0, frames = 0, worst = 0, panelChecked = 0;
 
 function fail(msg) { console.error('FAIL ' + msg); process.exit(1); }
 for (let mi = 0; mi < M; mi++) {
-  const n = 2 + master.word(3), seed = master._next(), nRounds = 2;
-  const types = Array.from({ length: n }, () => (mi === 0 ? 0 : KINDS[master.word(KINDS.length)]));     // первый матч — одни люди
+  const gold = GOLD ? (GOLD.matches || GOLD.cases || GOLD)[GOLD_IDS[mi]] : null;
+  const n = gold ? gold.players : 2 + master.word(3), seed = gold ? gold.seed >>> 0 : master._next(), nRounds = gold ? gold.rounds.length : 2;
+  const types = Array.from({ length: n }, (_, i) => (gold ? AI.indexOf(GOLD_NAMES[(i + gold.seed) % GOLD_NAMES.length]) : mi === 0 ? 0 : KINDS[master.word(KINDS.length)]));     // первый матч — одни люди
   const m = createVector(ROM);
   m.wr(L.g_n, [n]); m.wr(L.g_rounds, [nRounds]); m.wr(L.g_seed, u32(seed)); m.wr(L.g_fixed, [1]); m.wr(L.g_types, types); m.wr(L.g_step, [1]);
   const phase = () => m.rd(L.g_phase);
@@ -37,7 +42,7 @@ for (let mi = 0; mi < M; mi++) {
     m.key(row, bit, true);
     for (let f = 0; m.rd(L.kb_taken) === t0; f++) { if (f > 200) fail(`${tag}: нажатие ${code} не принято`); m.frame(); }
     m.key(row, bit, false);
-    for (let f = 0; ; f++) { m.frame(); if (m.rd(L.gk_last) === 0 && (phase() === PH.input || phase() === PH.results || phase() === PH.ready)) break; if (f > 6000) fail(`${tag}: игра не вернулась к вводу`); }
+    for (let f = 0; ; f++) { m.frame(); if (m.rd(L.gk_last) === 0 && [PH.input, PH.results, PH.ready, PH.shop].includes(phase())) break; if (f > 6000) fail(`${tag}: игра не вернулась к вводу`); }
     keys++; return m.frames - f0;
   }
   function check(tag, ps, rng, v, panel) {
@@ -79,7 +84,7 @@ for (let mi = 0; mi < M; mi++) {
         TW.computerTurn(v, bg, ps, p, rng, fl.rebound);
         if (phase() !== PH.ready) fail(`${tag}: компьютер не готов к выстрелу (фаза ${phase()})`);
         check(tag + ' перед выстрелом', ps, rng, v, (w) => TW.drawPanel(w, p, fl.wind));
-        if (t > 60) { const c0 = master.word(2) ? 11 : 12; press(c0, tag); if (c0 === 12) winner = TW.abortRound(rng, ps, true); over = true; break; }
+        if (t > 60 && !gold) { const c0 = master.word(2) ? 11 : 12; press(c0, tag); if (c0 === 12) winner = TW.abortRound(rng, ps, true); over = true; break; }
         shot();
         const f = press(5, tag); frames += f; worst = Math.max(worst, f); turns++; aiTurns++;
         const alive = ps.filter((q) => q.alive);
@@ -117,6 +122,8 @@ for (let mi = 0; mi < M; mi++) {
     }
     if (winner) TW.winnerBonus(winner, n);
     TW.results(rng, ps, allAi);
+    if (gold) { const g = gold.rounds[round - 1], mine = ps.map((q) => [q.name, q.score, q.wins, q.ammo.join('.')].join(':')).join('|');
+      if (g.seed !== rng.seed || g.players !== mine) fail(`золотой матч ${GOLD_IDS[mi]} раунд ${round}: эталонный цикл теста разошёлся с golden.json`); goldRounds++; }
     const tag = `матч ${mi} (игроки ${types.map((k) => AI[k] || 'человек').join(', ')}; seed 0x${seed.toString(16)}) раунд ${round}: результаты`;
     if (phase() !== PH.results) fail(`${tag}: нет экрана результатов (фаза ${phase()})`);
     const res = new Uint8Array(65536); TW.drawResults(res, ps, round, nRounds);
@@ -125,8 +132,47 @@ for (let mi = 0; mi < M; mi++) {
       if (any) { for (let k = 0; k < 65536; k++) if (g[k] !== res[k]) fail(`${tag}: экран: (${k & 255},${k >> 8}) 8080=${g[k]} эталон=${res[k]}`); panelChecked++; } }
     rounds++;
     if (PNG && mi === 0 && round === 1) savePng(m.bmp(), PNG);
-    if (round < nRounds) { for (const q of ps) if (q.ctrl === 3) TW.aiShop(q, q.strategy); press(5, tag); }
+    if (round < nRounds) {
+      press(5, tag);
+      for (const q of ps) {                                   // магазин по порядку мест
+        if (q.ctrl === 3) { TW.aiShop(q, q.strategy); continue; }
+        if (q.score - q.spent < TW.MIN_PRICE) continue;
+        const stag = `${tag}: магазин ${q.name}`;
+        let menu, qty, cart, sel;
+        const reset = () => { menu = TW.shopMenu(q); qty = menu.map(() => 0); cart = 0; sel = 0; };
+        const look = () => {
+          if (phase() !== PH.shop) fail(`${stag}: игра не в магазине (фаза ${phase()})`);
+          if (m.rd(L.hs_sel) !== sel) fail(`${stag}: строка 8080=${m.rd(L.hs_sel)} эталон=${sel}`);
+          { const cnt = m.rd(L.sh_count), cat = [], num = [], qq = []; for (let k = 0; k < cnt; k++) { cat.push(m.rd(L.sh_cat + k)); num.push(m.rd(L.sh_num + k)); qq.push(m.rd(L.sh_qty + k)); }
+            const mine = cat.map((c, k) => c + ':' + num[k] + 'x' + qq[k]).join(' '), ref = menu.map(([c, i], k) => c + ':' + i + 'x' + qty[k]).join(' ');
+            const cart8 = m.rd(L.sh_cart) | (m.rd(L.sh_cart + 1) << 8) | (m.rd(L.sh_cart + 2) << 16);
+            if (mine !== ref || cart8 !== cart) fail(`${stag}: меню 8080=[${mine}] корзина ${cart8}; эталон=[${ref}] корзина ${cart}; деньги ${q.score - q.spent}`); }
+          if (L.shopui_end - L.show_shop < 4) return;         // экран магазина ещё заглушка
+          const want = new Uint8Array(65536); TW.drawShop(want, q, menu, qty, cart, sel);
+          const g = planesToScreen(m.mem()); for (let k = 0; k < 65536; k++) if (g[k] !== want[k]) fail(`${stag}: экран: (${k & 255},${k >> 8}) 8080=${g[k]} эталон=${want[k]}`);
+          shopChecked++;
+        };
+        const key = (c) => {
+          const rows = menu.length + 2;
+          if (c === 3) sel = (sel + 1) % rows; else if (c === 4) sel = (sel + rows - 1) % rows;
+          else if (sel < menu.length) { const [cat, i] = menu[sel], price = TW.SHOP_PRICE[cat][i];
+            if (c === 1) { if (qty[sel] > 0) { qty[sel]--; cart -= price; } } else if (qty[sel] < 9 && price <= q.score - q.spent - cart) { qty[sel]++; cart += price; } }
+          else if (c === 5) { TW.shopCommit(q, menu, qty); if (sel === menu.length) reset(); else sel = -9; }
+          press(c, stag);
+        };
+        if (process.env.DBG) console.log(stag, 'деньги', q.score - q.spent, 'порядок', ps.map((z) => z.name + ':' + (z.score - z.spent)).join(' | '));
+        reset(); look();
+        for (let a = 0; a < 2 + master.word(5) && sel !== -9; a++) {
+          for (let k = master.word(menu.length + 3); k > 0; k--) key(master.word(4) ? 3 : 4);
+          look();
+          for (let k = 1 + master.word(4); k > 0 && sel !== -9; k--) key([2, 2, 5, 1][master.word(4)]);
+          if (sel !== -9) look();
+        }
+        while (sel !== -9) { if (sel === menu.length + 1) key(5); else key(3); }
+        if (process.env.DBG) console.log('  магазин закрыт: фаза', phase(), 'hs_place', m.rd(L.hs_place), 'hs_sel', m.rd(L.hs_sel), 'sh_count', m.rd(L.sh_count));
+      }
+    }
   }
 }
-console.log(`OK  игра с клавиатуры: матчей ${M}, раундов ${rounds}, ходов ${turns} (компьютера ${aiTurns}), нажатий ${keys} — записи, RandSeed и экран совпали` +
-  ` (панель и результаты сверены ${panelChecked} раз); ход в среднем ${(frames / Math.max(1, turns) / 50).toFixed(1)} с, худший ${(worst / 50).toFixed(1)} с`);
+console.log(`OK  игра${GOLD ? ' (золотые матчи ' + GOLD_IDS.join(',') + ', раундов сверено с golden.json: ' + goldRounds + ')' : ' с клавиатуры'}: матчей ${M}, раундов ${rounds}, ходов ${turns} (компьютера ${aiTurns}), нажатий ${keys} — записи, RandSeed и экран совпали` +
+  ` (панель и результаты сверены ${panelChecked} раз, экран магазина ${shopChecked}); ход в среднем ${(frames / Math.max(1, turns) / 50).toFixed(1)} с, худший ${(worst / 50).toFixed(1)} с`);

@@ -894,10 +894,10 @@ sh_have16_herb:
 	ld	hl, (sh_pp)
 	ld	de, PL_HERB
 	add	hl, de
-	ld	a, (hl)
-	ld	l, a
+	ld	e, (hl)
 	inc	hl
-	ld	h, (hl)			; HL = herb
+	ld	h, (hl)
+	ld	l, e			; (раньше L портился до чтения старшего байта)			; HL = herb
 	ld	a, h
 	or	a
 	jp	m, sh_h16_le0
@@ -910,10 +910,10 @@ sh_have16_vick:
 	ld	hl, (sh_pp)
 	ld	de, PL_VICK
 	add	hl, de
-	ld	a, (hl)
-	ld	l, a
+	ld	e, (hl)
 	inc	hl
 	ld	h, (hl)
+	ld	l, e			; (раньше L портился до чтения старшего байта)
 	ld	a, h
 	or	a
 	jp	m, sh_h16_le0
@@ -950,6 +950,7 @@ sh_h32_chk:
 	or	a
 	jp	m, sh_h16_le0		; отрицательное — «<= 0»
 	ld	a, (sh_tmpa)
+	or	a			; (раньше флаг Z оставался от старшего байта)
 	ret
 
 sh_ret:

@@ -17,6 +17,7 @@ PH_INPUT	equ	1
 PH_BUSY		equ	2
 PH_RESULTS	equ	3
 PH_READY	equ	4
+PH_SHOP		equ	5
 
 K_ABORT		equ	11
 K_ABORT_RND	equ	12
@@ -235,20 +236,25 @@ gm_end:
 	ld	a, (g_round)
 	cp	b
 	jp	nc, gm_match
-	; магазин: компьютеры закупаются сами (магазин человека — дальше по плану)
+	; магазин: по порядку мест; компьютеры закупаются сами
 	ld	a, 1
 gm_shop:
-	ld	(gm_i), a
+	ld	(gm_sh), a
 	call	dt_ptr
 	ld	de, PL_CTRL
 	add	hl, de
 	ld	a, (hl)
 	cp	3
-	ld	a, (gm_i)
-	call	z, ai_shop
+	ld	a, (gm_sh)
+	jp	nz, gm_sh_h
+	call	ai_shop
+	jp	gm_sh_n
+gm_sh_h:
+	call	human_shop
+gm_sh_n:
 	ld	a, (n_players)
 	ld	b, a
-	ld	a, (gm_i)
+	ld	a, (gm_sh)
 	cp	b
 	jp	z, gm_round
 	inc	a
@@ -702,6 +708,7 @@ gk_tmr:		db	0
 gk_rep:		db	0
 gm_code:	db	0
 gm_i:		db	0
+gm_sh:		db	0
 gm_k:		db	0
 gm_p:		dw	0
 
@@ -734,6 +741,7 @@ gm_p:		dw	0
 	include	"aimain.asm"
 	include	"shop.asm"
 	include	"shopui.asm"
+	include	"hshop.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"
