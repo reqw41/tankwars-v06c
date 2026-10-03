@@ -820,7 +820,7 @@ export function tankRGB(p) { if (p.men < 0) return [0, 0, 0]; const L = trunc(p.
 // ---------- полёт с отрисовкой мяча и следа (2583:01c0) ----------
 const K12 = real48ToFloat(new Uint8Array([0x81, 0x9a, 0x99, 0x99, 0x99, 0x19]));
 const CROSS = [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0]];
-function cross(v, src, x, y, color = null) {
+export function cross(v, src, x, y, color = null) {
   const b = off16(x, y);
   for (const [dx, dy] of CROSS) { const o = (b + dy * W + dx) & 0xffff; if (o < v.length) v[o] = color !== null ? color : (o < src.length ? src[o] : 0); }
 }
@@ -916,12 +916,12 @@ export function fire(v, bg, ps, shooter, rng, fl, onFrame = null) {
 }
 
 // ---------- гибель танка (оверлей 285c), вариант Random(7) ----------
-function eraseTankBarrel(v, bg, t) { eraseTank(v, bg, t.x, t.y); const [bdx, bdy] = barrelOf(t.angle); line(v, t.x, t.y, t.x + bdx * t.facing, t.y - bdy, 0, bg); }
+export function eraseTankBarrel(v, bg, t) { eraseTank(v, bg, t.x, t.y); const [bdx, bdy] = barrelOf(t.angle); line(v, t.x, t.y, t.x + bdx * t.facing, t.y - bdy, 0, bg); }
 const redrawAll = (v, ts) => { for (const t of ts) drawTankBarrel(v, t); };
 const gpVp = (v, x, y) => { const X = x + P.X0, Y = y + P.Y0; return X >= 0 && X < W && Y >= 0 && Y < H ? v[Y * W + X] : 0; };
 const ppVp = (v, x, y, c) => { const X = x + P.X0, Y = y + P.Y0; if (inVp(X, Y, VIEWPORT)) v[Y * W + X] = c; };
-function replaceColor(v, bg, lo, hi) { for (let o = SCREEN; o > 0; o--) if (o < v.length && v[o] >= lo && v[o] <= hi) v[o] = bg[o]; }
-function replaceTmp(v, bg, lo, hi) { for (let o = SCREEN; o > 0; o--) if (o < v.length && P.isTmp(v[o], lo, hi)) v[o] = bg[o]; }
+export function replaceColor(v, bg, lo, hi) { for (let o = SCREEN; o > 0; o--) if (o < v.length && v[o] >= lo && v[o] <= hi) v[o] = bg[o]; }
+export function replaceTmp(v, bg, lo, hi) { for (let o = SCREEN; o > 0; o--) if (o < v.length && P.isTmp(v[o], lo, hi)) v[o] = bg[o]; }
 const G0 = 0.006999999999997897, VX0 = 0.5, VY0 = 0.10000000000002274;
 const blastK = (n) => (n <= 2 ? 1 : n <= 5 ? 2 : n <= 7 ? 3 : n === 8 ? 4 : 5);
 function deathIntro(rng, sound) { for (let i = 0; i < 54; i++) { if (sound) rng.word(500); rng.word(0xffff); } }
