@@ -23,9 +23,20 @@ MODE_RANDOM	equ	1
 MODE_PIXELS	equ	2
 MODE_LINES	equ	3
 MODE_BENCH	equ	4
+MODE_ERASELN	equ	5
+MODE_FRAME	equ	6
+MODE_TANK	equ	7
+MODE_CROSS	equ	8
+MODE_RING	equ	9
+MODE_CLEAR	equ	10
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
+KIND_FRAME	equ	4
+KIND_TANK	equ	5
+KIND_CROSS	equ	6
+KIND_RING	equ	7
+KIND_CLEAR	equ	8
 
 PPI_CW		equ	0x00
 PPI_C		equ	0x01
@@ -47,6 +58,19 @@ entry:
 	jp	z, do_lines
 	cp	MODE_BENCH
 	jp	z, do_bench
+	cp	MODE_ERASELN
+	jp	z, do_eraseln
+	cp	MODE_FRAME
+	jp	z, do_frame
+	cp	MODE_TANK
+	jp	z, do_tank
+	cp	MODE_CROSS
+	jp	z, do_cross
+	cp	MODE_RING
+	jp	z, do_ring
+	cp	MODE_CLEAR
+	jp	z, do_clear
+	jp	done
 done:
 	halt
 	jp	done
@@ -245,6 +269,16 @@ do_bench:
 	jp	z, bench_pixel
 	cp	KIND_LINE
 	jp	z, bench_line
+	cp	KIND_FRAME
+	jp	z, bench_frame
+	cp	KIND_TANK
+	jp	z, bench_tank
+	cp	KIND_CROSS
+	jp	z, bench_cross
+	cp	KIND_RING
+	jp	z, bench_ring
+	cp	KIND_CLEAR
+	jp	z, bench_clear
 	jp	done
 
 bench_random:
@@ -301,6 +335,188 @@ bench_line_call:
 bench_line_ret:
 	jp	done
 
+do_eraseln:
+	ld	a, 1
+	call	fill_screen
+	jp	do_lines
+
+do_frame:
+	ld	hl, (PARAM_COUNT)
+	ld	(left), hl
+	ld	hl, LIST
+	ld	(list_ptr), hl
+df_lp:
+	ld	hl, (left)
+	ld	a, h
+	or	l
+	jp	z, done
+	dec	hl
+	ld	(left), hl
+	ld	hl, (list_ptr)
+	ld	a, (hl)
+	inc	hl
+	ld	(list_ptr), hl
+	call	draw_frame
+	jp	df_lp
+
+do_tank:
+	ld	hl, (PARAM_COUNT)
+	ld	(left), hl
+	ld	hl, LIST
+	ld	(list_ptr), hl
+dt_lp:
+	ld	hl, (left)
+	ld	a, h
+	or	l
+	jp	z, done
+	dec	hl
+	ld	(left), hl
+	ld	hl, (list_ptr)
+	ld	d, (hl)
+	inc	hl
+	ld	e, (hl)
+	inc	hl
+	ld	a, (hl)
+	inc	hl
+	ld	b, (hl)
+	inc	hl
+	ld	(list_ptr), hl
+	ld	c, a
+	ld	a, b
+	or	a
+	ld	a, c
+	jp	z, dt_draw
+	call	erase_tank
+	jp	dt_lp
+dt_draw:
+	call	draw_tank
+	jp	dt_lp
+
+do_cross:
+	ld	hl, (PARAM_COUNT)
+	ld	(left), hl
+	ld	hl, LIST
+	ld	(list_ptr), hl
+dc_lp:
+	ld	hl, (left)
+	ld	a, h
+	or	l
+	jp	z, done
+	dec	hl
+	ld	(left), hl
+	ld	hl, (list_ptr)
+	ld	d, (hl)
+	inc	hl
+	ld	e, (hl)
+	inc	hl
+	ld	a, (hl)
+	inc	hl
+	ld	(list_ptr), hl
+	call	draw_cross
+	jp	dc_lp
+
+do_ring:
+	ld	hl, (PARAM_COUNT)
+	ld	(left), hl
+	ld	hl, LIST
+	ld	(list_ptr), hl
+drg_lp:
+	ld	hl, (left)
+	ld	a, h
+	or	l
+	jp	z, done
+	dec	hl
+	ld	(left), hl
+	ld	hl, (list_ptr)
+	ld	a, (hl)
+	ld	(ring_cx), a
+	inc	hl
+	ld	a, (hl)
+	ld	(ring_cx + 1), a
+	inc	hl
+	ld	a, (hl)
+	ld	(ring_cy), a
+	inc	hl
+	ld	a, (hl)
+	ld	(ring_cy + 1), a
+	inc	hl
+	ld	a, (hl)
+	ld	(ring_r), a
+	inc	hl
+	ld	a, (hl)
+	ld	(ring_c), a
+	inc	hl
+	ld	(list_ptr), hl
+	call	ring
+	jp	drg_lp
+
+do_clear:
+	ld	a, (PARAM_KIND)
+	or	a
+	jp	z, do_clr_all
+	dec	a
+	jp	z, do_clr_pan
+	jp	done
+do_clr_all:
+	call	clear_screen
+	jp	done
+do_clr_pan:
+	call	clear_panel
+	jp	done
+
+bench_frame:
+	ld	a, (PARAM_C)
+bench_frame_call:
+	call	draw_frame
+bench_frame_ret:
+	jp	done
+
+bench_tank:
+	ld	a, (PARAM_X)
+	ld	d, a
+	ld	a, (PARAM_Y)
+	ld	e, a
+	ld	a, (PARAM_C)
+bench_tank_call:
+	call	draw_tank
+bench_tank_ret:
+	jp	done
+
+bench_cross:
+	ld	a, (PARAM_X)
+	ld	d, a
+	ld	a, (PARAM_Y)
+	ld	e, a
+	ld	a, (PARAM_C)
+bench_cross_call:
+	call	draw_cross
+bench_cross_ret:
+	jp	done
+
+bench_ring:
+	ld	a, (PARAM_X)
+	ld	(ring_cx), a
+	xor	a
+	ld	(ring_cx + 1), a
+	ld	a, (PARAM_Y)
+	ld	(ring_cy), a
+	xor	a
+	ld	(ring_cy + 1), a
+	ld	a, (PARAM_X2)
+	ld	(ring_r), a
+	ld	a, (PARAM_C)
+	ld	(ring_c), a
+bench_ring_call:
+	call	ring
+bench_ring_ret:
+	jp	done
+
+bench_clear:
+bench_clear_call:
+	call	clear_screen
+bench_clear_ret:
+	jp	done
+
 copy_b:
 	ld	a, (hl)
 	ld	(de), a
@@ -313,6 +529,10 @@ copy_b:
 	include	"random.asm"
 	include	"pixel.asm"
 	include	"line.asm"
+	include	"frame.asm"
+	include	"sprite.asm"
+	include	"fill.asm"
+	include	"ring.asm"
 
 list_ptr:	dw	0
 res_ptr:	dw	0
@@ -326,3 +546,7 @@ rom_end:
 	display	"getpixel=", /h, getpixel, "-", /h, getpixel_end, " bytes ", /d, getpixel_end - getpixel
 	display	"pixel=", /h, putpixel, "-", /h, pixel_end, " bytes ", /d, pixel_end - putpixel
 	display	"line=", /h, line, "-", /h, line_end, " bytes ", /d, line_end - line
+	display	"draw_frame=", /h, draw_frame, "-", /h, draw_frame_end, " bytes ", /d, draw_frame_end - draw_frame
+	display	"draw_tank=", /h, draw_tank, "-", /h, draw_tank_end, " bytes ", /d, draw_tank_end - draw_tank
+	display	"fill_screen=", /h, fill_screen, "-", /h, fill_screen_end, " bytes ", /d, fill_screen_end - fill_screen
+	display	"ring=", /h, ring, "-", /h, ring_end, " bytes ", /d, ring_end - ring

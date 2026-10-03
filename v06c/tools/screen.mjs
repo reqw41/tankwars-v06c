@@ -13,6 +13,28 @@ export function pixelLoc(x, y) {
   };
 }
 
+export function screenToPlanes(v, mem) {
+  if (!mem) mem = new Uint8Array(0x10000);
+  for (let y = 0; y < 256; y++) {
+    for (let col = 0; col < 32; col++) {
+      let a = 0, b = 0, c = 0;
+      for (let bit = 0; bit < 8; bit++) {
+        const x = col * 8 + bit;
+        const color = v[y * 256 + x] & 7;
+        const mask = 0x80 >> bit;
+        if (color & 1) a |= mask;
+        if (color & 2) b |= mask;
+        if (color & 4) c |= mask;
+      }
+      const off = col * 256 + (255 - y);
+      mem[0xA000 + off] = a;
+      mem[0xC000 + off] = b;
+      mem[0xE000 + off] = c;
+    }
+  }
+  return mem;
+}
+
 export function planesToScreen(mem) {
   const v = new Uint8Array(256 * 256);
   for (let y = 0; y < 256; y++) {
