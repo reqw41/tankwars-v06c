@@ -28,22 +28,17 @@ pp_sh:
 	jp	nz, pp_sh
 pp_mask:
 	ld	a, b
-	and	7
 	cp	3
 	jp	nz, pp_other
-	; цвет 3: плоскости A и C — 1, E — 0 (замер putpixel(40,50,3))
+	ld	de, 0x2000
 	ld	a, (hl)
 	or	c
 	ld	(hl), a
-	ld	a, h
-	add	a, 0x20
-	ld	h, a
+	add	hl, de
 	ld	a, (hl)
 	or	c
 	ld	(hl), a
-	ld	a, h
-	add	a, 0x20
-	ld	h, a
+	add	hl, de
 	ld	a, c
 	cpl
 	and	(hl)
