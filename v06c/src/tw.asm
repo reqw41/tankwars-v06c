@@ -51,6 +51,7 @@ MODE_SHOP	equ	29
 MODE_TURN	equ	30
 MODE_AISTEP	equ	31
 MODE_HUD		equ	32
+MODE_AIPLAN	equ	33
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -139,6 +140,8 @@ entry:
 	jp	z, do_aistep
 	cp	MODE_HUD
 	jp	z, do_hud
+	cp	MODE_AIPLAN
+	jp	z, do_aiplan
 	jp	done
 done:
 	halt
@@ -1208,6 +1211,49 @@ dhd_res:
 	call	show_results
 	jp	done
 
+; планировщики: LIST = записи игроков; PARAM_N = число игроков; PARAM_C = место; PARAM_KIND: 1 — plan_stupid
+; (PARAM_X = стены отражают), 2 — plan_birdy, 3 — record_shot (RESULT на входе = 4 байта fl_x). PARAM_SEED -> RandSeed и обратно.
+do_aiplan:
+	ld	hl, PARAM_SEED
+	ld	de, rand_seed
+	ld	b, 4
+	call	copy_b
+	ld	a, (PARAM_N)
+	ld	(n_players), a
+	ld	hl, LIST
+	ld	de, players
+	call	dm_copy
+	ld	a, (PARAM_KIND)
+	dec	a
+	jp	z, dap_1
+	dec	a
+	jp	z, dap_2
+	ld	hl, RESULT
+	ld	de, fl_x
+	ld	b, 4
+	call	copy_b
+	ld	a, (PARAM_C)
+	call	record_shot
+	jp	dap_e
+dap_1:
+	ld	a, (PARAM_X)
+	ld	(ap_rebound), a
+	ld	a, (PARAM_C)
+	call	plan_stupid
+	jp	dap_e
+dap_2:
+	ld	a, (PARAM_C)
+	call	plan_birdy
+dap_e:
+	ld	hl, players
+	ld	de, LIST
+	call	dm_copy
+	ld	hl, rand_seed
+	ld	de, PARAM_SEED
+	ld	b, 4
+	call	copy_b
+	jp	done
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -1333,6 +1379,7 @@ kernel_start:
 	include	"turn.asm"
 	include	"aistep.asm"
 	include	"hud.asm"
+	include	"aiplan.asm"
 	include	"shop.asm"
 	include	"barrel.asm"
 	include	"text.asm"
