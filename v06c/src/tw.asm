@@ -31,6 +31,9 @@ MODE_RING	equ	9
 MODE_CLEAR	equ	10
 MODE_BARREL	equ	11
 MODE_TEXT	equ	12
+MODE_CRUMBLE	equ	13
+MODE_REPLACE	equ	14
+MODE_PAL	equ	15
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -78,6 +81,10 @@ entry:
 	jp	z, do_barrel
 	cp	MODE_TEXT
 	jp	z, do_text
+	cp	MODE_CRUMBLE
+	jp	z, do_crumble
+	cp	MODE_REPLACE
+	jp	z, do_replace
 	jp	done
 done:
 	halt
@@ -645,6 +652,14 @@ bench_char_call:
 bench_char_ret:
 	jp	done
 
+do_crumble:
+	call	crumble
+	jp	done
+
+do_replace:
+	call	replace_tmp
+	jp	done
+
 copy_b:
 	ld	a, (hl)
 	ld	(de), a
@@ -663,6 +678,7 @@ copy_b:
 	include	"ring.asm"
 	include	"barrel.asm"
 	include	"text.asm"
+	include	"crumble.asm"
 
 list_ptr:	dw	0
 res_ptr:	dw	0
@@ -682,3 +698,5 @@ rom_end:
 	display	"ring=", /h, ring, "-", /h, ring_end, " bytes ", /d, ring_end - ring
 	display	"draw_tank_barrel=", /h, draw_tank_barrel, "-", /h, draw_tank_barrel_end, " bytes ", /d, draw_tank_barrel_end - draw_tank_barrel
 	display	"draw_char=", /h, draw_char, "-", /h, draw_char_end, " bytes ", /d, draw_char_end - draw_char
+	display	"crumble=", /h, crumble, "-", /h, crumble_end, " bytes ", /d, crumble_end - crumble
+	display	"replace_tmp=", /h, replace_tmp, "-", /h, replace_tmp_end, " bytes ", /d, replace_tmp_end - replace_tmp

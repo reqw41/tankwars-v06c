@@ -11,7 +11,7 @@ const ROM = path.join(ROOT, 'v06c/build/tw.rom');
 const SYM = path.join(ROOT, 'v06c/build/tw.sym');
 const PARAM = 0x0080, LIST = 0x2000, RESULT = 0x7000;
 const MODE_RANDOM = 1, MODE_PIXELS = 2, MODE_LINES = 3, MODE_BENCH = 4;
-const MODE_ERASELN = 5, MODE_FRAME = 6, MODE_TANK = 7, MODE_CROSS = 8, MODE_RING = 9, MODE_CLEAR = 10, MODE_BARREL = 11, MODE_TEXT = 12;
+const MODE_ERASELN = 5, MODE_FRAME = 6, MODE_TANK = 7, MODE_CROSS = 8, MODE_RING = 9, MODE_CLEAR = 10, MODE_BARREL = 11, MODE_TEXT = 12, MODE_CRUMBLE = 13, MODE_REPLACE = 14;
 const KIND_RANDOM = 1, KIND_PIXEL = 2, KIND_LINE = 3;
 const KIND_FRAME = 4, KIND_TANK = 5, KIND_CROSS = 6, KIND_RING = 7, KIND_CLEAR = 8, KIND_CHAR = 10;
 
@@ -420,6 +420,74 @@ function testText() {
   console.log(`OK  знак/строка: ${strs.length}, экран совпал`);
 }
 
+function runOnScreen(mode, v0, extra = new Uint8Array(15)) {
+  boot();
+  poke(machine, 0xA000, screenToPlanes(v0).subarray(0xA000));
+  poke(machine, PARAM, hdr(mode, extra));
+  return runUntil(machine, { haltPc: null, maxInsns: 80_000_000 });
+}
+
+function testCrumble() {
+  const cases = [];
+  const empty = new Uint8Array(65536);
+  cases.push(empty);
+  const full = new Uint8Array(65536).fill(1);
+  cases.push(full);
+  const field = new Uint8Array(65536);
+  TW.drawFrame(field, false);
+  for (let x = 3; x <= 252; x++) {
+    const top = 80 + (x % 40);
+    for (let y = top; y <= 252; y++) field[y * 256 + x] = 1;
+  }
+  TW.ring(field, 125, 113, 30, 0);
+  cases.push(field);
+  const gen = new LCG(0xC8B1);
+  while (cases.length < 200) {
+    const v = new Uint8Array(65536);
+    TW.drawFrame(v, false);
+    for (let x = 3; x <= 252; x++) {
+      const top = 40 + gen.below(160);
+      for (let y = top; y <= 252; y++) v[y * 256 + x] = 1;
+    }
+    if (gen.below(2)) TW.ring(v, 20 + gen.below(200), 40 + gen.below(160), gen.below(40), 0);
+    cases.push(v);
+  }
+  const bg = new Uint8Array(65536);
+  for (let i = 0; i < cases.length; i++) {
+    const v = cases[i].slice();
+    TW.crumbleColumns(v, bg);
+    const r = runOnScreen(MODE_CRUMBLE, cases[i]);
+    const got = planesToScreen(r.mem);
+    const d = firstPixelDiff(got, v);
+    if (d) fail(`осыпание случай #${i} (${d.x},${d.y}) emu=${d.got} oracle=${d.exp}`);
+  }
+  console.log(`OK  осыпание: ${cases.length} (пустой, сплошной, воронка r=30, случайные)`);
+}
+
+function testReplace() {
+  const gen = new LCG(0x3E3);
+  const cases = [];
+  const a = new Uint8Array(65536);
+  a[0] = 3;
+  for (let i = 1; i < 400; i++) a[gen.below(65536)] = 3;
+  cases.push(a);
+  while (cases.length < 200) {
+    const v = new Uint8Array(65536);
+    for (let i = 0; i < 800; i++) v[gen.below(65536)] = gen.below(8);
+    cases.push(v);
+  }
+  const bg = new Uint8Array(65536);
+  for (let i = 0; i < cases.length; i++) {
+    const v = cases[i].slice();
+    TW.replaceTmp(v, bg, 0, 0);
+    const r = runOnScreen(MODE_REPLACE, cases[i]);
+    const got = planesToScreen(r.mem);
+    const d = firstPixelDiff(got, v);
+    if (d) fail(`replaceTmp #${i} (${d.x},${d.y}) emu=${d.got} oracle=${d.exp}`);
+  }
+  console.log(`OK  replaceTmp: ${cases.length}, точка (0,0) не трогается`);
+}
+
 function pokeBench(kind, fields) {
   boot();
   const b = new Uint8Array(16);
@@ -479,6 +547,8 @@ testRing();
 testClear();
 testBarrel();
 testText();
+testCrumble();
+testReplace();
 console.log('--- замер ---');
 const sz = sizes(L);
 const tRandom = bench('Random(n=100)', L.random, L.bench_random_ret, KIND_RANDOM, { seed: 1, n: 100 });
