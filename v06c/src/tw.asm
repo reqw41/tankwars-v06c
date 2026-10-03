@@ -48,6 +48,7 @@ MODE_AFTER	equ	26
 MODE_ACTION	equ	27
 MODE_DEATH	equ	28
 MODE_SHOP	equ	29
+MODE_TURN	equ	30
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -130,6 +131,8 @@ entry:
 	jp	z, do_death
 	cp	MODE_SHOP
 	jp	z, do_shop_ai
+	cp	MODE_TURN
+	jp	z, do_turn
 	jp	done
 done:
 	halt
@@ -1086,6 +1089,52 @@ dsa_end:
 	jp	done
 dsa_i:	db	0
 
+; ход: LIST = записи игроков; PARAM_N = число игроков; RESULT (на входе) = стрелок, xkill, стены, ветер (слово),
+; процент осыпания, падение; PARAM_SEED -> rand_seed и обратно. Экран загружает стенд. На выходе в RESULT — fl_stop.
+do_turn:
+	ld	hl, PARAM_SEED
+	ld	de, rand_seed
+	ld	b, 4
+	call	copy_b
+	ld	a, (PARAM_N)
+	ld	(n_players), a
+	ld	hl, LIST
+	ld	de, players
+	call	dm_copy
+	ld	hl, RESULT
+	ld	a, (hl)
+	ld	(tn_shooter), a
+	inc	hl
+	ld	a, (hl)
+	ld	(tn_xkill), a
+	inc	hl
+	ld	a, (hl)
+	ld	(rs_rebound), a
+	inc	hl
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	inc	hl
+	ex	de, hl
+	ld	(rs_wind), hl
+	ex	de, hl
+	ld	a, (hl)
+	ld	(as_crumble), a
+	inc	hl
+	ld	a, (hl)
+	ld	(as_fall), a
+	call	turn
+	ld	a, (fl_stop)
+	ld	(RESULT), a
+	ld	hl, players
+	ld	de, LIST
+	call	dm_copy
+	ld	hl, rand_seed
+	ld	de, PARAM_SEED
+	ld	b, 4
+	call	copy_b
+	jp	done
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -1208,6 +1257,7 @@ kernel_start:
 	include	"after.asm"
 	include	"action.asm"
 	include	"death.asm"
+	include	"turn.asm"
 	include	"shop.asm"
 	include	"barrel.asm"
 	include	"text.asm"
