@@ -101,7 +101,7 @@ export function regs(machine) {
 }
 
 /** Исполнять до HLT, PC===haltPc, или maxInsns. Возврат: cpu_cycles и vcycles (Вектор). */
-export function runUntil(machine, { haltPc = null, maxInsns = 20_000_000, countFromPc = null } = {}) {
+export function runUntil(machine, { haltPc = null, maxInsns = 20_000_000, countFromPc = null, prof = null } = {}) {
   const cpu = machine.cpu;
   const timer = machine.timer;
   let insns = 0, cpuCycles = 0, vcycles = 0, tacc = 0, counting = countFromPc == null;
@@ -116,6 +116,7 @@ export function runUntil(machine, { haltPc = null, maxInsns = 20_000_000, countF
     cpuCycles += cc;
     vcycles += vc;
     if (counting) { bodyCpu += cc; bodyV += vc; }
+    if (prof) prof[opAt] += vc;                        // профиль: такты по адресам команд
     tacc += vc;
     if (tacc > 1) { const tn = tacc >> 1; tacc -= tn * 2; timer.Count(tn); }
     if (cpu.last_opcode === 0xd3) machine.io.commit();
@@ -174,3 +175,16 @@ if (isMain) {
 }
 
 export { ROOT, VEC };
+
+/** Печать профиля: такты по файлам-модулям (по меткам *_end и началам) и по меткам. */
+export function printProf(prof, L, top = 30) {
+  const names = Object.entries(L).filter(([, v]) => v >= 0x100 && v < 0xA000).sort((a, b) => a[1] - b[1]);
+  const cost = new Float64Array(names.length); let total = 0, k = 0;
+  for (let a = 0; a < 0x10000; a++) { while (k + 1 < names.length && names[k + 1][1] <= a) k++; if (prof[a]) { total += prof[a]; if (names[k][1] <= a) cost[k] += prof[a]; } }
+  const byPrefix = {};
+  names.forEach(([n], i) => { if (!cost[i]) return; const pre = n.split('_')[0]; byPrefix[pre] = (byPrefix[pre] || 0) + cost[i]; });
+  console.log(`всего тактов ${total}; по префиксам меток:`);
+  for (const [pre, c] of Object.entries(byPrefix).sort((a, b) => b[1] - a[1]).slice(0, 16)) console.log(`  ${(100 * c / total).toFixed(1).padStart(5)}%  ${pre}_*`);
+  console.log('по меткам:');
+  for (const i of [...cost.keys()].sort((a, b) => cost[b] - cost[a]).slice(0, top)) console.log(`  ${(100 * cost[i] / total).toFixed(1).padStart(5)}%  ${names[i][0]}`);
+}

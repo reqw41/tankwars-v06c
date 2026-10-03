@@ -18,90 +18,134 @@ rnd_hi:
 	ld	hl, (rand_seed + 2)
 	ret
 rnd_mod:
+	ld	a, d
+	or	a
+	jp	nz, rnd_mod16
+	; n < 256 (почти все вызовы): остаток в A, 16 шагов по 9 команд
+	ld	c, e
+	ld	b, 16
+rnd_m8:
+	add	hl, hl
+	rla
+	jp	c, rnd_m8s		; остаток >= 256 — вычитать точно
+	cp	c
+	jp	c, rnd_m8n
+rnd_m8s:
+	sub	c
+rnd_m8n:
+	dec	b
+	jp	nz, rnd_m8
+	ld	l, a
+	ld	h, 0
+	ret
+rnd_mod16:
 	ld	b, d
 	ld	c, e			; BC = n
-	call	umod16
-	ret
+	jp	umod16
 
 ; rand_seed := (rand_seed * 0x08088405 + 1) & 0xffffffff
-; 0x08088405 = биты 0, 2, 10, 15, 19, 27. Сдвигаемая копия семени tmp32 двигается нарастающим итогом:
-; +2 бита, +байт, +5 бит, +4 бита, +байт — всего 11 сдвигов по биту вместо 73.
+; 0x08088405 = биты 0, 2, 10, 15, 19, 27: s + (s<<2) + (s<<2)<<8 + (s<<7)<<8 + (s<<3)<<16 + (s<<3)<<24 + 1.
+; Три сдвига влево на бит и один вправо вместо одиннадцати; сдвиги на 8, 16, 24 — смещением байтов.
 lcg_next:
 	ld	hl, (rand_seed)
+	ex	de, hl
+	ld	hl, (rand_seed + 2)	; HL:DE = s
+	call	lcg_sh
+	call	lcg_sh			; s << 2
+	ld	(tmp32 + 2), hl
+	ex	de, hl
 	ld	(tmp32), hl
-	ld	(acc), hl		; бит 0
-	ld	hl, (rand_seed + 2)
-	ld	(tmp32 + 2), hl
-	ld	(acc + 2), hl
-	ld	b, 2
-	call	acc_sh_add		; бит 2
-	call	tmp_byte
-	call	acc_add			; бит 10
-	ld	b, 5
-	call	acc_sh_add		; бит 15
-	ld	b, 4
-	call	acc_sh_add		; бит 19
-	call	tmp_byte
-	call	acc_add			; бит 27
-	ld	hl, acc			; + 1
-lcg_inc:
-	inc	(hl)
-	jp	nz, lcg_done
-	inc	hl
-	ld	a, l
-	cp	(acc + 4) & 255
-	jp	nz, lcg_inc
-lcg_done:
-	ld	hl, (acc)
-	ld	(rand_seed), hl
-	ld	hl, (acc + 2)
-	ld	(rand_seed + 2), hl
-	ret
-
-; tmp32 <<= 8
-tmp_byte:
-	ld	hl, (tmp32 + 1)
-	ld	(tmp32 + 2), hl
-	ld	a, (tmp32)
-	ld	(tmp32 + 1), a
-	xor	a
-	ld	(tmp32), a
-	ret
-
-; tmp32 <<= B, затем acc += tmp32
-acc_sh_add:
+	ex	de, hl
+	call	lcg_sh			; s << 3: нужно только младшее слово
+	ex	de, hl
+	ld	(lcg_a3), hl
+	; lcg_v = младшие три байта (s << 7): сдвиг вправо на бит байтов s2, s1, s0
+	ld	hl, rand_seed + 2
+	ld	a, (hl)
+	rra
+	dec	hl
+	ld	a, (hl)
+	rra
+	ld	(lcg_v + 2), a
+	dec	hl
+	ld	a, (hl)
+	rra
+	ld	(lcg_v + 1), a
+	ld	a, 0
+	rra
+	ld	(lcg_v), a
+	; s + (s << 2)
+	ld	hl, (rand_seed)
+	ex	de, hl
 	ld	hl, (tmp32)
+	add	hl, de
+	ld	(rand_seed), hl
+	ld	hl, (rand_seed + 2)
 	ex	de, hl
-	ld	hl, (tmp32 + 2)		; HL:DE = tmp32
-acc_sh:
+	ld	hl, (tmp32 + 2)
+	jp	nc, lcg_1
+	inc	hl
+lcg_1:
+	add	hl, de
+	ld	(rand_seed + 2), hl
+	; + 1
+	ld	hl, rand_seed
+	inc	(hl)
+	jp	nz, lcg_2
+	inc	hl
+	inc	(hl)
+	jp	nz, lcg_2
+	inc	hl
+	inc	(hl)
+	jp	nz, lcg_2
+	inc	hl
+	inc	(hl)
+lcg_2:
+	; со смещением на байт: (s << 2) и (s << 7)
+	ld	hl, rand_seed + 1
+	ld	de, tmp32
+	call	lcg_add3
+	ld	hl, rand_seed + 1
+	ld	de, lcg_v
+	call	lcg_add3
+	; со смещением на два и три байта: (s << 3)
+	ld	hl, (rand_seed + 2)
 	ex	de, hl
-	add	hl, hl			; младшее слово
+	ld	hl, (lcg_a3)
+	add	hl, de
+	ld	(rand_seed + 2), hl
+	ld	a, (lcg_a3)
+	ld	hl, rand_seed + 3
+	add	a, (hl)
+	ld	(hl), a
+	ret
+; HL:DE <<= 1
+lcg_sh:
+	ex	de, hl
+	add	hl, hl
 	ex	de, hl
 	ld	a, l
 	rla
 	ld	l, a
 	ld	a, h
 	rla
-	ld	h, a			; старшее слово с переносом
-	dec	b
-	jp	nz, acc_sh
-	ld	(tmp32 + 2), hl
-	ex	de, hl
-	ld	(tmp32), hl
-acc_add:
-	ld	hl, (acc)
-	ex	de, hl
-	ld	hl, (tmp32)
-	add	hl, de
-	ld	(acc), hl
-	ld	hl, (acc + 2)
-	ex	de, hl
-	ld	hl, (tmp32 + 2)
-	jp	nc, acc_add_h
+	ld	h, a
+	ret
+; три байта по адресу HL += три байта по адресу DE
+lcg_add3:
+	ld	a, (de)
+	add	a, (hl)
+	ld	(hl), a
 	inc	hl
-acc_add_h:
-	add	hl, de
-	ld	(acc + 2), hl
+	inc	de
+	ld	a, (de)
+	adc	a, (hl)
+	ld	(hl), a
+	inc	hl
+	inc	de
+	ld	a, (de)
+	adc	a, (hl)
+	ld	(hl), a
 	ret
 
 ; HL = HL % BC (беззнаковое). Если BC = 0, HL = 0. Портит AF, DE.
@@ -148,6 +192,7 @@ umod_next:
 random_end:
 
 rand_seed:	ds	4
-acc:		ds	4
+lcg_a3:		dw	0
+lcg_v:		ds	3
 tmp32:		ds	4
 umod_cnt:	db	0

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as TW from '../../web/tankwars.js';
-import { createMachine, loadRom, poke, runUntil, parseSym } from '../tools/run.mjs';
+import { createMachine, loadRom, poke, runUntil, parseSym, printProf } from '../tools/run.mjs';
 import { planesToScreen, screenToPlanes } from '../tools/screen.mjs';
 import { packPlayer, viewKey, viewPlayer, PL_SIZE, MAX_PLAYERS } from '../tools/player.mjs';
 
@@ -19,6 +19,7 @@ const N = +process.argv[2] || 150;
 const master = new TW.TPRandom(31415);
 const u32 = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
 const STOP = { max: 0, terrain: 1, tank: 2, bounds: 3 };
+const PROF = process.env.PROF ? new Float64Array(0x10000) : null;      // PROF=1 — профиль по меткам
 let cases = 0, deaths = 0, hits = 0, cyc = 0, worst = 0;
 for (let i = 0; i < N; i++) {
   const n = 2 + master.word(3);
@@ -47,7 +48,7 @@ for (let i = 0; i < N; i++) {
   poke(machine, RESULT, [shooter, fl.xkill ? 1 : 0, fl.rebound ? 1 : 0, fl.wind & 255, (fl.wind >> 8) & 255, fl.crumble, fl.fall ? 1 : 0]);
   const rng = new TW.TPRandom(seed), alive0 = ps.filter((p) => p.alive).length;
   const res = TW.turn(v, bg, ps, shooter, rng, fl);
-  const r = runUntil(machine, { haltPc: null, maxInsns: 3_000_000_000 });
+  const r = runUntil(machine, { haltPc: null, maxInsns: 3_000_000_000, prof: PROF });
   const tag = `#${i} игроков=${n} стрелок=${shooter} оружие=${s.weapon} угол=${s.angle} мощность=${s.power} напр=${s.facing} ветер=${fl.wind} стены=${+fl.rebound} осыпание=${fl.crumble} падение=${+fl.fall} xkill=${+fl.xkill} seed=0x${seed.toString(16)}`;
   if (res && r.mem[RESULT] !== STOP[res.stop]) { console.error(`FAIL ${tag}: остановка 8080=${r.mem[RESULT]} эталон=${STOP[res.stop]} (${res.stop})`); process.exit(1); }
   for (let k = 0; k < n; k++) {
@@ -62,3 +63,4 @@ for (let i = 0; i < N; i++) {
   cases++; cyc += r.vcycles; worst = Math.max(worst, r.vcycles); deaths += alive0 - ps.filter((p) => p.alive).length; if (res && (res.stop === 'tank' || res.stop === 'terrain')) hits++;
 }
 console.log(`OK  ход целиком: ${cases} ходов (остановка, записи, RandSeed, экран) совпали; попаданий ${hits}, гибелей ${deaths}; байт ${L.turn_end - L.turn}; в среднем ${(cyc / cases / 3e6).toFixed(2)} с, худший ${(worst / 3e6).toFixed(2)} с при 3 МГц`);
+if (PROF) printProf(PROF, L);

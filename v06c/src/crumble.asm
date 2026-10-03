@@ -18,15 +18,22 @@ cr_cols:
 cr_gotm:
 	ld	a, b
 	ld	(cr_vm), a
-	ld	a, 227
-	ld	(cr_n), a
 	ld	a, (cr_ah)
 	ld	h, a
 	ld	l, 2
 	xor	a
 	ld	c, a
 	ld	e, a
+; Просмотр столбца снизу вверх: C — «ниже есть пустота» (по битам), E — «земля над пустотой».
+; Быстрые пути: пока пустоты нет (C = 0) — пропуск строк сплошной земли; когда пустота во всех битах (C = FFh) —
+; пропуск пустых строк. В обоих случаях строка не меняет ни C, ни E.
 cr_sk:
+	ld	a, c
+	or	a
+	jp	z, cr_f0
+	inc	a
+	jp	z, cr_f1
+cr_slow:
 	ld	a, h
 	add	a, 0x20
 	ld	h, a
@@ -76,13 +83,14 @@ cr_sk:
 	or	c
 	ld	c, a
 	inc	l
-	ld	a, (cr_n)
-	dec	a
-	ld	(cr_n), a
+	ld	a, l
+	cp	229
 	jp	nz, cr_sk
+cr_scend:
 	ld	a, (cr_vm)
 	and	e
 	jp	z, cr_nxt
+	ld	(cr_vm), a		; дальше — только те биты, где есть что осыпать
 	ld	hl, cr_fl
 	ld	b, 8
 	ld	a, 0xFF
@@ -207,6 +215,73 @@ cr_bn:
 	dec	a
 	ld	(cr_n), a
 	jp	nz, cr_row
+	jp	cr_nxt
+; C = 0: строки сплошной земли (A000 = FFh, C000 = E000 = 0)
+cr_f0:
+	ld	a, e
+	ld	(cr_e), a
+	call	cr_ptrs
+cr_f0l:
+	ld	a, (hl)
+	inc	a
+	jp	nz, cr_f0x
+	ld	a, (bc)
+	ex	de, hl
+	or	(hl)
+	ex	de, hl
+	jp	nz, cr_f0x
+	inc	l
+	inc	e
+	inc	c
+	ld	a, l
+	cp	229
+	jp	nz, cr_f0l
+	ld	a, (cr_e)
+	ld	e, a
+	ld	c, 0
+	jp	cr_scend
+cr_f0x:
+	ld	a, (cr_e)
+	ld	e, a
+	ld	c, 0
+	jp	cr_slow
+; C = FFh: пустые строки (все три плоскости 0)
+cr_f1:
+	ld	a, e
+	ld	(cr_e), a
+	call	cr_ptrs
+cr_f1l:
+	ld	a, (bc)
+	ex	de, hl
+	or	(hl)
+	ex	de, hl
+	or	(hl)
+	jp	nz, cr_f1x
+	inc	l
+	inc	e
+	inc	c
+	ld	a, l
+	cp	229
+	jp	nz, cr_f1l
+	ld	a, (cr_e)
+	ld	e, a
+	ld	c, 0xFF
+	jp	cr_scend
+cr_f1x:
+	ld	a, (cr_e)
+	ld	e, a
+	ld	c, 0xFF
+	jp	cr_slow
+; DE и BC — та же строка в плоскостях C000 и E000 (HL — в A000)
+cr_ptrs:
+	ld	e, l
+	ld	c, l
+	ld	a, h
+	add	a, 0x20
+	ld	d, a
+	add	a, 0x20
+	ld	b, a
+	ret
 cr_nxt:
 	ld	a, (cr_ah)
 	inc	a
@@ -259,4 +334,5 @@ cr_l:	db	0
 cr_bit:	db	0
 cr_bi:	db	0
 cr_n:	db	0
+cr_e:		db	0
 cr_fl:	ds	8
