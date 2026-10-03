@@ -42,6 +42,7 @@ MODE_FX		equ	20
 MODE_PLACE	equ	21
 MODE_MATCH	equ	22
 MODE_FLIGHT	equ	23
+MODE_ROUND	equ	24
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -112,6 +113,8 @@ entry:
 	jp	z, do_match
 	cp	MODE_FLIGHT
 	jp	z, do_flight
+	cp	MODE_ROUND
+	jp	z, do_round
 	jp	done
 done:
 	halt
@@ -890,6 +893,36 @@ bench_flight_ret:
 	call	copy_b
 	jp	done
 
+; начало раунда: LIST = записи игроков; PARAM_N = число игроков, PARAM_KIND = стены (0/1/2), PARAM_C = режим ветра;
+; PARAM_SEED -> rand_seed и обратно; после вызова записи копируются обратно в LIST, а rs_rebound, rs_first, rs_wind — в RESULT.
+do_round:
+	ld	hl, PARAM_SEED
+	ld	de, rand_seed
+	ld	b, 4
+	call	copy_b
+	ld	a, (PARAM_N)
+	ld	(n_players), a
+	ld	a, (PARAM_KIND)
+	ld	(rs_walls), a
+	ld	a, (PARAM_C)
+	ld	(rs_windmode), a
+	ld	hl, LIST
+	ld	de, players
+	call	dm_copy
+	call	round_start
+	ld	hl, players
+	ld	de, LIST
+	call	dm_copy
+	ld	hl, rs_rebound
+	ld	de, RESULT
+	ld	b, 4
+	call	copy_b
+	ld	hl, rand_seed
+	ld	de, PARAM_SEED
+	ld	b, 4
+	call	copy_b
+	jp	done
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -1005,6 +1038,7 @@ kernel_start:
 	include	"terrain.asm"
 	include	"place.asm"
 	include	"match.asm"
+	include	"round.asm"
 	include	"fx.asm"
 	include	"flight.asm"
 	include	"barrel.asm"
