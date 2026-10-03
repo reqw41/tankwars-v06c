@@ -13,7 +13,7 @@ TW.setProfile(TW.PROFILE_V06C);
 const P = TW.PROFILE_V06C, L = parseSym(path.join(ROOT, 'v06c/build/tw.sym'));
 const rom = new Uint8Array(fs.readFileSync(path.join(ROOT, 'v06c/build/tw.rom')));
 const machine = createMachine();
-const PARAM = 0x80, LIST = 0x6400, RESULT = 0x7C00, MODE_FLIGHT = 23;
+const PARAM = 0x80, LIST = 0x7000, RESULT = 0x8400, MODE_FLIGHT = 23;
 const N = +process.argv[2] || 300;
 const master = new TW.TPRandom(20261003);
 const i32 = (m, o) => (m[o] | (m[o + 1] << 8) | (m[o + 2] << 16) | (m[o + 3] << 24)) | 0;
