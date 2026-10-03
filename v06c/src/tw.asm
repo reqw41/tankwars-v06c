@@ -37,6 +37,7 @@ MODE_PAL	equ	15
 MODE_UI		equ	16
 MODE_DISC	equ	17
 MODE_SHOW	equ	18
+MODE_TERRAIN	equ	19
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -97,6 +98,8 @@ entry:
 	jp	z, do_disc
 	cp	MODE_SHOW
 	jp	z, do_show
+	cp	MODE_TERRAIN
+	jp	z, do_terrain
 	jp	done
 done:
 	halt
@@ -688,6 +691,20 @@ show_idle:
 	halt
 	jp	show_idle
 
+; рельеф: PARAM_SEED -> rand_seed, PARAM_KIND = число игроков; после вызова seed пишется обратно в PARAM_SEED
+do_terrain:
+	ld	hl, PARAM_SEED
+	ld	de, rand_seed
+	ld	b, 4
+	call	copy_b
+	ld	a, (PARAM_KIND)
+	call	gen_terrain
+	ld	hl, rand_seed
+	ld	de, PARAM_SEED
+	ld	b, 4
+	call	copy_b
+	jp	done
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -799,6 +816,7 @@ kernel_start:
 	include	"sprite.asm"
 	include	"fill.asm"
 	include	"disc.asm"
+	include	"terrain.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"

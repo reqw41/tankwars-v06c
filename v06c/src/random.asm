@@ -11,6 +11,12 @@ random:
 	jp	nz, rnd_mod
 	ld	hl, 0
 	ret
+; rnd_hi: шаг генератора, HL = старшие 16 бит нового RandSeed (0..65535). Для порогов «Random < p»:
+; сравнить HL с порогом (0.2 → 13107, 0.1 → 6554, 0.05 → 3277, 0.5 → 32768), см. web/fixmath.js TH. Портит AF, BC, DE.
+rnd_hi:
+	call	lcg_next
+	ld	hl, (rand_seed + 2)
+	ret
 rnd_mod:
 	ld	b, d
 	ld	c, e			; BC = n
