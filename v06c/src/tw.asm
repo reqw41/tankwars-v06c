@@ -52,6 +52,7 @@ MODE_TURN	equ	30
 MODE_AISTEP	equ	31
 MODE_HUD		equ	32
 MODE_AIPLAN	equ	33
+MODE_SHOPUI	equ	34
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -142,6 +143,8 @@ entry:
 	jp	z, do_hud
 	cp	MODE_AIPLAN
 	jp	z, do_aiplan
+	cp	MODE_SHOPUI
+	jp	z, do_shopui
 	jp	done
 done:
 	halt
@@ -1280,6 +1283,38 @@ dap_e:
 	call	copy_b
 	jp	done
 
+; экран магазина по записям: LIST = записи игроков; PARAM_N = число игроков; PARAM_C = место; PARAM_X = выбранная строка;
+; PARAM_KIND = число позиций; RESULT (на входе) = 4 байта корзины, затем по 22 байта: категории, номера, количества.
+do_shopui:
+	ld	a, (PARAM_N)
+	ld	(n_players), a
+	ld	hl, LIST
+	ld	de, players
+	call	dm_copy
+	ld	a, (PARAM_KIND)
+	ld	(sh_count), a
+	ld	a, (PARAM_X)
+	ld	(su_sel), a
+	ld	hl, RESULT
+	ld	de, sh_cart
+	ld	b, 4
+	call	copy_b
+	ld	hl, RESULT + 4
+	ld	de, sh_cat
+	ld	b, 22
+	call	copy_b
+	ld	hl, RESULT + 26
+	ld	de, sh_num
+	ld	b, 22
+	call	copy_b
+	ld	hl, RESULT + 48
+	ld	de, sh_qty
+	ld	b, 22
+	call	copy_b
+	ld	a, (PARAM_C)
+	call	show_shop
+	jp	done
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -1412,6 +1447,7 @@ kernel_start:
 	include	"aitwang.asm"
 	include	"aimain.asm"
 	include	"shop.asm"
+	include	"shopui.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"

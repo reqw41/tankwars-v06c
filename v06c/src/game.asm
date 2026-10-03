@@ -733,6 +733,7 @@ gm_p:		dw	0
 	include	"aitwang.asm"
 	include	"aimain.asm"
 	include	"shop.asm"
+	include	"shopui.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"
