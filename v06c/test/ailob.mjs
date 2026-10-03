@@ -89,7 +89,7 @@ function traced(name, kind, label, count) {
   let c = 0, w = 0, low = 0, big = 0;
   const master = new TW.TPRandom(kind * 1000 + 7);
   for (let t = 0; t < count; t++) {
-    const n = 2 + rnd(3), rebound = rnd(2);
+    const n = 2 + rnd(3), rebound = kind === 7 ? 1 : rnd(2);     // Twanger без отражающих стен играет как Rifleman
     const ps = Array.from({ length: n }, (_, i) => { const p = TW.newPlayer(i + 1, 10); p.ctrl = 3; p.name = name; return p; });
     const r0 = TW.roundStart(new TW.TPRandom(master._next()), ps, 1, 0, 2), v = r0.v;
     for (const p of ps) { TW.drawTankBarrel(v, p); p.men = [100, 100, 37, 5][rnd(4)]; p.alive = rnd(6) > 0; p.power = rnd(1001);
