@@ -496,3 +496,21 @@ def plan(v, bg, ps, p, h: Hist, rng, rebound: bool, name: bytes):
     if fn is None:
         raise NotImplementedError(f'ИИ типа {t}')
     fn(v, bg, ps, p, h, rng, rebound)
+
+
+# ---------- история выстрелов (нужна Lobber) ----------
+def turn_begin(h: Hist):
+    """2583:27b9: в начале хода игрока счётчик истории +1 (у всех игроков, не только у компьютера)."""
+    h.sw(0, h.w(0) + 1)
+
+
+def record_shot(h: Hist, p, hit_x: float, hit_y: float):
+    """2583:29ee..2af4: после выстрела — запись k = счётчик: точка остановки снаряда (Trunc Real DS:4332/4338;
+    x > 32767 -> 0x7FFF), направление, мощность и угол игрока на момент выстрела."""
+    o = 0x0b + 10 * h.w(0)
+    tx = math.trunc(hit_x)
+    h.sw(o + 6, 0x7FFF if tx > 0x7FFF else tx)
+    h.sw(o + 8, math.trunc(hit_y))
+    h.sw(o + 4, p.facing)
+    h.sw(o + 2, p.power)
+    h.sw(o, p.angle)
