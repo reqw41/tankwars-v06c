@@ -28,7 +28,8 @@ export const PROFILE_V06C = { name: 'v06c', W: 256, H: 256, X0: 3, Y0: 27, X1: 2
   playerColors: [[1, X, X], [1, 1, X], [X, 1, 1], [1, X, 1]],          // красный, жёлтый, голубой, пурпурный
   terrain: { init: 200, lo: 20, hi: 185, min: 3, max: 205, margin: (n) => 50 - 6 * (n - 2) },
   place: { rnd: 24, off: 5 }, bgKinds: 1,
-  sparkM: 48, fountainN: 50 };       // гибель: искр и комьев земли в 8 раз меньше, чем в оригинале (скорость 8080)
+  sparkM: 48, fountainN: 50,
+  shopMaxWeapon: 5, shopNoGuides: true };   // магазин: только то, что есть в порте на 8080 (оружие 1..5, щит и демпфер)       // гибель: искр и комьев земли в 8 раз меньше, чем в оригинале (скорость 8080)
 let P = PROFILE_DOS;
 export let W = 320, H = 200, SCREEN = W * H;
 export function setProfile(p) { P = p; W = p.W; H = p.H; SCREEN = W * H; VIEWPORT.splice(0, 4, p.X0, p.Y0, p.X1, p.Y1); }
@@ -1567,8 +1568,8 @@ export function shopAdd(p, cat, i, n) {
 }
 export function shopMenu(p) {                          // 224b:0118 -> [[категория, номер], ...]
   const money = p.score - p.spent, menu = [];
-  for (let w = 0; w < 18; w++) if ((p.ammo[w] > 0 || W_PRICE[w] <= money) && W_PACK[w] !== 0) menu.push([0, w]);
-  for (const cat of [1, 2]) for (let i = 0; i < 2; i++) if (shopHave(p, cat, i) > 0 || (SHOP_PRICE[cat][i] <= money && SHOP_PACK[cat][i] !== 0)) menu.push([cat, i]);
+  for (let w = 0; w < 18; w++) if ((p.ammo[w] > 0 || W_PRICE[w] <= money) && W_PACK[w] !== 0 && !(P.shopMaxWeapon && w > P.shopMaxWeapon)) menu.push([0, w]);
+  for (const cat of P.shopNoGuides ? [2] : [1, 2]) for (let i = 0; i < 2; i++) if (shopHave(p, cat, i) > 0 || (SHOP_PRICE[cat][i] <= money && SHOP_PACK[cat][i] !== 0)) menu.push([cat, i]);
   return menu;
 }
 export function shopCommit(p, menu, qty) {            // «Purchase»/«Done»
