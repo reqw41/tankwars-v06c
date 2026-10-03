@@ -774,6 +774,7 @@ copy_b:
 	jp	nz, copy_b
 	ret
 
+kernel_start:
 	include	"random.asm"
 	include	"pixel.asm"
 	include	"line.asm"
@@ -786,6 +787,7 @@ copy_b:
 	include	"crumble.asm"
 	include	"pal.asm"
 	include	"ui.asm"
+kernel_end:
 
 list_ptr:	dw	0
 res_ptr:	dw	0
@@ -809,3 +811,6 @@ rom_end:
 	display	"replace_tmp=", /h, replace_tmp, "-", /h, replace_tmp_end, " bytes ", /d, replace_tmp_end - replace_tmp
 	display	"pal_apply=", /h, pal_apply, "-", /h, pal_apply_end, " bytes ", /d, pal_apply_end - pal_apply
 	display	"draw_panel=", /h, draw_panel, "-", /h, draw_panel_end, " bytes ", /d, draw_panel_end - draw_panel
+	display	"stand=", /d, kernel_start - 0x0100
+	display	"kernel=", /d, kernel_end - kernel_start
+	display	"rom=", /d, rom_end - 0x0100

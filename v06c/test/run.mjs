@@ -697,10 +697,20 @@ function sizes(L) {
     if (a == null || b == null) fail(`нет меток размера для ${name}`);
     console.log(`БАЙТЫ  ${name}: ${b - a} (0x${a.toString(16)}..0x${(b - 1).toString(16)})`);
   }
+  if (L.kernel_start == null || L.kernel_end == null) fail('нет меток kernel_start/kernel_end');
+  const stand = L.kernel_start - 0x0100;
+  const kernel = L.kernel_end - L.kernel_start;
+  const rom = L.rom_end - 0x0100;
+  console.log(`БАЙТЫ  стенд+диспетчер: ${stand}`);
+  console.log(`БАЙТЫ  ядро: ${kernel}`);
+  console.log(`БАЙТЫ  образ: ${rom}`);
   return {
     random: L.random_end - L.random,
     pixel: L.pixel_end - L.putpixel,
     line: L.line_end - L.line,
+    stand,
+    kernel,
+    rom,
   };
 }
 
@@ -774,13 +784,26 @@ function ringPts(r) {
   }
   return n;
 }
-const n30 = ringPts(30);
-console.log('--- взрыв (6·Σ t(i), t(i)=t30·n(i)/n(30); n=число plot ellipsePoints в VIEWPORT) ---');
-for (const R of [10, 30, 60]) {
-  let s = 0;
-  const ns = [];
-  for (let i = 0; i <= R; i++) { const n = ringPts(i); ns.push(n); s += n; }
-  const v = 6 * s * tRg.v / n30;
-  console.log(`R=${R} n(30)=${n30} Σn=${s} vcycles=${Math.round(v)} с@3МГц=${(v / 3e6).toFixed(3)}`);
+const ringT = [];
+for (let r = 0; r <= 60; r++) {
+  pokeBench(KIND_RING, { x: 125, y: 113, x2: r, c: 3 });
+  const rr = runUntil(machine, { haltPc: L.bench_ring_ret, countFromPc: L.ring, maxInsns: 20_000_000 });
+  ringT[r] = rr.bodyV;
 }
+console.log('--- взрыв (6·Σ t(i) замером каждого радиуса) ---');
+for (const R of [10, 30, 60]) {
+  let sN = 0, sT = 0;
+  for (let i = 0; i <= R; i++) { sN += ringPts(i); sT += ringT[i]; }
+  const v = 6 * sT;
+  console.log(`R=${R} n(30)=${ringPts(30)} Σn=${sN} vcycles=${v} с@3МГц=${(v / 3e6).toFixed(3)}`);
+}
+console.log(`таблица_v6\tточка\t${tPix.v}\t250`);
+console.log(`таблица_v6\tтанк\t${tTk.v}\t6000`);
+console.log(`таблица_v6\tкрестик\t${tCr.v}\t1200`);
+console.log(`таблица_v6\tкольцо_на_точку\t${(tRg.v / 172).toFixed(1)}\t150`);
+console.log(`таблица_v6\tзнак\t${tCh.v}\t1500`);
+console.log(`таблица_v6\tочистка\t${tCl.v}\t350000`);
+console.log(`таблица_v6\tрамка\t${tFr.v}\t150000`);
+console.log(`таблица_v6\tосыпание\t${rCb.bodyV}\t4000000`);
+console.log(`таблица_v6\tядро\t${sz.kernel}\t5000`);
 console.log('OK  сверка с эталоном PROFILE_V06C');
