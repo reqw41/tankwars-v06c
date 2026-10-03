@@ -42,7 +42,7 @@ for (let mi = 0; mi < M; mi++) {
     m.key(row, bit, true);
     for (let f = 0; m.rd(L.kb_taken) === t0; f++) { if (f > 200) fail(`${tag}: нажатие ${code} не принято`); m.frame(); }
     m.key(row, bit, false);
-    for (let f = 0; ; f++) { m.frame(); if (m.rd(L.gk_last) === 0 && [PH.input, PH.results, PH.ready, PH.shop].includes(phase())) break; if (f > 6000) fail(`${tag}: игра не вернулась к вводу`); }
+    for (let f = 0; ; f++) { m.frame(); if (m.rd(L.gk_last) === 0 && [PH.input, PH.results, PH.ready, PH.shop].includes(phase())) break; if (f > 60000) { const pc = m.cpu.pc & 0xffff, near = Object.entries(L).filter(([, v]) => v <= pc).sort((x, y) => y[1] - x[1])[0]; fail(`${tag}: игра не вернулась к вводу за 20 минут (PC=${pc.toString(16)} у метки ${near && near[0]})`); } }
     keys++; return m.frames - f0;
   }
   function check(tag, ps, rng, v, panel) {

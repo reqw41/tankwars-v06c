@@ -144,12 +144,10 @@ fl_w3:
 	ld	(fl_hit), a
 	ld	a, (fl_players)
 	ld	(fl_sub), a
-	ld	hl, 0
-	ld	(fl_px), hl
-	ld	(fl_py), hl
-	ld	hl, -99
-	ld	(fl_px + 2), hl
-	ld	(fl_py + 2), hl
+	xor	a
+	ld	(fl_drawn), a
+	ld	(fl_qx_ok), a
+	ld	(fl_qy_ok), a
 	ld	hl, (fl_men)		; fuse = 1000 − 2·men
 	add	hl, hl
 	ld	a, l
@@ -176,18 +174,62 @@ fl_loop:
 fl_s1:
 	ld	(fl_sub), a
 	; x += vx/10; y += vy/10
+	; vx/10 пересчитывается, только когда vx менялась (ветер, отражение)
+	ld	a, (fl_qx_ok)
+	or	a
+	jp	nz, fl_ax0
 	ld	de, fl_vx
-	call	fl_div10
-	ld	hl, fl_x
-	ld	de, fl_t
-	ld	b, 4
-	call	fx_addm
+	call	fl_div10		; HL:DE = vx/10
+	ld	(fl_qx + 2), hl
+	ex	de, hl
+	ld	(fl_qx), hl
+	ld	a, 1
+	ld	(fl_qx_ok), a
+fl_ax0:
+	ld	hl, (fl_qx)
+	ex	de, hl
+	ld	hl, (fl_x)
+	add	hl, de
+	ld	(fl_x), hl
+	ld	hl, (fl_qx + 2)
+	ex	de, hl
+	ld	hl, (fl_x + 2)
+	jp	nc, fl_ax
+	inc	hl
+fl_ax:
+	add	hl, de
+	ld	(fl_x + 2), hl
+	; vy/10: между пересчётами ведётся приращением (тяжесть 655/656 = 65·10 + 5/6), остаток — в fl_ry
+	ld	a, (fl_qy_ok)
+	or	a
+	jp	nz, fl_ay0
 	ld	de, fl_vy
 	call	fl_div10
-	ld	hl, fl_y
-	ld	de, fl_t
-	ld	b, 4
-	call	fx_addm
+	ld	(fl_qy + 2), hl
+	ex	de, hl
+	ld	(fl_qy), hl
+	ld	a, b			; остаток·16 от (|vy| + 5)
+	rrca
+	rrca
+	rrca
+	rrca
+	ld	(fl_ry), a
+	ld	a, 1
+	ld	(fl_qy_ok), a
+fl_ay0:
+	ld	hl, (fl_qy)
+	ex	de, hl
+	ld	hl, (fl_y)
+	add	hl, de
+	ld	(fl_y), hl
+	ld	hl, (fl_qy + 2)
+	ex	de, hl
+	ld	hl, (fl_y + 2)
+	jp	nc, fl_ay
+	inc	hl
+fl_ay:
+	add	hl, de
+	ld	(fl_y + 2), hl
 	; vy += 655 или 656
 	ld	a, (fl_grem)
 	add	a, 9
@@ -198,6 +240,11 @@ fl_s1:
 	inc	de
 fl_g1:
 	ld	(fl_grem), a
+	ld	a, (fl_vy + 3)
+	ld	c, a			; знак vy до прибавки
+	ld	a, e			; 655 -> 5, 656 -> 6: остаток прибавки по модулю 10
+	sub	(655 & 255) - 5
+	ld	b, a
 	ld	hl, (fl_vy)
 	add	hl, de
 	ld	(fl_vy), hl
@@ -206,6 +253,46 @@ fl_g1:
 	inc	hl
 	ld	(fl_vy + 2), hl
 fl_g2:
+	ld	a, (fl_vy + 3)
+	xor	c
+	jp	p, fl_gq		; знак тот же — частное ведём приращением
+	xor	a
+	ld	(fl_qy_ok), a		; знак сменился — пересчитать делением
+	jp	fl_gq3
+fl_gq:
+	ld	de, 65
+	ld	a, c
+	or	a
+	ld	a, (fl_ry)
+	jp	m, fl_gqn
+	add	a, b			; vy >= 0: остаток растёт
+	cp	10
+	jp	c, fl_gq1
+	sub	10
+	inc	de
+	jp	fl_gq1
+fl_gqn:
+	sub	b			; vy < 0: остаток убывает
+	jp	nc, fl_gq1
+	add	a, 10
+	inc	de
+fl_gq1:
+	ld	(fl_ry), a
+	ld	hl, (fl_qy)
+	add	hl, de
+	ld	(fl_qy), hl
+	jp	nc, fl_gq3
+	ld	hl, (fl_qy + 2)
+	inc	hl
+	ld	(fl_qy + 2), hl
+fl_gq3:
+	; ветер: при нулевом ветре vx не меняется
+	ld	hl, (fl_wind)
+	ld	a, h
+	or	l
+	jp	z, fl_wz
+	xor	a
+	ld	(fl_qx_ok), a
 	; vx += fl_wq + поправка от остатка
 	ld	hl, fl_vx
 	ld	de, fl_wq
@@ -247,41 +334,80 @@ fl_wn2:					; r <= −3125: частное −1, остаток r + 3125
 fl_wk:
 	ex	de, hl
 	ld	(fl_wrem), hl
+fl_wz:
 
-	; стереть мяч в предыдущей точке
-	ld	a, (fl_ball)
+	; стереть мяч в предыдущей точке (он рисовался при том же условии, что раньше проверялось здесь)
+	ld	a, (fl_drawn)
+	cp	2			; 2 — мяч нарисован быстрым путём: вокруг было пусто
+	jp	nz, fl_er
+	ld	a, (fl_x + 3)
+	ld	b, a
+	ld	a, (fl_y + 3)
+	or	b
+	jp	nz, fl_er
+	ld	a, (fl_ex)
+	ld	b, a
+	ld	a, (fl_x + 2)
+	cp	b
+	jp	nz, fl_er
+	ld	a, (fl_ey)
+	ld	b, a
+	ld	a, (fl_y + 2)
+	cp	b
+	jp	z, fl_c1		; точка та же: на экране ничего не меняется, проверка дала бы то же
+fl_er:
+	ld	a, (fl_drawn)
 	or	a
 	jp	z, fl_e1
-	ld	hl, fl_px
-	ld	de, FL_X1
-	call	fl_lt
-	jp	nc, fl_e1
-	ld	hl, fl_py
-	ld	de, FL_Y0
-	call	fl_gt
-	jp	nc, fl_e1
-	ld	hl, fl_px
-	ld	de, FL_X0
-	call	fl_gt
-	jp	nc, fl_e1
-	ld	a, (fl_px + 2)
+	xor	a
+	ld	(fl_drawn), a
+	ld	a, (fl_ex)
 	ld	d, a
-	ld	a, (fl_py + 2)
+	ld	a, (fl_ey)
 	ld	e, a
+	call	fl_fastq
+	jp	nc, fl_e0
+	xor	a
+	call	fl_cross
+	jp	fl_e1
+fl_e0:
 	xor	a
 	call	draw_cross
 fl_e1:
-	ld	hl, fl_px
-	ld	de, fl_x
-	ld	b, 4
-	call	fx_copy
-	ld	hl, fl_py
-	ld	de, fl_y
-	ld	b, 4
-	call	fx_copy
 	xor	a
 	ld	(fl_stop), a
 	ld	(fl_hit), a
+	; быстрый путь: точка внутри поля с запасом (x 4..251, y 30..251) и все пять точек ромба пусты
+	ld	a, (fl_x + 3)
+	ld	b, a
+	ld	a, (fl_y + 3)
+	or	b
+	jp	nz, fl_slow
+	ld	a, (fl_x + 2)
+	ld	d, a
+	ld	a, (fl_y + 2)
+	ld	e, a
+	cp	FL_Y0 + 3
+	jp	c, fl_slow
+	call	fl_fastq
+	jp	nc, fl_slow
+	call	fl_air
+	jp	nz, fl_dmd		; что-то есть — разбор по точкам
+	ld	a, (fl_ball)
+	or	a
+	jp	z, fl_c1
+	ld	a, (fl_x + 2)
+	ld	d, a
+	ld	(fl_ex), a
+	ld	a, (fl_y + 2)
+	ld	e, a
+	ld	(fl_ey), a
+	ld	a, 2
+	ld	(fl_drawn), a
+	ld	a, FL_BALL
+	call	fl_cross
+	jp	fl_c1
+fl_slow:
 	; в полосе поля?
 	ld	hl, fl_y
 	ld	de, FL_Y1
@@ -300,6 +426,7 @@ fl_e1:
 	call	fl_gt
 	jp	nc, fl_out
 	; ромб из пяти точек
+fl_dmd:
 	xor	a
 	ld	(fl_done), a
 	ld	hl, fl_diamond
@@ -346,6 +473,8 @@ fl_d1:
 	ld	de, fx_a
 	ld	b, 4
 	call	fx_copy
+	xor	a
+	ld	(fl_qy_ok), a
 	jp	fl_d_next
 fl_d_ground:
 	ld	(fl_hit), a
@@ -400,6 +529,8 @@ fl_out:					; вне полосы
 	ld	hl, fl_vx
 	ld	b, 4
 	call	fx_negm
+	xor	a
+	ld	(fl_qx_ok), a
 	jp	fl_r2
 fl_r1:
 	ld	hl, fl_vx
@@ -412,6 +543,8 @@ fl_r1:
 	ld	hl, fl_vx
 	ld	b, 4
 	call	fx_negm
+	xor	a
+	ld	(fl_qx_ok), a
 fl_r2:
 	ld	a, (fl_vy + 3)
 	or	a
@@ -423,6 +556,8 @@ fl_r2:
 	ld	hl, fl_vy
 	ld	b, 4
 	call	fx_negm
+	xor	a
+	ld	(fl_qy_ok), a
 	jp	fl_chk
 fl_r3:
 	ld	hl, fl_vy
@@ -435,6 +570,8 @@ fl_r3:
 	ld	hl, fl_vy
 	ld	b, 4
 	call	fx_negm
+	xor	a
+	ld	(fl_qy_ok), a
 	jp	fl_chk
 fl_nr:					; стены обычные: снаряд, уносимый ветром, считается улетевшим
 	ld	hl, (fl_wind)
@@ -524,8 +661,12 @@ fl_cont:
 	jp	nc, fl_c1
 	ld	a, (fl_x + 2)
 	ld	d, a
+	ld	(fl_ex), a
 	ld	a, (fl_y + 2)
 	ld	e, a
+	ld	(fl_ey), a
+	ld	a, 1
+	ld	(fl_drawn), a
 	ld	a, FL_BALL
 	call	draw_cross
 fl_c1:
@@ -581,58 +722,250 @@ fl_mul10:
 	ld	b, 4
 	jp	fx_addm			; 8v + 2v
 
-; fl_t = (DE)/10 с округлением от нуля; (DE) — 32 бита со знаком
+; HL:DE = (DE)/10 с округлением от нуля; (DE) — 32 бита со знаком. Деление — по полубайтам через таблицу fl_d10.
 fl_div10:
-	ld	hl, fl_t
-	ld	b, 4
-	call	fx_copy
-	ld	a, (fl_t + 3)
+	ex	de, hl
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+	inc	hl
+	ld	a, (hl)
+	inc	hl
+	ld	h, (hl)
+	ld	l, a			; HL:DE = значение
+	ld	a, h
 	or	a
 	push	af
-	jp	p, fl_dv1
-	ld	hl, fl_t
-	ld	b, 4
-	call	fx_negm
-fl_dv1:
-	ld	hl, fl_t		; + 5
-	ld	a, (hl)
+	call	m, fl_neg32
+	ld	a, e			; + 5
 	add	a, 5
-	ld	(hl), a
-	jp	nc, fl_dv3
-fl_dv2:
-	inc	hl
-	inc	(hl)
-	jp	z, fl_dv2
-fl_dv3:
-	ld	hl, fl_t + 3		; деление столбиком по байтам, остаток в E
-	ld	e, 0
-	ld	d, 4
-fl_dv4:
-	ld	c, (hl)
-	ld	b, 8
-fl_dv5:
-	ld	a, c
-	add	a, a
-	ld	c, a
-	ld	a, e
-	rla
-	cp	10
-	jp	c, fl_dv6
-	sub	10
-	inc	c
-fl_dv6:
 	ld	e, a
-	dec	b
-	jp	nz, fl_dv5
-	ld	(hl), c
-	dec	hl
-	dec	d
-	jp	nz, fl_dv4
+	jp	nc, fl_dv1
+	inc	d
+	jp	nz, fl_dv1
+	inc	hl
+fl_dv1:
+	ld	b, 0			; остаток·16
+	ld	a, h
+	or	a
+	call	nz, fl_dvb		; старший байт почти всегда ноль
+	ld	h, a
+	ld	a, l
+	call	fl_dvb
+	ld	l, a
+	ld	a, d
+	call	fl_dvb
+	ld	d, a
+	ld	a, e
+	call	fl_dvb
+	ld	e, a
 	pop	af
 	ret	p
-	ld	hl, fl_t
-	ld	b, 4
-	jp	fx_negm
+fl_neg32:
+	ld	a, e
+	cpl
+	ld	e, a
+	ld	a, d
+	cpl
+	ld	d, a
+	ld	a, l
+	cpl
+	ld	l, a
+	ld	a, h
+	cpl
+	ld	h, a
+	inc	de
+	ld	a, d
+	or	e
+	ret	nz
+	inc	hl
+	ret
+; байт A с остатком B (остаток·16) разделить на 10: A = частное, B = новый остаток·16. HL, DE целы.
+fl_dvb:
+	push	hl
+	ld	c, a
+	rrca
+	rrca
+	rrca
+	rrca
+	and	0x0F
+	or	b
+	ld	l, a
+	ld	h, fl_d10 >> 8
+	ld	a, (hl)
+	ld	b, a
+	and	0xF0
+	ld	l, a
+	ld	a, c
+	and	0x0F
+	or	l
+	ld	l, a
+	ld	a, b
+	and	0x0F
+	rlca
+	rlca
+	rlca
+	rlca
+	ld	c, a
+	ld	a, (hl)
+	ld	b, a
+	and	0x0F
+	or	c
+	ld	c, a
+	ld	a, b
+	and	0xF0
+	ld	b, a
+	ld	a, c
+	pop	hl
+	ret
+
+; CF = 1, если точка (D, E) внутри поля с запасом на крестик: x 4..251, y 28..251
+fl_fastq:
+	ld	a, d
+	sub	4
+	cp	248
+	ret	nc
+	ld	a, e
+	sub	28
+	cp	224
+	ret
+; адрес и маска точки (D, E): HL — байт в плоскости A000, C — маска. DE цел.
+fl_addr:
+	ld	a, d
+	rrca
+	rrca
+	rrca
+	and	0x1F
+	or	0xA0
+	ld	h, a
+	ld	a, e
+	cpl
+	ld	l, a
+	ld	a, d
+	and	7
+	add	a, fl_masks & 255
+	ld	c, a
+	ld	b, fl_masks >> 8
+	ld	a, (bc)
+	ld	c, a
+	ret
+; ZF = 1, если пять точек ромба вокруг (D, E) — цвета 0. Точка должна проходить fl_fastq.
+fl_air:
+	call	fl_addr
+	call	fl_get3
+	ret	nz
+	inc	l			; y − 1
+	call	fl_get3
+	ret	nz
+	dec	l
+	dec	l			; y + 1
+	call	fl_get3
+	ret	nz
+	inc	l
+	call	fl_left
+	call	fl_get3
+	ret	nz
+	call	fl_right
+	call	fl_right
+; A = точка (HL, маска C) в трёх плоскостях: 0 — цвет 0. HL цел.
+fl_get3:
+	ld	a, (hl)
+	ld	b, a
+	ld	a, h
+	add	a, 0x20
+	ld	h, a
+	ld	a, (hl)
+	or	b
+	ld	b, a
+	ld	a, h
+	add	a, 0x20
+	ld	h, a
+	ld	a, (hl)
+	or	b
+	and	c
+	ld	b, a
+	ld	a, h
+	sub	0x40
+	ld	h, a
+	ld	a, b
+	or	a
+	ret
+; сосед слева / справа: маска и, если надо, столбец байтов
+fl_left:
+	ld	a, c
+	rlca
+	ld	c, a
+	ret	nc
+	dec	h
+	ret
+fl_right:
+	ld	a, c
+	rrca
+	ld	c, a
+	ret	nc
+	inc	h
+	ret
+; крестик из пяти точек вокруг (D, E) цветом A (0 или FL_BALL). Точка должна проходить fl_fastq.
+fl_cross:
+	ld	(fl_cc), a
+	call	fl_addr
+	call	fl_plot
+	inc	l
+	call	fl_plot
+	dec	l
+	dec	l
+	call	fl_plot
+	inc	l
+	call	fl_left
+	call	fl_plot
+	call	fl_right
+	call	fl_right
+fl_plot:
+	ld	a, (fl_cc)
+	or	a
+	jp	z, fl_pl0
+	ld	a, (hl)			; цвет 3: плоскости A000 и C000 — 1, E000 — 0
+	or	c
+	ld	(hl), a
+	ld	a, h
+	add	a, 0x20
+	ld	h, a
+	ld	a, (hl)
+	or	c
+	ld	(hl), a
+	ld	a, h
+	add	a, 0x20
+	ld	h, a
+	ld	a, c
+	cpl
+	and	(hl)
+	ld	(hl), a
+	ld	a, h
+	sub	0x40
+	ld	h, a
+	ret
+fl_pl0:
+	ld	a, c
+	cpl
+	ld	b, a
+	and	(hl)
+	ld	(hl), a
+	ld	a, h
+	add	a, 0x20
+	ld	h, a
+	ld	a, (hl)
+	and	b
+	ld	(hl), a
+	ld	a, h
+	add	a, 0x20
+	ld	h, a
+	ld	a, (hl)
+	and	b
+	ld	(hl), a
+	ld	a, h
+	sub	0x40
+	ld	h, a
+	ret
 
 ; 32-битное значение по адресу HL уменьшить на 1
 fl_dec32:
@@ -735,8 +1068,15 @@ fl_x:		ds	4
 fl_y:		ds	4
 fl_vx:		ds	4
 fl_vy:		ds	4
-fl_px:		ds	4
-fl_py:		ds	4
+fl_qx_ok:	db	0			; fl_qx = vx/10 верно
+fl_qy_ok:	db	0
+fl_ry:		db	0			; остаток (|vy| + 5) mod 10
+fl_qx:		ds	4
+fl_qy:		ds	4
+fl_drawn:	db	0			; мяч нарисован в (fl_ex, fl_ey)
+fl_ex:		db	0
+fl_ey:		db	0
+fl_cc:		db	0
 fl_t:		ds	4
 fl_t2:		ds	4
 fl_wq:		ds	4
@@ -749,3 +1089,18 @@ fl_done:	db	0
 fl_i:		db	0
 fl_dp:		dw	0
 fl_cnt:		ds	3
+; таблицы на границе страницы: индекс — младший байт адреса
+	align	256
+fl_d10:					; [остаток·16 + полубайт] = (новый остаток)·16 + частное
+	db	0x00, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90, 0x01, 0x11, 0x21, 0x31, 0x41, 0x51
+	db	0x61, 0x71, 0x81, 0x91, 0x02, 0x12, 0x22, 0x32, 0x42, 0x52, 0x62, 0x72, 0x82, 0x92, 0x03, 0x13
+	db	0x23, 0x33, 0x43, 0x53, 0x63, 0x73, 0x83, 0x93, 0x04, 0x14, 0x24, 0x34, 0x44, 0x54, 0x64, 0x74
+	db	0x84, 0x94, 0x05, 0x15, 0x25, 0x35, 0x45, 0x55, 0x65, 0x75, 0x85, 0x95, 0x06, 0x16, 0x26, 0x36
+	db	0x46, 0x56, 0x66, 0x76, 0x86, 0x96, 0x07, 0x17, 0x27, 0x37, 0x47, 0x57, 0x67, 0x77, 0x87, 0x97
+	db	0x08, 0x18, 0x28, 0x38, 0x48, 0x58, 0x68, 0x78, 0x88, 0x98, 0x09, 0x19, 0x29, 0x39, 0x49, 0x59
+	db	0x69, 0x79, 0x89, 0x99, 0x0A, 0x1A, 0x2A, 0x3A, 0x4A, 0x5A, 0x6A, 0x7A, 0x8A, 0x9A, 0x0B, 0x1B
+	db	0x2B, 0x3B, 0x4B, 0x5B, 0x6B, 0x7B, 0x8B, 0x9B, 0x0C, 0x1C, 0x2C, 0x3C, 0x4C, 0x5C, 0x6C, 0x7C
+	db	0x8C, 0x9C, 0x0D, 0x1D, 0x2D, 0x3D, 0x4D, 0x5D, 0x6D, 0x7D, 0x8D, 0x9D, 0x0E, 0x1E, 0x2E, 0x3E
+	db	0x4E, 0x5E, 0x6E, 0x7E, 0x8E, 0x9E, 0x0F, 0x1F, 0x2F, 0x3F, 0x4F, 0x5F, 0x6F, 0x7F, 0x8F, 0x9F
+fl_masks:
+	db	0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01

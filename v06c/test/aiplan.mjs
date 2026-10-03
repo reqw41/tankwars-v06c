@@ -13,7 +13,7 @@ TW.setProfile(TW.PROFILE_V06C);
 const L = parseSym(path.join(ROOT, 'v06c/build/tw.sym'));
 const rom = new Uint8Array(fs.readFileSync(path.join(ROOT, 'v06c/build/tw.rom')));
 const machine = createMachine();
-const PARAM = 0x80, LIST = 0x7800, RESULT = 0x8C00, MODE_AIPLAN = 33, PL_AI_S1 = 98, PL_AI_S2 = 102, PL_POWER = 4;
+const PARAM = 0x80, LIST = 0x8000, RESULT = 0x9400, MODE_AIPLAN = 33, PL_AI_S1 = 98, PL_AI_S2 = 102, PL_POWER = 4;
 const N = +process.argv[2] || 300;
 for (const n of ['plan_stupid', 'plan_birdy', 'record_shot', 'aiplan_end', 'ap_rebound']) if (L[n] === undefined) { console.error('FAIL нет метки ' + n); process.exit(1); }
 let s = 1010; const rnd = (n) => { s = (Math.imul(s, 1103515245) + 12345) >>> 0; return Math.floor(s / 4294967296 * n); };

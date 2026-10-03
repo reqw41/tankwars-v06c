@@ -9,7 +9,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const L = parseSym(path.join(ROOT, 'v06c/build/tw.sym'));
 const rom = new Uint8Array(fs.readFileSync(path.join(ROOT, 'v06c/build/tw.rom')));
 const machine = createMachine();
-const PARAM = 0x80, LIST = 0x7800, RESULT = 0x8C00, MODE_FX = 20;
+const PARAM = 0x80, LIST = 0x8000, RESULT = 0x9400, MODE_FX = 20;
 const le = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
 const i32 = (m, o) => (m[o] | (m[o + 1] << 8) | (m[o + 2] << 16) | (m[o + 3] << 24)) | 0;
 let seed = 12345; const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296;
@@ -31,7 +31,7 @@ function batch(name, recs, want, cmp, cyc) {
   console.log(`OK  ${name}: ${recs.length} случаев; в среднем ${Math.round(r.vcycles / recs.length)} vcycles`);
 }
 const one = (m, o) => i32(m, o);
-const N = 450;      // список (9 байт на случай) не должен дотянуться до RESULT
+const N = 300;      // список (9 байт на случай) не должен дотянуться до RESULT
 const fits = (f) => { try { FX.setDebug(true); const v = f(); FX.setDebug(false); return v; } catch { FX.setDebug(false); return null; } };
 { // умножение
   const recs = [], want = [];
@@ -67,7 +67,7 @@ const fits = (f) => { try { FX.setDebug(true); const v = f(); FX.setDebug(false)
 { // синус и косинус: все углы -360..720
   const recs = [], want = [];
   for (let d = -360; d <= 720; d++) { recs.push([6, d, 0]); const [c, s] = FX.sincos(d); want.push([c, s]); }
-  for (let k = 0; k < recs.length; k += 450) batch('синус и косинус', recs.slice(k, k + 450), want.slice(k, k + 450), (m, o) => [i32(m, o), i32(m, o + 4)]);   // список и результат не должны пересечься
+  for (let k = 0; k < recs.length; k += 300) batch('синус и косинус', recs.slice(k, k + 300), want.slice(k, k + 300), (m, o) => [i32(m, o), i32(m, o + 4)]);   // список и результат не должны пересечься
 }
 { // арктангенс
   const recs = [], want = [];

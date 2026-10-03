@@ -26,9 +26,9 @@ fi
 python3 v06c/tools/check_i8080.py v06c/build/tw.lst
 sz=$(wc -c < v06c/build/tw.rom | tr -d ' ')
 echo "OK: v06c/build/tw.rom ($sz Б)"
-# потолок образа: буфер LIST стенда начинается с 7000h — образ не должен до него доставать
-if [ "$sz" -gt $((0x7800 - 0x100)) ]; then
-	echo "ОБРАЗ ($sz Б) ДОСТАЁТ ДО БУФЕРА LIST (7800h) — провал"
+# потолок образа: буфер LIST стенда начинается с 8000h — образ не должен до него доставать
+if [ "$sz" -gt $((0x8000 - 0x100)) ]; then
+	echo "ОБРАЗ ($sz Б) ДОСТАЁТ ДО БУФЕРА LIST (8000h) — провал"
 	rm -f v06c/build/tw.rom
 	exit 1
 fi
