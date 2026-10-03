@@ -41,6 +41,7 @@ MODE_TERRAIN	equ	19
 MODE_FX		equ	20
 MODE_PLACE	equ	21
 MODE_MATCH	equ	22
+MODE_FLIGHT	equ	23
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -109,6 +110,8 @@ entry:
 	jp	z, do_place
 	cp	MODE_MATCH
 	jp	z, do_match
+	cp	MODE_FLIGHT
+	jp	z, do_flight
 	jp	done
 done:
 	halt
@@ -872,6 +875,21 @@ dm_cp:
 	jp	nz, dm_cp
 	ret
 
+; полёт: LIST = 14 байт входа (как ячейки fl_angle..fl_ball); экран загружает стенд. Выход — в RESULT: stop, hit, x, y
+do_flight:
+	ld	hl, LIST
+	ld	de, fl_angle
+	ld	b, 14
+	call	copy_b
+bench_flight_call:
+	call	flight
+bench_flight_ret:
+	ld	hl, fl_stop
+	ld	de, RESULT
+	ld	b, 10
+	call	copy_b
+	jp	done
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -988,6 +1006,7 @@ kernel_start:
 	include	"place.asm"
 	include	"match.asm"
 	include	"fx.asm"
+	include	"flight.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"
