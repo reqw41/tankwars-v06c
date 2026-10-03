@@ -508,8 +508,8 @@ function testPal() {
     }
     const bytes = PAGE.slice();
     for (let i = 0; i < 4; i++) {
-      const [R, G, B] = TW.tankRGB(ps[i]);
-      bytes[4 + i] = encPal(R >> 3, G >> 3, B >> 4);
+      const [R, G, B] = TW.tankPalV06C(ps[i]);
+      bytes[4 + i] = encPal(R, G, B);
     }
     const exp = new Uint8Array(16);
     for (let idx = 0; idx < 16; idx++) exp[idx] = bytes[gameC(idx)];

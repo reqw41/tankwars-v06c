@@ -1,5 +1,5 @@
-; Палитра 16 регистров парами. 0..3 — страница, 4..7 — tankRGB(p) затем R,G>>3, B>>4.
-; pal_men/divr/divg/divb: по 4 слова (игроки 0..3).
+; Палитра 16 регистров парами. 0..3 — страница, 4..7 — tankPalV06C(p).
+; pal_men/divr/divg/divb: по 4 слова (игроки 0..3); канал включён, если делитель = 1.
 
 pal_apply:
 	ld	de, pal_page
@@ -78,6 +78,8 @@ pa_p3:
 	out	(2), a
 	ret
 
+; tankPalV06C: men≤0 → чёрный; m=min(men,100);
+; R,G = 3+m·4/100 если делитель канала = 1, иначе 0; B = 1+m·2/100.
 tank_rgb_byte:
 	ld	a, (pal_cur)
 	ld	e, a
@@ -90,70 +92,66 @@ tank_rgb_byte:
 	ld	d, (hl)
 	ld	a, d
 	and	0x80
-	jp	z, tr_ok
+	jp	nz, tr_blk
+	ld	a, d
+	or	e
+	jp	z, tr_blk
+	ld	a, d
+	or	a
+	jp	nz, tr_cap
+	ld	a, e
+	cp	101
+	jp	c, tr_m
+tr_cap:
+	ld	e, 100
+tr_m:
+	ld	a, e
+	ld	b, 0
+tr_d25:
+	cp	25
+	jp	c, tr_d25d
+	sub	25
+	inc	b
+	jp	tr_d25
+tr_d25d:
+	ld	a, b
+	add	a, 3
+	ld	(tr_rg), a
+	ld	a, e
+	ld	b, 1
+	cp	50
+	jp	c, tr_bb
+	inc	b
+	cp	100
+	jp	c, tr_bb
+	inc	b
+tr_bb:
+	ld	a, b
+	ld	(tr_bv), a
 	xor	a
-	ld	(tr_byte), a
-	ret
-tr_ok:
-	ld	h, d
-	ld	l, e
-	ld	b, 63
-	call	mulhl_b
-	ld	de, 100
-	call	udiv_hl_de
-	ld	(tr_L), hl
-	ld	a, (pal_cur)
-	ld	e, a
-	ld	d, 0
-	ld	hl, pal_divr
-	add	hl, de
-	add	hl, de
-	ld	e, (hl)
-	inc	hl
-	ld	d, (hl)
-	ld	hl, (tr_L)
-	call	udiv_hl_de
-	ld	a, l
-	rrca
-	rrca
-	rrca
-	and	7
 	ld	(tr_r), a
-	ld	a, (pal_cur)
-	ld	e, a
-	ld	d, 0
-	ld	hl, pal_divg
-	add	hl, de
-	add	hl, de
-	ld	e, (hl)
-	inc	hl
-	ld	d, (hl)
-	ld	hl, (tr_L)
-	call	udiv_hl_de
-	ld	a, l
-	rrca
-	rrca
-	rrca
-	and	7
 	ld	(tr_g), a
-	ld	a, (pal_cur)
-	ld	e, a
-	ld	d, 0
-	ld	hl, pal_divb
-	add	hl, de
-	add	hl, de
-	ld	e, (hl)
-	inc	hl
-	ld	d, (hl)
-	ld	hl, (tr_L)
-	call	udiv_hl_de
-	ld	a, l
-	rrca
-	rrca
-	rrca
-	rrca
-	and	3
 	ld	(tr_b), a
+	ld	hl, pal_divr
+	call	tr_on
+	jp	nz, tr_nr
+	ld	a, (tr_rg)
+	ld	(tr_r), a
+tr_nr:
+	ld	hl, pal_divg
+	call	tr_on
+	jp	nz, tr_ng
+	ld	a, (tr_rg)
+	ld	(tr_g), a
+tr_ng:
+	ld	hl, pal_divb
+	call	tr_on
+	jp	nz, tr_nb
+	ld	a, (tr_bv)
+	ld	(tr_b), a
+tr_nb:
+	ld	a, (tr_b)
+	and	3
 	rlca
 	rlca
 	rlca
@@ -162,61 +160,35 @@ tr_ok:
 	rlca
 	ld	b, a
 	ld	a, (tr_g)
+	and	7
 	rlca
 	rlca
 	rlca
 	or	b
 	ld	b, a
 	ld	a, (tr_r)
+	and	7
 	or	b
 	ld	(tr_byte), a
 	ret
-
-; HL * B → HL (младшие 16)
-mulhl_b:
-	ld	a, b
-	or	a
-	jp	nz, mhb0
-	ld	hl, 0
+tr_blk:
+	xor	a
+	ld	(tr_byte), a
 	ret
-mhb0:
-	ex	de, hl
-	ld	hl, 0
-mhb1:
+
+; HL = pal_div*, pal_cur. ZF=1 если слово = 1.
+tr_on:
+	ld	a, (pal_cur)
+	ld	e, a
+	ld	d, 0
 	add	hl, de
-	dec	b
-	jp	nz, mhb1
-	ret
-
-; HL / DE → HL. DE=0 → 0. Частное циклом (L≤63 в tankRGB).
-udiv_hl_de:
-	ld	a, d
-	or	e
-	jp	nz, ud0
-	ld	hl, 0
-	ret
-ud0:
-	ld	bc, 0
-ud_cmp:
-	ld	a, h
-	cp	d
-	jp	c, ud_done
-	jp	nz, ud_sub
-	ld	a, l
-	cp	e
-	jp	c, ud_done
-ud_sub:
-	ld	a, l
-	sub	e
-	ld	l, a
-	ld	a, h
-	sbc	a, d
-	ld	h, a
-	inc	bc
-	jp	ud_cmp
-ud_done:
-	ld	h, b
-	ld	l, c
+	add	hl, de
+	ld	a, (hl)
+	cp	1
+	ret	nz
+	inc	hl
+	ld	a, (hl)
+	or	a
 	ret
 
 pal_apply_end:
@@ -229,9 +201,9 @@ pal_divr:	ds	8
 pal_divg:	ds	8
 pal_divb:	ds	8
 pal_cur:	db	0
-tr_L:		dw	0
+tr_rg:		db	0
+tr_bv:		db	0
 tr_r:		db	0
 tr_g:		db	0
 tr_b:		db	0
 tr_byte:	db	0
-ud_n:		db	0
