@@ -1,0 +1,31 @@
+address;name;signature;unit;evidence;verified
+224b:327c;TW_MatchLoop;;Game;цикл раундов: перетасовка, раунд, бонус, результаты, магазин;static
+224b:25a7;TW_ShufflePlayers;;Game;"Random(20)+10 обменов; tests/test_match.py 15/15";yes
+224b:0000;TW_SwapPlayers;void (int a, int b);Game;обмен записи 0x61, структуры ИИ 0x802 и типа управления;yes
+224b:2641;TW_Results;;Game;"сортировка по победам/очкам, men=100, заставка 1000 Random; 13/13";yes
+224b:0e51;TW_Shop;;Game;"магазин; стратегии ИИ 1..4; 67/67";yes
+224b:0118;TW_ShopMenu;void (int player);Game;позиции магазина DS:375A;yes
+2583:2531;TW_Round;;Game;"цикл раунда; ход 160/160";yes
+2eef:0909;TW_RoundStart;;Game;"стены, фон, рельеф, расстановка, ветер; 10/10";yes
+2eef:0000;TW_Background;;Game;"фоны 0..5; background.py";yes
+2eef:10dd;TW_WeaponIcons;;Game;18 значков оружия палитрой 100+w;static
+2b39:0425;TW_PlayerTurn;void (int player);Game;"цикл кодов 1..10 до огня; 84/84 на компьютере";yes
+2b39:0f78;TW_ReadAction;int (int player, int ctrl);Game;клавиатура/мышь/ИИ -> код действия;static
+2b39:0020;TW_TanksFall;;Game;падение танков (T03);yes
+2b39:03da;TW_CrumbleGate;;Game;осыпание (T03);yes
+2cab:000d;TW_ComputerMove;int (int player);Game;"ИИ: тип по имени, планировщик, выбор кода; 84/84";yes
+32ec:0139;TW_InitAI;void (int player);Game;обнуление структуры ИИ, стратегия закупки Random(4)+1;static
+32ec:02b9;TW_InitPlayer;void (int player);Game;начальная запись игрока, цвет, запасы;static
+32ec:37b8;TW_PlayersScreen;;Game;"экран игроков; имя Random -> Random(6)+1; DS:8864";static
+32ec:4265;TW_LoadConfig;;Game;умолчания, BOMB.CFG (30 байт), ключи командной строки;static
+30b8:0040;TW_PlayerInfo;void (int ctrl, int n);Game;окно сведений об игроке (цифры 1..0);static
+30b8:08a1;TW_PickTarget;void (int player, int ctrl);Game;выбор цели наведения;static
+1062:07a9;TW_SetTankPalette;void (int player);Game;палитра k+19 = men*63/100 div делители записи +0x4D..;static
+1062:059f;TW_DrawTank;void (int player);Game;танк со стволом;yes
+1062:06b7;TW_EraseTank;void (int player);Game;стереть корпус и ствол из буфера фона;yes
+285c:0020;TW_Death0;;Game;"гибель 0; 56/56 на все варианты";yes
+285c:0f61;TW_Death1_3;;Game;гибель 1 и 3;yes
+285c:1da5;TW_Death2;;Game;гибель 2;yes
+285c:28d9;TW_Death4;;Game;гибель 4;yes
+285c:2b76;TW_Death5;;Game;гибель 5;yes
+285c:2c29;TW_Death6;;Game;гибель 6;yes
