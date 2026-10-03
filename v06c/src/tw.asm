@@ -36,6 +36,7 @@ MODE_REPLACE	equ	14
 MODE_PAL	equ	15
 MODE_UI		equ	16
 MODE_DISC	equ	17
+MODE_SHOW	equ	18
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -94,6 +95,8 @@ entry:
 	jp	z, do_ui
 	cp	MODE_DISC
 	jp	z, do_disc
+	cp	MODE_SHOW
+	jp	z, do_show
 	jp	done
 done:
 	halt
@@ -104,8 +107,9 @@ done:
 set_palette:
 	ld	a, PPI_OUT
 	out	(PPI_CW), a
+	ld	a, 0xFF
+	out	(PPI_A), a		; прокрутка FFh
 	xor	a
-	out	(PPI_A), a
 	out	(PPI_C), a
 	ld	b, 0
 sp_lp:
@@ -666,6 +670,23 @@ do_crumble:
 do_replace:
 	call	replace_tmp
 	jp	done
+
+; Показ на настоящем видеотракте: палитра пишется сразу после прерывания кадра, пока луч в бордюре
+; (регистр палитры выбирается цветом под лучом, в бордюре — индексом из порта 02h). Вектор RST 7 ставит стенд показа.
+do_show:
+	ld	hl, LIST
+	ld	de, pal_men
+	ld	b, 32
+	call	copy_b
+	call	pal_prepare
+	ei
+	halt
+	di
+	call	pal_out
+	ei
+show_idle:
+	halt
+	jp	show_idle
 
 do_pal:
 	ld	hl, LIST

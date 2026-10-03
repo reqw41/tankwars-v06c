@@ -1,7 +1,13 @@
 ; Палитра 16 регистров парами. 0..3 — страница, 4..7 — tankPalV06C(p).
 ; pal_men/divr/divg/divb: по 4 слова (игроки 0..3); канал включён, если делитель = 1.
 
+; pal_apply = pal_prepare (расчёт 8 байт цветов) + pal_out (запись 16 регистров).
+; На машине pal_out зовут сразу после прерывания кадра, пока луч в бордюре: регистр палитры выбирается цветом
+; под лучом, в бордюре это индекс из порта 02h. Расчёт делается заранее — он в бордюр не помещается.
 pal_apply:
+	call	pal_prepare
+	jp	pal_out
+pal_prepare:
 	ld	de, pal_page
 	ld	hl, pal_byte
 	ld	b, 4
@@ -28,13 +34,16 @@ pa_tn:
 	ld	(pal_cur), a
 	cp	4
 	jp	nz, pa_tn
+	ret
+pal_out:
 	ld	a, 0x88
 	out	(0), a
+	ld	a, 0xFF
+	out	(3), a		; прокрутка FFh: верхняя строка экрана — младший байт адреса FFh
 	xor	a
-	out	(3), a
 	out	(1), a
-	ld	b, 0
-	ld	hl, RESULT
+	ld	b, 15			; от 15 к 0: вторая запись в порт 0Ch доходит уже при следующем индексе,
+	ld	hl, RESULT + 15		; при обходе вниз последним остаётся верный цвет индекса 0
 pa_out:
 	ld	a, b
 	and	0x04
@@ -69,11 +78,9 @@ pa_p3:
 	out	(0x0C), a
 	out	(0x0C), a
 	ld	(hl), c
-	inc	hl
-	inc	b
-	ld	a, b
-	cp	16
-	jp	c, pa_out
+	dec	hl
+	dec	b
+	jp	p, pa_out
 	xor	a
 	out	(2), a
 	ret
