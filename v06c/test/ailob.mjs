@@ -14,7 +14,7 @@ TW.setProfile(TW.PROFILE_V06C);
 const L = parseSym(path.join(ROOT, 'v06c/build/tw.sym'));
 const rom = new Uint8Array(fs.readFileSync(path.join(ROOT, 'v06c/build/tw.rom')));
 const machine = createMachine();
-const PARAM = 0x80, LIST = 0x7000, MODE_AIPLAN = 33, PL_AI_S1 = 98;
+const PARAM = 0x80, LIST = 0x7800, MODE_AIPLAN = 33, PL_AI_S1 = 98;
 const N = +process.argv[2] || 600;
 let s = 4242; const rnd = (n) => { s = (Math.imul(s, 1103515245) + 12345) >>> 0; return Math.floor(s / 4294967296 * n); };
 const u32 = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];

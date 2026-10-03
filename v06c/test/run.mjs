@@ -9,7 +9,7 @@ import { planesToScreen, firstPixelDiff, screenToPlanes } from '../tools/screen.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const ROM = path.join(ROOT, 'v06c/build/tw.rom');
 const SYM = path.join(ROOT, 'v06c/build/tw.sym');
-const PARAM = 0x0080, LIST = 0x7000, RESULT = 0x8400;
+const PARAM = 0x0080, LIST = 0x7800, RESULT = 0x8C00;
 const MODE_RANDOM = 1, MODE_PIXELS = 2, MODE_LINES = 3, MODE_BENCH = 4;
 const MODE_ERASELN = 5, MODE_FRAME = 6, MODE_TANK = 7, MODE_CROSS = 8, MODE_RING = 9;
 const MODE_CLEAR = 10, MODE_BARREL = 11, MODE_TEXT = 12, MODE_CRUMBLE = 13, MODE_REPLACE = 14, MODE_PAL = 15;

@@ -35,7 +35,7 @@ const rom = new Uint8Array(fs.readFileSync(path.join(ROOT, 'v06c/build/tw.rom'))
 const img = new Uint8Array(0x10000); img.set(rom, 0x100);
 memory.init_from_array(img, 0); memory.detach_boot && memory.detach_boot();
 const wr = (a, bytes) => bytes.forEach((b, i) => { memory.bytes[memory.tobank((a + i) & 0xffff)] = b & 255; });
-const PARAM = 0x80, LIST = 0x7000;
+const PARAM = 0x80, LIST = 0x7800;
 let frames = 0;
 // один режим стенда: записать параметры, запустить с 0100h, крутить кадры до HLT
 function mode(m, extra, list, runFrames = 0) {

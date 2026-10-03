@@ -9,7 +9,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const L = parseSym(path.join(ROOT, 'v06c/build/tw.sym'));
 const rom = new Uint8Array(fs.readFileSync(path.join(ROOT, 'v06c/build/tw.rom')));
 const machine = createMachine();
-const PARAM = 0x80, LIST = 0x7000, RESULT = 0x8400, MODE_FX = 20;
+const PARAM = 0x80, LIST = 0x7800, RESULT = 0x8C00, MODE_FX = 20;
 const le = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
 const i32 = (m, o) => (m[o] | (m[o + 1] << 8) | (m[o + 2] << 16) | (m[o + 3] << 24)) | 0;
 let seed = 12345; const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296;

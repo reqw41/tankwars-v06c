@@ -14,7 +14,7 @@ TW.setProfile(TW.PROFILE_V06C);
 const L = parseSym(path.join(ROOT, 'v06c/build/tw.sym'));
 const rom = new Uint8Array(fs.readFileSync(path.join(ROOT, 'v06c/build/tw.rom')));
 const machine = createMachine();
-const PARAM = 0x80, LIST = 0x7000, RESULT = 0x8400, MODE_TURN = 30;
+const PARAM = 0x80, LIST = 0x7800, RESULT = 0x8C00, MODE_TURN = 30;
 const N = +process.argv[2] || 150;
 const master = new TW.TPRandom(31415);
 const u32 = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
