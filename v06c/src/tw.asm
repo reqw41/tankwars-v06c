@@ -46,6 +46,7 @@ MODE_ROUND	equ	24
 MODE_EXPLODE	equ	25
 MODE_AFTER	equ	26
 MODE_ACTION	equ	27
+MODE_DEATH	equ	28
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -124,6 +125,8 @@ entry:
 	jp	z, do_after
 	cp	MODE_ACTION
 	jp	z, do_action
+	cp	MODE_DEATH
+	jp	z, do_death
 	jp	done
 done:
 	halt
@@ -1029,6 +1032,32 @@ dac_end:
 	call	dm_copy
 	jp	done
 
+; гибель: LIST = записи игроков; PARAM_N = число игроков; RESULT (на входе) = вариант, жертва, ветер (слово), xkill;
+; PARAM_SEED -> rand_seed и обратно. Экран загружает стенд.
+do_death:
+	ld	hl, PARAM_SEED
+	ld	de, rand_seed
+	ld	b, 4
+	call	copy_b
+	ld	a, (PARAM_N)
+	ld	(n_players), a
+	ld	hl, LIST
+	ld	de, players
+	call	dm_copy
+	ld	hl, RESULT
+	ld	de, dt_variant
+	ld	b, 5
+	call	copy_b
+	call	death
+	ld	hl, players
+	ld	de, LIST
+	call	dm_copy
+	ld	hl, rand_seed
+	ld	de, PARAM_SEED
+	ld	b, 4
+	call	copy_b
+	jp	done
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -1150,6 +1179,7 @@ kernel_start:
 	include	"explode.asm"
 	include	"after.asm"
 	include	"action.asm"
+	include	"death.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"
