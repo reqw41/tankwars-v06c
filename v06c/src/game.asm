@@ -16,6 +16,7 @@ PH_TITLE	equ	0
 PH_INPUT	equ	1
 PH_BUSY		equ	2
 PH_RESULTS	equ	3
+PH_READY	equ	4
 
 K_ABORT		equ	11
 K_ABORT_RND	equ	12
@@ -61,6 +62,7 @@ gm_match:
 	xor	a
 	ld	(g_round), a
 	ld	(gm_i), a
+	ld	(g_anyhuman), a
 gm_np:
 	call	gm_newplayer
 	ld	a, (n_players)
@@ -70,6 +72,9 @@ gm_np:
 	ld	(gm_i), a
 	cp	b
 	jp	nz, gm_np
+	ld	a, (g_anyhuman)
+	xor	1
+	ld	(g_allai), a
 
 ; --- раунд ---
 gm_round:
@@ -95,6 +100,52 @@ gm_turn:
 	ld	(ac_place), a
 	call	turn_begin
 	call	auto_switch
+	ld	a, (g_cur)
+	call	dt_ptr
+	ld	de, PL_CTRL
+	add	hl, de
+	ld	a, (hl)
+	cp	3
+	jp	nz, gm_show
+	; --- компьютер: шаги до кода 5 ---
+	ld	a, (g_cur)
+	call	show_panel
+	ld	a, (rs_rebound)
+	ld	(ap_rebound), a
+gm_ai:
+	ld	a, (g_cur)
+	call	computer_step
+	ld	(gm_code), a
+	cp	5
+	jp	z, gm_ai_fire
+	ld	a, (g_cur)
+	ld	(ac_place), a
+	ld	a, (gm_code)
+	call	apply_code
+	jp	gm_ai
+gm_ai_fire:
+	ld	a, (g_cur)
+	call	show_panel
+	call	kb_code			; прервать раунд можно и на ходу компьютера
+	cp	K_ABORT
+	jp	z, gm_abort
+	cp	K_ABORT_RND
+	jp	z, gm_abort_rnd
+	ld	a, (g_step)		; пошаговый режим (проверки): ждать клавишу перед выстрелом
+	or	a
+	jp	z, gm_fire
+	ld	a, PH_READY
+	ld	(g_phase), a
+	call	get_key
+	ld	b, a
+	ld	a, PH_BUSY
+	ld	(g_phase), a
+	ld	a, b
+	cp	K_ABORT
+	jp	z, gm_abort
+	cp	K_ABORT_RND
+	jp	z, gm_abort_rnd
+	jp	gm_fire
 gm_show:
 	ld	a, (g_cur)
 	call	show_panel
@@ -156,6 +207,10 @@ gm_fire:
 	ld	a, (g_fall)
 	ld	(as_fall), a
 	call	turn
+	ld	a, (tn_w)
+	cp	5
+	ld	a, (g_cur)
+	call	nz, record_shot		; история выстрелов (лазер не пишется)
 	call	gm_pal
 	call	round_winner
 	jp	nc, gm_turn
@@ -163,7 +218,7 @@ gm_fire:
 gm_end:
 	or	a
 	call	nz, winner_bonus
-	xor	a			; не все компьютеры
+	ld	a, (g_allai)
 	call	results_sort
 	call	clear_screen
 	call	gm_pal
@@ -179,8 +234,25 @@ gm_end:
 	ld	b, a
 	ld	a, (g_round)
 	cp	b
-	jp	c, gm_round
-	jp	gm_match
+	jp	nc, gm_match
+	; магазин: компьютеры закупаются сами (магазин человека — дальше по плану)
+	ld	a, 1
+gm_shop:
+	ld	(gm_i), a
+	call	dt_ptr
+	ld	de, PL_CTRL
+	add	hl, de
+	ld	a, (hl)
+	cp	3
+	ld	a, (gm_i)
+	call	z, ai_shop
+	ld	a, (n_players)
+	ld	b, a
+	ld	a, (gm_i)
+	cp	b
+	jp	z, gm_round
+	inc	a
+	jp	gm_shop
 
 ; прерывание раунда: ничья
 gm_abort:
@@ -264,10 +336,22 @@ gnp_z:
 	ld	(hl), 1			; alive
 	inc	hl
 	ld	(hl), 1			; weapon
+	; тип: 0 — человек, 1..7 — компьютер (имя из таблицы)
+	ld	a, (gm_i)
+	ld	e, a
+	ld	d, 0
+	ld	hl, g_types
+	add	hl, de
+	ld	a, (hl)
+	ld	(gm_k), a
 	ld	hl, (gm_p)
 	ld	de, PL_CTRL
 	add	hl, de
+	or	a
 	ld	(hl), 1
+	jp	z, gnp_c
+	ld	(hl), 3
+gnp_c:
 	; цвета: gm_colors[место]
 	ld	a, (gm_i)
 	ld	e, a
@@ -321,13 +405,31 @@ gnp_z:
 	ld	de, PL_NAME
 	add	hl, de
 	ex	de, hl
+	ld	a, (gm_k)
+	or	a
+	jp	nz, gnp_ai
 	ld	hl, s_player
 	ld	b, 7
 	call	gm_copy
 	ld	a, (gm_i)
 	add	a, '1'
 	ld	(de), a
-	ret
+	ld	a, 1
+	ld	(g_anyhuman), a
+	jp	gnp_st
+gnp_ai:
+	ld	hl, s_ainames - 13
+	ld	bc, 13
+gnp_nm:
+	add	hl, bc
+	dec	a
+	jp	nz, gnp_nm
+	ld	b, 13
+	call	gm_copy
+gnp_st:
+	ld	a, (gm_i)
+	inc	a
+	jp	pick_strategy
 
 ; палитра по записям игроков: здоровье и цвета мест 1..4; пишет её прерывание
 gm_pal:
@@ -558,6 +660,14 @@ isr_row:
 s_gtitle:	db	"TANK WARS"
 s_anykey:	db	"PRESS ANY KEY"
 s_player:	db	"PLAYER "
+s_ainames:				; по 13 байт, порядок — как в выборе игрока оригинала; 7 — Birdy Bonker
+	db	"Mr. Stupid", 0, 0, 0
+	db	"Lobber", 0, 0, 0, 0, 0, 0, 0
+	db	"Rifleman", 0, 0, 0, 0, 0
+	db	"Lob & Shoot", 0, 0
+	db	"Windless Wit", 0
+	db	"Twanger", 0, 0, 0, 0, 0, 0
+	db	"Birdy Bonker", 0
 gm_colors:				; делители R, G, B: красный, жёлтый, голубой, пурпурный
 	db	1, 0xFF, 0xFF
 	db	1, 1, 0xFF
@@ -566,6 +676,8 @@ gm_colors:				; делители R, G, B: красный, жёлтый, голу
 
 ; настройки матча (значения по умолчанию эталона)
 g_n:		db	2		; игроков
+g_types:	db	0, 6, 2, 3	; игроки по местам: 0 — человек, 1..7 — компьютер (номер имени)
+g_step:		db	0		; 1 — компьютер ждёт клавишу перед выстрелом
 g_rounds:	db	10
 g_walls:	db	1		; стены: 0 обычные, 1 случайно, 2 отражают
 g_windmode:	db	2		; ветер: 0 None .. 4 Gale, 5 Random
@@ -576,6 +688,8 @@ g_seed:		db	0x39, 0x30, 0x00, 0x00
 g_fixed:	db	0
 
 g_phase:	db	0
+g_allai:	db	0
+g_anyhuman:	db	0
 g_round:	db	0
 g_cur:		db	0
 g_frames:	dw	0
@@ -617,6 +731,8 @@ gm_p:		dw	0
 	include	"aiwit.asm"
 	include	"airifle.asm"
 	include	"aitwang.asm"
+	include	"aimain.asm"
+	include	"shop.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"

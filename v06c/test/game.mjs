@@ -17,16 +17,19 @@ const L = parseSym(path.join(ROOT, 'v06c/build/game.sym'));
 const ROM = path.join(ROOT, 'v06c/build/game.rom');
 const M = +process.argv[2] || 6, PNG = process.argv[3];
 const KEY = { 1: [0, 0x10], 2: [0, 0x40], 3: [0, 0x80], 4: [0, 0x20], 5: [7, 0x80], 6: [5, 0x02], 7: [6, 0x02], 8: [6, 0x80], 11: [1, 0x04], 12: [1, 0x02] };
-const PH = { title: 0, input: 1, busy: 2, results: 3 };
+const PH = { title: 0, input: 1, busy: 2, results: 3, ready: 4 };
+const AI = [null, 'Mr. Stupid', 'Lobber', 'Rifleman', 'Lob & Shoot', 'Windless Wit', 'Twanger', 'Birdy Bonker'];
+const KINDS = (process.env.KINDS || '0,2,3,4,5,6').split(',').map(Number);
 const master = new TW.TPRandom(27182);
 const u32 = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
-let turns = 0, rounds = 0, keys = 0, frames = 0, worst = 0, panelChecked = 0;
+let aiTurns = 0, turns = 0, rounds = 0, keys = 0, frames = 0, worst = 0, panelChecked = 0;
 
 function fail(msg) { console.error('FAIL ' + msg); process.exit(1); }
 for (let mi = 0; mi < M; mi++) {
   const n = 2 + master.word(3), seed = master._next(), nRounds = 2;
+  const types = Array.from({ length: n }, () => (mi === 0 ? 0 : KINDS[master.word(KINDS.length)]));     // первый матч — одни люди
   const m = createVector(ROM);
-  m.wr(L.g_n, [n]); m.wr(L.g_rounds, [nRounds]); m.wr(L.g_seed, u32(seed)); m.wr(L.g_fixed, [1]);
+  m.wr(L.g_n, [n]); m.wr(L.g_rounds, [nRounds]); m.wr(L.g_seed, u32(seed)); m.wr(L.g_fixed, [1]); m.wr(L.g_types, types); m.wr(L.g_step, [1]);
   const phase = () => m.rd(L.g_phase);
   // нажать клавишу и отпустить, дождаться, пока игра снова ждёт ввода (или показывает результаты)
   function press(code, tag) {
@@ -34,7 +37,7 @@ for (let mi = 0; mi < M; mi++) {
     m.key(row, bit, true);
     for (let f = 0; m.rd(L.kb_taken) === t0; f++) { if (f > 200) fail(`${tag}: нажатие ${code} не принято`); m.frame(); }
     m.key(row, bit, false);
-    for (let f = 0; ; f++) { m.frame(); if (m.rd(L.gk_last) === 0 && (phase() === PH.input || phase() === PH.results)) break; if (f > 6000) fail(`${tag}: игра не вернулась к вводу`); }
+    for (let f = 0; ; f++) { m.frame(); if (m.rd(L.gk_last) === 0 && (phase() === PH.input || phase() === PH.results || phase() === PH.ready)) break; if (f > 6000) fail(`${tag}: игра не вернулась к вводу`); }
     keys++; return m.frames - f0;
   }
   function check(tag, ps, rng, v, panel) {
@@ -56,7 +59,9 @@ for (let mi = 0; mi < M; mi++) {
   }
   // --- эталон: тот же порядок, что в game.asm ---
   const rng = new TW.TPRandom(seed);
-  const ps = Array.from({ length: n }, (_, i) => { const p = TW.newPlayer(i + 1, nRounds); p.name = 'PLAYER ' + (i + 1); return p; });
+  const ps = Array.from({ length: n }, (_, i) => { const p = TW.newPlayer(i + 1, nRounds); if (types[i]) { p.ctrl = 3; p.name = AI[types[i]]; } else p.name = 'PLAYER ' + (i + 1);
+    p.strategy = TW.pickStrategy(p.name, rng); return p; });
+  const allAi = types.every(Boolean);
   m.frame(3);
   if (phase() !== PH.title) fail(`матч ${mi}: нет заставки`);
   press(5, `матч ${mi}: заставка`);                       // любая клавиша -> первый раунд
@@ -68,7 +73,19 @@ for (let mi = 0; mi < M; mi++) {
     for (let t = 0; !over; t++) {
       cur = TW.nextAlive(ps, cur); const p = ps[cur - 1];
       TW.turnBegin(p.hist); TW.autoSwitchWeapon(p);
-      const tag = `матч ${mi} (игроков ${n}, seed 0x${seed.toString(16)}) раунд ${round} ход ${t + 1} место ${cur}`;
+      const tag = `матч ${mi} (игроки ${types.map((k) => AI[k] || 'человек').join(', ')}; seed 0x${seed.toString(16)}) раунд ${round} ход ${t + 1} место ${cur} ${p.name}`;
+      const shot = () => { const res = TW.fire(v, bg, ps, cur, rng, fl); if (res) TW.recordShot(p.hist, p, res.x, res.y); TW.afterShot(v, bg, ps, cur, rng, fl); };
+      if (p.ctrl === 3) {
+        TW.computerTurn(v, bg, ps, p, rng, fl.rebound);
+        if (phase() !== PH.ready) fail(`${tag}: компьютер не готов к выстрелу (фаза ${phase()})`);
+        check(tag + ' перед выстрелом', ps, rng, v, (w) => TW.drawPanel(w, p, fl.wind));
+        if (t > 60) { const c0 = master.word(2) ? 11 : 12; press(c0, tag); if (c0 === 12) winner = TW.abortRound(rng, ps, true); over = true; break; }
+        shot();
+        const f = press(5, tag); frames += f; worst = Math.max(worst, f); turns++; aiTurns++;
+        const alive = ps.filter((q) => q.alive);
+        if (alive.length <= 1) { winner = alive[0] || null; over = true; }
+        continue;
+      }
       if (phase() !== PH.input) fail(`${tag}: игра не ждёт ввода (фаза ${phase()})`);
       if (process.env.SHOT && mi === 0 && round === 1 && t === 4) savePng(m.bmp(), process.env.SHOT);
       check(tag + ' перед вводом', ps, rng, v, (w) => TW.drawPanel(w, p, fl.wind));
@@ -93,14 +110,14 @@ for (let mi = 0; mi < M; mi++) {
       if (over) break;
       check(tag + ' после ввода', ps, rng, v, (w) => TW.drawPanel(w, p, fl.wind));
       if (TW.needsWeaponSwitch(p)) fail(`${tag}: сценарий — оружие пусто`);
-      TW.turn(v, bg, ps, cur, rng, fl);
+      shot();
       const f = press(5, tag); if (process.env.DBG) { const q = (a) => ((m.rd(a) | (m.rd(a + 1) << 8) | (m.rd(a + 2) << 16) | (m.rd(a + 3) << 24)) / 65536).toFixed(4); console.log('  вход:', ['fl_angle','fl_facing','fl_power','fl_power+1','fl_tx','fl_ty','fl_wind','fl_wind+1','fl_rebound','fl_weapon','fl_men','rs_wind','rs_wind+1','rs_rebound'].map((k) => { const [nm, o] = k.split('+'); return k + '=' + m.rd(L[nm] + (+o || 0)); }).join(' ')); console.log('  8080: fl_x', q(L.fl_x), 'fl_y', q(L.fl_y), 'stop', m.rd(L.fl_stop), 'dk_x', m.rd(L.dk_x), 'dk_y', m.rd(L.dk_y), 'dk_r', m.rd(L.dk_r), 'el/er', m.rd(L.dk_el), m.rd(L.dk_er)); } frames += f; worst = Math.max(worst, f); turns++;
       const alive = ps.filter((q) => q.alive);
       if (alive.length <= 1) { winner = alive[0] || null; over = true; break; }
     }
     if (winner) TW.winnerBonus(winner, n);
-    TW.results(rng, ps, false);
-    const tag = `матч ${mi} (игроков ${n}, seed 0x${seed.toString(16)}) раунд ${round}: результаты`;
+    TW.results(rng, ps, allAi);
+    const tag = `матч ${mi} (игроки ${types.map((k) => AI[k] || 'человек').join(', ')}; seed 0x${seed.toString(16)}) раунд ${round}: результаты`;
     if (phase() !== PH.results) fail(`${tag}: нет экрана результатов (фаза ${phase()})`);
     const res = new Uint8Array(65536); TW.drawResults(res, ps, round, nRounds);
     check(tag, ps, rng, null, null);
@@ -108,8 +125,8 @@ for (let mi = 0; mi < M; mi++) {
       if (any) { for (let k = 0; k < 65536; k++) if (g[k] !== res[k]) fail(`${tag}: экран: (${k & 255},${k >> 8}) 8080=${g[k]} эталон=${res[k]}`); panelChecked++; } }
     rounds++;
     if (PNG && mi === 0 && round === 1) savePng(m.bmp(), PNG);
-    if (round < nRounds) press(5, tag);
+    if (round < nRounds) { for (const q of ps) if (q.ctrl === 3) TW.aiShop(q, q.strategy); press(5, tag); }
   }
 }
-console.log(`OK  игра с клавиатуры: матчей ${M}, раундов ${rounds}, ходов ${turns}, нажатий ${keys} — записи, RandSeed и экран совпали` +
+console.log(`OK  игра с клавиатуры: матчей ${M}, раундов ${rounds}, ходов ${turns} (компьютера ${aiTurns}), нажатий ${keys} — записи, RandSeed и экран совпали` +
   ` (панель и результаты сверены ${panelChecked} раз); ход в среднем ${(frames / Math.max(1, turns) / 50).toFixed(1)} с, худший ${(worst / 50).toFixed(1)} с`);

@@ -1410,6 +1410,7 @@ kernel_start:
 	include	"aiwit.asm"
 	include	"airifle.asm"
 	include	"aitwang.asm"
+	include	"aimain.asm"
 	include	"shop.asm"
 	include	"barrel.asm"
 	include	"text.asm"
