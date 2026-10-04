@@ -627,22 +627,24 @@ rc_2:
 	jp	nc, rc_3
 	ld	e, 0
 rc_3:
-	ld	hl, 0xA000
+	; Обход по плоскости C000: байт без подходящих битов (небо и земля для цвета 3 — всегда) пропускается сразу.
+	ld	hl, 0xC000
 rc_lp:
 	ld	a, (hl)
-	xor	c
+	xor	d
+	jp	z, rc_nx
 	ld	b, a
 	ld	a, h
-	add	a, 0x20
+	sub	0x20
 	ld	h, a
-	ld	a, (hl)
-	xor	d
+	ld	a, (hl)			; A000
+	xor	c
 	and	b
 	ld	b, a
 	ld	a, h
-	add	a, 0x20
+	add	a, 0x40
 	ld	h, a
-	ld	a, (hl)
+	ld	a, (hl)			; E000
 	xor	e
 	and	b
 	jp	z, rc_no
@@ -651,13 +653,13 @@ rc_lp:
 	and	(hl)
 	ld	(hl), a
 	ld	a, h
-	sub	0x20
+	sub	0x40
 	ld	h, a
 	ld	a, (hl)
 	and	b
 	ld	(hl), a
 	ld	a, h
-	sub	0x20
+	add	a, 0x20
 	ld	h, a
 	ld	a, (hl)
 	and	b
@@ -665,12 +667,12 @@ rc_lp:
 	jp	rc_nx
 rc_no:
 	ld	a, h
-	sub	0x40
+	sub	0x20
 	ld	h, a
 rc_nx:
 	inc	hl
 	ld	a, h
-	cp	0xC0
+	cp	0xE0
 	jp	nz, rc_lp
 	ld	de, 0
 	ld	a, (dt_rc0)
