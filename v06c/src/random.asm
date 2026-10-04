@@ -21,6 +21,18 @@ rnd_mod:
 	ld	a, d
 	or	a
 	jp	nz, rnd_mod16
+	ld	a, e			; степень двойки (1, 2, 4, ... 128): остаток — младшие биты
+	dec	a
+	ld	c, a
+	and	e
+	jp	nz, rnd_m8g
+	ld	a, l
+	and	c
+	ld	l, a
+	ld	h, 0
+	ret
+rnd_m8g:
+	xor	a
 	; n < 256 (почти все вызовы): остаток в A, 16 шагов по 9 команд
 	ld	c, e
 	ld	b, 16

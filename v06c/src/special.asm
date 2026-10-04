@@ -350,38 +350,7 @@ sx_w1:
 	ld	(sx_x), a
 	ld	a, e
 	ld	(sx_y), a
-	; направления с землёй
-	xor	a
-	ld	(sx_nd), a
-	ld	a, 1
-sx_w2:
-	ld	(sx_d), a
-	ld	b, a
-	ld	a, (sx_odd)
-	or	a
-	jp	z, sx_w3		; чётное оружие — все восемь
-	ld	a, b
-	and	1
-	jp	z, sx_w4		; нечётное оружие — без диагоналей (чётных направлений)
-sx_w3:
-	call	sx_step			; D, E = точка в направлении sx_d
-	call	getpixel
-	cp	1
-	jp	nz, sx_w4
-	ld	a, (sx_nd)
-	ld	e, a
-	ld	d, 0
-	inc	a
-	ld	(sx_nd), a
-	ld	hl, sx_dirs
-	add	hl, de
-	ld	a, (sx_d)
-	ld	(hl), a
-sx_w4:
-	ld	a, (sx_d)
-	inc	a
-	cp	9
-	jp	nz, sx_w2
+	call	sx_scan			; направления с землёй -> sx_dirs, sx_nd
 	ld	a, (sx_nd)
 	or	a
 	jp	nz, sx_w5
@@ -458,6 +427,82 @@ sx_e5:
 	ret	z
 	jp	sx_sweep
 
+; Соседи точки (sx_x, sx_y) цвета земли: номера направлений 1..8 в sx_dirs, число в sx_nd. Обход кольцом прямо по
+; плоскостям (адрес и маска считаются один раз), вместо восьми getpixel. Точка — внутри поля, соседи на экране.
+sx_scan:
+	xor	a
+	ld	(sx_nd), a
+	ld	a, (sx_x)
+	ld	d, a
+	ld	a, (sx_y)
+	ld	e, a
+	call	fl_addr
+	inc	l			; 1: (0, -1)
+	ld	a, 1
+	call	sx_tst
+	call	fl_right		; 2: (1, -1)
+	ld	a, 2
+	call	sx_tst
+	dec	l			; 3: (1, 0)
+	ld	a, 3
+	call	sx_tst
+	dec	l			; 4: (1, 1)
+	ld	a, 4
+	call	sx_tst
+	call	fl_left			; 5: (0, 1)
+	ld	a, 5
+	call	sx_tst
+	call	fl_left			; 6: (-1, 1)
+	ld	a, 6
+	call	sx_tst
+	inc	l			; 7: (-1, 0)
+	ld	a, 7
+	call	sx_tst
+	inc	l			; 8: (-1, -1)
+	ld	a, 8
+sx_tst:
+	ld	(sx_d), a
+	ld	b, a
+	ld	a, (sx_odd)
+	or	a
+	jp	z, sx_t1
+	ld	a, b
+	and	1
+	ret	z			; нечётное оружие по диагонали не ходит
+sx_t1:
+	ld	a, (hl)			; земля: бит в A000 есть, в C000 и E000 нет
+	and	c
+	ret	z
+	ld	a, h
+	add	a, 0x20
+	ld	h, a
+	ld	a, (hl)
+	ld	b, a
+	ld	a, h
+	add	a, 0x20
+	ld	h, a
+	ld	a, (hl)
+	or	b
+	and	c
+	ld	b, a
+	ld	a, h
+	sub	0x40
+	ld	h, a
+	ld	a, b
+	or	a
+	ret	nz
+	push	hl
+	ld	a, (sx_nd)
+	ld	e, a
+	ld	d, 0
+	inc	a
+	ld	(sx_nd), a
+	ld	hl, sx_dirs
+	add	hl, de
+	ld	a, (sx_d)
+	ld	(hl), a
+	pop	hl
+	ret
 ; D, E = точка sx_i
 sx_pt:
 	ld	a, (sx_i)
