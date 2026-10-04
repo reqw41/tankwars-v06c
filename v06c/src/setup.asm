@@ -4,6 +4,8 @@
 
 setup:
 	call	clear_screen
+	ld	a, 1
+	call	gm_scene
 	; палитра: цвета мест при полном здоровье — имена игроков цветом своих танков
 	ld	a, MAX_PLAYERS
 	ld	(n_players), a

@@ -86,6 +86,8 @@ gm_round:
 	ld	a, (g_windmode)
 	ld	(rs_windmode), a
 	call	round_start
+	ld	a, (g_round)		; небо и земля раунда — парой цветов палитры, по кругу
+	call	gm_scene
 	call	gm_pal
 	ld	a, (rs_first)
 	ld	(g_cur), a
@@ -305,6 +307,8 @@ gm_end:
 	call	sfx_play
 	ld	a, (g_allai)
 	call	results_sort
+	ld	a, 1			; результаты и магазин — на чёрном
+	call	gm_scene
 	call	clear_screen
 	call	gm_pal
 	ld	a, (g_round)
@@ -523,6 +527,36 @@ gnp_colors:
 	ex	de, hl
 	ld	b, 3
 	jp	gm_copy
+
+; цвета неба и земли по номеру A (1 — чёрное небо и зелёная земля, как в оригинале; дальше по кругу из gm_scenes).
+; Меняются только два регистра палитры — на игру и сверку с эталоном это не влияет.
+gm_scene:
+	dec	a
+gsc_m:
+	cp	GM_NSCENES
+	jp	c, gsc_1
+	sub	GM_NSCENES
+	jp	gsc_m
+gsc_1:
+	add	a, a
+	ld	e, a
+	ld	d, 0
+	ld	hl, gm_scenes
+	add	hl, de
+	ld	a, (hl)
+	ld	(pal_page), a
+	inc	hl
+	ld	a, (hl)
+	ld	(pal_page + 1), a
+	ret
+GM_NSCENES	equ	6
+gm_scenes:				; небо, земля — байты палитры BBGGGRRR
+	db	0x00, 0x29		; чёрное небо, зелёная земля
+	db	0x40, 0x29		; тёмно-синее небо, зелёная земля
+	db	0x42, 0x14		; закат: багровое небо, бурая земля
+	db	0x48, 0x65		; сумерки: сине-зелёное небо, песок
+	db	0x40, 0xF6		; ночь: тёмно-синее небо, снег
+	db	0x00, 0x5B		; чёрное небо, серый камень
 
 ; палитра по записям игроков: здоровье и цвета мест 1..4; пишет её прерывание
 gm_pal:
