@@ -14,7 +14,7 @@ TW.setProfile(TW.PROFILE_V06C);
 const L = parseSym(path.join(ROOT, 'v06c/build/tw.sym'));
 const rom = new Uint8Array(fs.readFileSync(path.join(ROOT, 'v06c/build/tw.rom')));
 const machine = createMachine();
-const PARAM = 0x80, LIST = 0x8000, RESULT = 0x9400, MODE_ACTION = 27;
+const PARAM = 0x80, LIST = 0x8400, RESULT = 0x9600, MODE_ACTION = 27;
 const N = +process.argv[2] || 250;
 const master = new TW.TPRandom(606);
 for (const n of ['apply_code', 'auto_switch', 'needs_switch', 'action_end', 'ac_place']) if (L[n] === undefined) { console.error('FAIL нет метки ' + n); process.exit(1); }

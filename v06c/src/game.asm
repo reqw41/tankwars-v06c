@@ -738,6 +738,7 @@ gm_p:		dw	0
 	include	"turn.asm"
 	include	"laser.asm"
 	include	"special.asm"
+	include	"sound.asm"
 	include	"aistep.asm"
 	include	"hud.asm"
 	include	"aiplan.asm"

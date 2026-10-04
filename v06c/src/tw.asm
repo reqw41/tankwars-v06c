@@ -15,8 +15,8 @@ PARAM_Y		equ	PARAM + 11
 PARAM_X2	equ	PARAM + 12
 PARAM_Y2	equ	PARAM + 13
 PARAM_C		equ	PARAM + 14
-LIST		equ	0x8000
-RESULT		equ	0x9400
+LIST		equ	0x8400
+RESULT		equ	0x9600
 STACK		equ	0x9F00
 
 MODE_RANDOM	equ	1
@@ -53,6 +53,7 @@ MODE_AISTEP	equ	31
 MODE_HUD		equ	32
 MODE_AIPLAN	equ	33
 MODE_SHOPUI	equ	34
+MODE_SOUND	equ	35
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -145,6 +146,8 @@ entry:
 	jp	z, do_aiplan
 	cp	MODE_SHOPUI
 	jp	z, do_shopui
+	cp	MODE_SOUND
+	jp	z, do_sound
 	jp	done
 done:
 	halt
@@ -1315,6 +1318,33 @@ do_shopui:
 	call	show_shop
 	jp	done
 
+; звук: PARAM_KIND 1 — snd_tone(HL = слово PARAM_SEED); 2 — snd_off; 3 — snd_play(LIST), затем PARAM_COUNT раз snd_tick
+do_sound:
+	ld	a, (PARAM_KIND)
+	dec	a
+	jp	z, dsn_1
+	dec	a
+	jp	z, dsn_2
+	ld	hl, LIST
+	call	snd_play
+	ld	hl, (PARAM_COUNT)
+dsn_l:
+	ld	a, h
+	or	l
+	jp	z, done
+	dec	hl
+	push	hl
+	call	snd_tick
+	pop	hl
+	jp	dsn_l
+dsn_1:
+	ld	hl, (PARAM_SEED)
+	call	snd_tone
+	jp	done
+dsn_2:
+	call	snd_off
+	jp	done
+
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -1440,6 +1470,7 @@ kernel_start:
 	include	"turn.asm"
 	include	"laser.asm"
 	include	"special.asm"
+	include	"sound.asm"
 	include	"aistep.asm"
 	include	"hud.asm"
 	include	"aiplan.asm"
