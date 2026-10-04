@@ -33,7 +33,9 @@ if [ "$sz" -gt $((0x8400 - 0x100)) ]; then
 	exit 1
 fi
 
-# игровой образ (v06c/src/game.asm) — те же модули с главным циклом
+# игровой образ (v06c/src/game.asm) — те же модули с главным циклом; заставка — кадр оригинала, сжатый ZX0
+python3 v06c/tools/title2planes.py > /dev/null
+"$ROOT/tools/bin/zx0" -f -c v06c/build/title.bin v06c/build/title.zx0 > /dev/null
 out=$($ASM --i8080 --fullpath -i v06c/src \
 	--lst=v06c/build/game.lst --sym=v06c/build/game.sym \
 	v06c/src/game.asm 2>&1) || {

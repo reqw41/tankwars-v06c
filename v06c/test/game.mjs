@@ -21,7 +21,7 @@ const GOLD = process.env.GOLD ? json('tests/fixtures/v06c/golden.json') : null, 
 const GOLD_NAMES = ['Lobber', 'Rifleman', 'Twanger', 'Windless Wit', 'Mr. Stupid', 'Lob & Shoot'];
 const M = GOLD ? GOLD_IDS.length : +process.argv[2] || 6, PNG = process.argv[3];
 const KEY = { 1: [0, 0x10], 2: [0, 0x40], 3: [0, 0x80], 4: [0, 0x20], 5: [7, 0x80], 6: [5, 0x02], 7: [6, 0x02], 8: [6, 0x80], 11: [1, 0x04], 12: [1, 0x02] };
-const PH = { title: 0, input: 1, busy: 2, results: 3, ready: 4, shop: 5 };
+const PH = { title: 0, input: 1, busy: 2, results: 3, ready: 4, shop: 5, splash: 6 };
 const AI = [null, 'Mr. Stupid', 'Lobber', 'Rifleman', 'Lob & Shoot', 'Windless Wit', 'Twanger', 'Birdy Bonker'];
 const KINDS = (process.env.KINDS || '0,2,3,4,5,6').split(',').map(Number);
 const master = new TW.TPRandom(27182);
@@ -42,7 +42,7 @@ for (let mi = 0; mi < M; mi++) {
     m.key(row, bit, true);
     for (let f = 0; m.rd(L.kb_taken) === t0; f++) { if (f > 200) fail(`${tag}: нажатие ${code} не принято`); m.frame(); }
     m.key(row, bit, false);
-    for (let f = 0; ; f++) { m.frame(); if (m.rd(L.gk_last) === 0 && [PH.input, PH.results, PH.ready, PH.shop].includes(phase())) break; if (f > 60000) { const pc = m.cpu.pc & 0xffff, near = Object.entries(L).filter(([, v]) => v <= pc).sort((x, y) => y[1] - x[1])[0]; fail(`${tag}: игра не вернулась к вводу за 20 минут (PC=${pc.toString(16)} у метки ${near && near[0]})`); } }
+    for (let f = 0; ; f++) { m.frame(); if (m.rd(L.gk_last) === 0 && [PH.input, PH.results, PH.ready, PH.shop, PH.title].includes(phase())) break; if (f > 60000) { const pc = m.cpu.pc & 0xffff, near = Object.entries(L).filter(([, v]) => v <= pc).sort((x, y) => y[1] - x[1])[0]; fail(`${tag}: игра не вернулась к вводу за 20 минут (PC=${pc.toString(16)} у метки ${near && near[0]})`); } }
     keys++; return m.frames - f0;
   }
   function check(tag, ps, rng, v, panel) {
@@ -67,8 +67,11 @@ for (let mi = 0; mi < M; mi++) {
   const ps = Array.from({ length: n }, (_, i) => { const p = TW.newPlayer(i + 1, nRounds); if (types[i]) { p.ctrl = 3; p.name = AI[types[i]]; } else p.name = 'PLAYER ' + (i + 1);
     p.strategy = TW.pickStrategy(p.name, rng); return p; });
   const allAi = types.every(Boolean);
-  m.frame(3);
-  if (phase() !== PH.title) fail(`матч ${mi}: нет заставки`);
+  m.frame(260);                                           // заставка распаковывается около трёх секунд и ждёт, пока клавиши отпущены
+  if (phase() !== PH.splash) fail(`матч ${mi}: нет заставки`);
+  press(5, `матч ${mi}: заставка`);                       // любая клавиша -> экран настройки
+  if (phase() !== PH.title) fail(`матч ${mi}: нет экрана настройки`);
+  if (process.env.SPLASH && mi === 0) savePng(m.bmp(), process.env.SPLASH);
   press(5, `матч ${mi}: заставка`);                       // любая клавиша -> первый раунд
   for (let round = 1; round <= nRounds; round++) {
     TW.shufflePlayers(rng, ps);

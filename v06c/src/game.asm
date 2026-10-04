@@ -18,6 +18,7 @@ PH_BUSY		equ	2
 PH_RESULTS	equ	3
 PH_READY	equ	4
 PH_SHOP		equ	5
+PH_SPLASH	equ	6
 
 K_ABORT		equ	11
 K_ABORT_RND	equ	12
@@ -34,6 +35,7 @@ entry:
 	ld	(g_phase), a
 	ld	(gk_last), a
 	ei
+	call	splash
 	; --- экран настройки матча ---
 gm_setup:
 	call	setup
@@ -848,6 +850,8 @@ gm_p:		dw	0
 	include	"shopui.asm"
 	include	"hshop.asm"
 	include	"setup.asm"
+	include	"dzx0.asm"
+	include	"splash.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"
