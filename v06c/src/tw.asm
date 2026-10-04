@@ -1471,6 +1471,7 @@ kernel_start:
 	include	"laser.asm"
 	include	"special.asm"
 	include	"sound.asm"
+	include	"sfx.asm"
 	include	"aistep.asm"
 	include	"hud.asm"
 	include	"aiplan.asm"

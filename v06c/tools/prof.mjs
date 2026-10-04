@@ -11,8 +11,8 @@ const [angle, power, wind, rebound] = [+process.argv[2] || 60, +process.argv[3] 
 const m = createMachine(), ps = [1, 2].map((k) => TW.newPlayer(k, 10)), r0 = TW.roundStart(new TW.TPRandom(7), ps, 0, 0, 2);
 loadRom(m, rom); const mem0 = new Uint8Array(0x10000); screenToPlanes(r0.v, mem0); poke(m, 0xA000, mem0.subarray(0xA000));
 const hdr = new Uint8Array(16); hdr[0] = 23; poke(m, 0x80, hdr);
-poke(m, 0x8000, [angle, 1, power & 255, power >> 8, ps[0].x, ps[0].y, wind & 255, (wind >> 8) & 255, rebound, 1, 100, 0, 2, 1]);
-const names = Object.entries(L).filter(([, v]) => v >= 0x100 && v < 0x8000).sort((a, b) => a[1] - b[1]);
+poke(m, 0x8400, [angle, 1, power & 255, power >> 8, ps[0].x, ps[0].y, wind & 255, (wind >> 8) & 255, rebound, 1, 100, 0, 2, 1]);
+const names = Object.entries(L).filter(([, v]) => v >= 0x100 && v < 0x8400).sort((a, b) => a[1] - b[1]);
 const owner = new Int32Array(0x10000).fill(-1); { let k = 0; for (let a = 0; a < 0x10000; a++) { while (k + 1 < names.length && names[k + 1][1] <= a) k++; owner[a] = names[k][1] <= a ? k : -1; } }
 const cost = new Float64Array(names.length); let total = 0, loops = 0;
 const cpu = m.cpu;

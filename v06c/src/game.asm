@@ -220,6 +220,8 @@ gm_fire:
 gm_end:
 	or	a
 	call	nz, winner_bonus
+	ld	hl, sfx_win
+	call	sfx_play
 	ld	a, (g_allai)
 	call	results_sort
 	call	clear_screen
@@ -577,6 +579,17 @@ gk_new:
 	jp	z, get_key
 	ld	hl, kb_taken
 	inc	(hl)
+	push	af
+	ld	a, (g_phase)		; щелчок клавиши — в меню и магазине, не на ходу
+	or	a
+	jp	z, gk_clk
+	cp	PH_SHOP
+	jp	nz, gk_nc
+gk_clk:
+	ld	hl, sfx_click
+	call	sfx_play
+gk_nc:
+	pop	af
 	ret
 
 ; код действия по нажатым клавишам: A = 0, если ничего. Таблица: строка матрицы, маска, код.
@@ -635,6 +648,7 @@ isr:
 	ld	(pal_dirty), a
 	call	pal_out
 isr_kb:
+	call	snd_tick
 	ld	a, 0x8A			; порт A — выход (выбор строки), порт B — вход
 	out	(0), a
 	ld	hl, kb_rows
@@ -739,6 +753,7 @@ gm_p:		dw	0
 	include	"laser.asm"
 	include	"special.asm"
 	include	"sound.asm"
+	include	"sfx.asm"
 	include	"aistep.asm"
 	include	"hud.asm"
 	include	"aiplan.asm"

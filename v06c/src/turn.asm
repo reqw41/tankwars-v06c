@@ -52,6 +52,8 @@ tn_die:
 	ld	(dt_wind), hl
 	ld	a, (tn_xkill)
 	ld	(dt_xkill), a
+	ld	hl, sfx_death
+	call	sfx_play
 	call	death
 	; стрелку +1500, если погиб не он
 	ld	a, (tn_shooter)
@@ -114,6 +116,8 @@ fire:
 	ld	(tn_w), a
 	cp	5
 	jp	nz, fr_ball
+	ld	hl, sfx_laser
+	call	sfx_play
 	ld	a, (tn_shooter)	; лазер: запас не тратится, выстрел без снаряда
 	jp	laser
 fr_ball:
@@ -191,6 +195,8 @@ fr_m:
 	ld	(fl_players), a
 	ld	a, 1
 	ld	(fl_ball), a
+	ld	hl, sfx_shot
+	call	sfx_play
 	call	flight
 	ld	a, (fl_stop)
 	cp	1
@@ -198,6 +204,8 @@ fr_m:
 	cp	2
 	ret	nz
 fr_hit:
+	ld	hl, sfx_boom
+	call	sfx_play
 	ld	hl, ex_x
 	ld	de, fl_x
 	ld	b, 8
