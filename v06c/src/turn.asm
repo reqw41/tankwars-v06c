@@ -2,7 +2,7 @@
 ; Вход: tn_shooter (место 1..n), tn_xkill (0/1); состояние раунда: rs_rebound, rs_wind (round.asm),
 ;       as_crumble, as_fall (after.asm); n_players, players, RandSeed.
 ; Выход: изменённые записи и экран; fl_stop, fl_x, fl_y — чем кончился выстрел (для истории ИИ).
-; Не сделано: полёт с наведением и особое оружие 6..17 (стреляют как обычный снаряд).
+; Наведение: PL_GUIDED и PL_TARGET стрелка.
 
 turn:
 	call	fire
@@ -193,6 +193,32 @@ fr_m:
 	ld	(fl_weapon), a
 	ld	a, (n_players)
 	ld	(fl_players), a
+	; наведение: цель — игрок PL_TARGET, если такой есть
+	xor	a
+	ld	(fl_guided), a
+	ld	a, (tn_g)
+	or	a
+	jp	z, fr_ng
+	ld	hl, (tn_p)
+	ld	de, PL_TARGET
+	add	hl, de
+	ld	a, (hl)
+	or	a
+	jp	z, fr_ng
+	ld	b, a
+	ld	a, (n_players)
+	cp	b
+	jp	c, fr_ng
+	ld	a, b
+	call	dt_ptr
+	ld	a, (hl)
+	ld	(fl_gtx), a
+	inc	hl
+	ld	a, (hl)
+	ld	(fl_gty), a
+	ld	a, (tn_g)
+	ld	(fl_guided), a
+fr_ng:
 	ld	a, 1
 	ld	(fl_ball), a
 	ld	hl, sfx_shot

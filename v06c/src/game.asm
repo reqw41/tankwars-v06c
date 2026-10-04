@@ -21,6 +21,7 @@ PH_SHOP		equ	5
 
 K_ABORT		equ	11
 K_ABORT_RND	equ	12
+K_TARGET	equ	13
 
 entry:
 	di
@@ -163,6 +164,11 @@ gm_input:
 	jp	z, gm_abort
 	cp	K_ABORT_RND
 	jp	z, gm_abort_rnd
+	cp	K_TARGET
+	jp	nz, gm_nt
+	call	gm_target
+	jp	gm_input
+gm_nt:
 	ld	a, (g_cur)
 	ld	(ac_place), a
 	call	needs_switch		; пустое оружие — можно только менять
@@ -199,7 +205,80 @@ gm_ap_lp:
 	jp	nz, gm_ap_lp
 	jp	gm_show
 
+; цель наведения игрока g_cur: следующий живой чужой после нынешней цели
+gm_target:
+	ld	a, (g_cur)
+	call	dt_ptr
+	ld	de, PL_TARGET
+	add	hl, de
+	ld	(gm_p), hl
+	ld	a, (n_players)
+	ld	(gm_i), a		; не больше n попыток
+	ld	a, (hl)
+gmt_l:
+	ld	b, a
+	ld	a, (n_players)
+	cp	b
+	jp	z, gmt_w
+	jp	nc, gmt_n
+gmt_w:
+	ld	b, 0
+gmt_n:
+	ld	a, b
+	inc	a
+	ld	(gm_k), a
+	ld	b, a
+	ld	a, (g_cur)
+	cp	b
+	jp	z, gmt_x
+	ld	a, b
+	call	dt_ptr
+	ld	de, PL_ALIVE
+	add	hl, de
+	ld	a, (hl)
+	or	a
+	jp	z, gmt_x
+	ld	hl, (gm_p)
+	ld	a, (gm_k)
+	ld	(hl), a
+	ret
+gmt_x:
+	ld	hl, gm_i
+	dec	(hl)
+	ret	z
+	ld	a, (gm_k)
+	jp	gmt_l
+
 gm_fire:
+	; наведение включено, а цель не выбрана, мертва или сам стрелок — взять следующую живую
+	ld	a, (g_cur)
+	call	dt_ptr
+	ld	de, PL_GUIDED
+	add	hl, de
+	ld	a, (hl)
+	or	a
+	jp	z, gm_f1
+	inc	hl
+	ld	a, (hl)			; PL_TARGET
+	or	a
+	jp	z, gm_f0
+	ld	b, a
+	ld	a, (n_players)
+	cp	b
+	jp	c, gm_f0
+	ld	a, (g_cur)
+	cp	b
+	jp	z, gm_f0
+	ld	a, b
+	call	dt_ptr
+	ld	de, PL_ALIVE
+	add	hl, de
+	ld	a, (hl)
+	or	a
+	jp	nz, gm_f1
+gm_f0:
+	call	gm_target
+gm_f1:
 	ld	a, (g_cur)
 	ld	(tn_shooter), a
 	ld	a, (g_xkill)
@@ -629,6 +708,9 @@ kb_map:					; строка матрицы, бит, код действия
 	db	6, 0x02, 7		; Q
 	db	6, 0x80, 8		; W
 	db	0, 0x01, 8		; ТАБ
+	db	5, 0x01, 9		; H — Herb's Guide
+	db	6, 0x40, 10		; V — Vick's Guide
+	db	6, 0x10, K_TARGET	; T — следующая цель наведения
 	db	1, 0x04, K_ABORT	; АР2
 	db	1, 0x02, K_ABORT_RND	; СТР
 	db	0xFF

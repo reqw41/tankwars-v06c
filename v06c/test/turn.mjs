@@ -38,6 +38,7 @@ for (let i = 0; i < N; i++) {
   if (master.word(3)) { s.facing = tgt.x > s.x ? 1 : -1; s.angle = 30 + master.word(50); s.power = Math.min(1000, 60 + Math.abs(tgt.x - s.x) * 2 + master.word(60)); }
   else { s.facing = master.word(2) ? 1 : -1; s.angle = master.word(91); s.power = master.word(1001); }
   if (s.power > 10 * s.men) s.power = 10 * s.men;
+  if (process.env.G) { s.guided = 1 + master.word(3); s.herb = 5; s.vick = 5; s.target = [tgt.idx, tgt.idx, 0, 9][master.word(4)]; }      // G=1 — с наведением
   TW.eraseTankBarrel(v, bg, { ...s, angle: shooter === 1 || shooter === n ? 75 : 90, facing: shooter === n ? -1 : 1 }); TW.drawTankBarrel(v, s);
   const fl = { rebound: r0.rebound, crumble: [0, 50, 100][master.word(3)], fall: master.word(4) > 0, xkill: master.word(4) > 0, sound: false, wind: r0.wind, ballVisible: true, trail: false };
   const seed = master._next();

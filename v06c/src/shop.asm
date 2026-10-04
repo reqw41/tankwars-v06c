@@ -300,7 +300,6 @@ sh_mn_w_next:
 	ld	a, (hl)
 	cp	18
 	jp	c, sh_mn_w_lp
-	jp	sh_mn_d_s0		; наведение не продаётся (shopNoGuides)
 	; категория 1: herb (номер 0), vick (номер 1)
 	ld	a, 1
 	ld	(sh_tmpb), a

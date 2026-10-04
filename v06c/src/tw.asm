@@ -917,6 +917,10 @@ do_flight:
 	ld	de, fl_angle
 	ld	b, 14
 	call	copy_b
+	ld	hl, LIST + 14		; наведение: guided, x и y цели
+	ld	de, fl_guided
+	ld	b, 3
+	call	copy_b
 bench_flight_call:
 	call	flight
 bench_flight_ret:

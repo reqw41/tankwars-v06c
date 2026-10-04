@@ -335,6 +335,9 @@ fl_wk:
 	ex	de, hl
 	ld	(fl_wrem), hl
 fl_wz:
+	ld	a, (fl_guided)
+	or	a
+	call	nz, fl_guide
 
 	; стереть мяч в предыдущей точке (он рисовался при том же условии, что раньше проверялось здесь)
 	ld	a, (fl_drawn)
@@ -459,6 +462,7 @@ fl_d1:
 	jp	nc, fl_d_next
 	xor	a
 	ld	(fl_done), a
+	ld	(fl_guided), a		; после отскока наведение выключено
 	ld	hl, fx_a
 	ld	de, fl_vy
 	ld	b, 4
@@ -574,6 +578,9 @@ fl_r3:
 	ld	(fl_qy_ok), a
 	jp	fl_chk
 fl_nr:					; стены обычные: снаряд, уносимый ветром, считается улетевшим
+	ld	a, (fl_guided)		; с наведением этого правила нет
+	or	a
+	jp	nz, fl_chk
 	ld	hl, (fl_wind)
 	ld	a, h
 	or	l
@@ -614,6 +621,17 @@ fl_chk:
 	jp	c, fl_bnd
 	ld	hl, fl_y
 	ld	de, FL_Y1 + 4
+	call	fl_gt
+	jp	c, fl_bnd
+	ld	a, (fl_guided)		; наведённый снаряд далеко за полем (x < −64 или x > 320) — улетел
+	or	a
+	jp	z, fl_cont
+	ld	hl, fl_x
+	ld	de, -64
+	call	fl_lt
+	jp	c, fl_bnd
+	ld	hl, fl_x
+	ld	de, 320
 	call	fl_gt
 	jp	nc, fl_cont
 fl_bnd:
@@ -721,6 +739,157 @@ fl_mul10:
 	ld	de, fl_t
 	ld	b, 4
 	jp	fx_addm			; 8v + 2v
+
+; Наведение — guideFix() эталона. fl_guided: бит 0 — Herb's Guide, бит 1 — Vick's Guide; цель — (fl_gtx, fl_gty).
+; Vick: по x ближе 2 точек к цели — vx = 0, снаряд идёт к цели по вертикали шагом 0.5.
+; Herb: по y ближе 2 точек — vy = 0, vx растёт в 1.01 раза в сторону цели.
+fl_guide:
+	ld	hl, fl_x
+	ld	de, fl_tdx
+	ld	a, (fl_gtx)
+	call	fl_gsub
+	ld	hl, fl_y
+	ld	de, fl_tdy
+	ld	a, (fl_gty)
+	call	fl_gsub
+	ld	a, (fl_guided)
+	and	2
+	jp	z, fl_gh
+	ld	hl, fl_tdx
+	call	fl_le2
+	jp	nc, fl_gh
+	ld	hl, 0
+	ld	(fl_vx), hl
+	ld	(fl_vx + 2), hl
+	xor	a
+	ld	(fl_qx_ok), a
+	; y += 0.5 при tdy > 0, иначе −0.5
+	ld	hl, fl_tdy
+	call	fl_nz
+	ld	de, -1
+	jp	z, fl_gv1
+	ld	a, (fl_tdy + 3)
+	or	a
+	jp	m, fl_gv1
+	ld	de, 0
+fl_gv1:
+	ld	hl, (fl_y)		; ± 0x8000 в младшем слове
+	ld	a, h
+	add	a, 0x80
+	ld	h, a
+	ld	(fl_y), hl
+	ld	hl, (fl_y + 2)
+	jp	nc, fl_gv2
+	inc	hl
+fl_gv2:
+	add	hl, de			; +0.5: +0x8000 и перенос; −0.5: +0x8000 − 0x10000
+	ld	(fl_y + 2), hl
+fl_gh:
+	ld	a, (fl_guided)
+	and	1
+	ret	z
+	ld	hl, fl_tdy
+	call	fl_le2
+	ret	nc
+	ld	hl, 0
+	ld	(fl_vy), hl
+	ld	(fl_vy + 2), hl
+	xor	a
+	ld	(fl_qy_ok), a
+	ld	(fl_qx_ok), a
+	; разгон только пока |vx| < 64
+	ld	hl, (fl_vx + 2)
+	ld	a, h
+	or	a
+	jp	p, fl_gh0
+	ld	a, (fl_vx)
+	ld	b, a
+	ld	a, (fl_vx + 1)
+	or	b
+	jp	z, fl_ghn		; отрицательное без дроби: |vx| = −целая часть
+	inc	hl			; с дробью: |vx| < −(целая часть) ... сравнение по целой части + 1
+fl_ghn:
+	call	lb_neg
+fl_gh0:
+	ld	de, 64
+	call	lb_ge
+	ret	nc			; |vx| >= 64
+	ld	hl, fx_a
+	ld	de, fl_tdx
+	ld	b, 4
+	call	fx_copy
+	ld	hl, fx_b
+	ld	de, fl_vx
+	ld	b, 4
+	call	fx_copy
+	call	fx_mul			; знак tdx · vx
+	ld	a, (fx_a + 3)
+	push	af
+	ld	hl, fx_a
+	ld	de, fl_vx
+	ld	b, 4
+	call	fx_copy
+	ld	hl, 66191 & 0xFFFF	; 1.01
+	ld	(fx_b), hl
+	ld	hl, 66191 >> 16
+	ld	(fx_b + 2), hl
+	pop	af
+	or	a
+	jp	p, fl_gh1
+	ld	hl, fx_b
+	ld	b, 4
+	call	fx_negm
+fl_gh1:
+	call	fx_mul
+	ld	hl, fl_vx
+	ld	de, fx_a
+	ld	b, 4
+	jp	fx_copy
+; (DE) = A·65536 − (HL), 4 байта
+fl_gsub:
+	ld	c, a
+	xor	a
+	sub	(hl)
+	ld	(de), a
+	inc	hl
+	inc	de
+	ld	a, 0
+	sbc	a, (hl)
+	ld	(de), a
+	inc	hl
+	inc	de
+	ld	a, c
+	sbc	a, (hl)
+	ld	(de), a
+	inc	hl
+	inc	de
+	ld	a, 0
+	sbc	a, (hl)
+	ld	(de), a
+	ret
+; CF = 1, если |значение Q16.16 по адресу HL| <= 2.0
+fl_le2:
+	ld	de, fx_a
+	ex	de, hl
+	ld	b, 4
+	call	fx_copy
+	call	fx_abs_a
+	ld	a, (fx_a + 3)
+	or	a
+	ret	nz			; CF = 0
+	ld	a, (fx_a + 2)
+	cp	2
+	ret	c
+	jp	nz, fl_le2n
+	ld	hl, (fx_a)
+	ld	a, h
+	or	l
+	jp	nz, fl_le2n
+	scf
+	ret
+fl_le2n:
+	or	a
+	ret
 
 ; HL:DE = (DE)/10 с округлением от нуля; (DE) — 32 бита со знаком. Деление — по полубайтам через таблицу fl_d10.
 fl_div10:
@@ -1062,6 +1231,11 @@ fl_weapon:	db	0
 fl_men:		dw	0
 fl_players:	db	0
 fl_ball:	db	0
+fl_guided:	db	0			; наведение: бит 0 — Herb, бит 1 — Vick; 0 — нет
+fl_gtx:		db	0			; цель наведения
+fl_gty:		db	0
+fl_tdx:		ds	4
+fl_tdy:		ds	4
 fl_stop:	db	0
 fl_hit:		db	0
 fl_x:		ds	4

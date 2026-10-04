@@ -28,9 +28,11 @@ for (let i = 0; i < N; i++) {
   const v = r0.v, bg = r0.bg;
   const sh = ps[master.word(players)];
   const angle = master.word(91), power = [master.word(1001), master.word(300) + 50, 1000 - 2 * 100, 1000][master.word(4)];
-  const wind = [0, master.word(601) - 300, master.word(60001) - 30000][master.word(3)];
+  let wind = [0, master.word(601) - 300, master.word(60001) - 30000][master.word(3)];
+  if (process.env.G && Math.abs(wind) > 300) wind = wind % 300;      // с наведением — только настоящий ветер: на шквале эталон выходит из разрядности
   const facing = master.word(2) ? 1 : -1, rebound = master.word(2), men = [100, 100, 60, 1][master.word(4)], weapon = [1, 1, 1, 13][master.word(4)], ball = master.word(8) ? 1 : 0;
-  const inp = { angle, power, facing, tank_x: sh.x, tank_y: sh.y, wind, rebound: !!rebound, weapon, men, guided: 0, target: null, maxSteps: 200000 };
+  const tg = ps[(sh.idx % players)], guided = process.env.G ? 1 + master.word(3) : 0;      // G=1 — выстрелы с наведением
+  const inp = { angle, power, facing, tank_x: sh.x, tank_y: sh.y, wind, rebound: !!rebound, weapon, men, guided, target: guided ? [tg.x, tg.y] : null, maxSteps: 200000 };
   const tag = `#${i} угол=${angle} мощность=${power} ветер=${wind} напр=${facing} стены=${rebound} men=${men} оружие=${weapon} игроков=${players} танк=(${sh.x},${sh.y}) мяч=${ball}`;
   loadRom(machine, rom);
   const mem0 = new Uint8Array(0x10000); screenToPlanes(v, mem0);
@@ -39,7 +41,7 @@ for (let i = 0; i < N; i++) {
   const want = TW.flightDraw(v, bg, inp, sh.idx, !!ball, false, players, () => { n++; });
   const hdr = new Uint8Array(16); hdr[0] = MODE_FLIGHT;
   poke(machine, PARAM, hdr);
-  poke(machine, LIST, [angle, facing & 255, power & 255, power >> 8, sh.x, sh.y, wind & 255, (wind >> 8) & 255, rebound, weapon, men & 255, (men >> 8) & 255, players, ball]);
+  poke(machine, LIST, [angle, facing & 255, power & 255, power >> 8, sh.x, sh.y, wind & 255, (wind >> 8) & 255, rebound, weapon, men & 255, (men >> 8) & 255, players, ball, guided, guided ? tg.x : 0, guided ? tg.y : 0]);
   const r = runUntil(machine, { haltPc: null, maxInsns: 2_000_000_000 });
   const got = { stop: r.mem[RESULT], hit: r.mem[RESULT + 1], x: i32(r.mem, RESULT + 2), y: i32(r.mem, RESULT + 6) };
   const exp = { stop: STOP[want.stop], hit: want.hit, x: Math.round(want.x * 65536), y: Math.round(want.y * 65536) };

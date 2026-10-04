@@ -28,8 +28,7 @@ export const PROFILE_V06C = { name: 'v06c', W: 256, H: 256, X0: 3, Y0: 27, X1: 2
   playerColors: [[1, X, X], [1, 1, X], [X, 1, 1], [1, X, 1]],          // красный, жёлтый, голубой, пурпурный
   terrain: { init: 200, lo: 20, hi: 185, min: 3, max: 205, margin: (n) => 50 - 6 * (n - 2) },
   place: { rnd: 24, off: 5 }, bgKinds: 1,
-  sparkM: 48, fountainN: 50,
-  shopNoGuides: true };   // магазин: всё оружие, щит и демпфер; наведения в порте на 8080 нет       // гибель: искр и комьев земли в 8 раз меньше, чем в оригинале (скорость 8080)
+  sparkM: 48, fountainN: 50 };       // гибель: искр и комьев земли в 8 раз меньше, чем в оригинале (скорость 8080)       // гибель: искр и комьев земли в 8 раз меньше, чем в оригинале (скорость 8080)
 let P = PROFILE_DOS;
 export let W = 320, H = 200, SCREEN = W * H;
 export function setProfile(p) { P = p; W = p.W; H = p.H; SCREEN = W * H; VIEWPORT.splice(0, 4, p.X0, p.Y0, p.X1, p.Y1); }
@@ -624,8 +623,10 @@ function guideFix(x, y, vx, vy, guided, target) {
   }
   if ((guided === 1 || guided === 3) && FX.abs(tdy) <= 2 * FX.ONE) {
     vy = 0;
-    const prod = FX.mul(tdx, vx);
-    vx = FX.mul(vx, prod >= 0 ? FX.HERB : -FX.HERB);
+    if (FX.abs(vx) < 64 * FX.ONE) {     // Вектор: разгон не дальше 64 точек за шаг — иначе числа выходят из 32 бит
+      const prod = FX.mul(tdx, vx);
+      vx = FX.mul(vx, prod >= 0 ? FX.HERB : -FX.HERB);
+    }
   }
   return { x, y, vx, vy };
 }
@@ -724,6 +725,7 @@ function flightDrawFix(v, bg, inp, shooter, ballVisible, trail, players, onFrame
       if (vx < FX.ONE && x < FX.fromInt(P.X0 - 1) && wind < 0) y = FX.fromInt(P.Y1 + 11);
     }
     if (stop === null && (y < FX.fromInt(-5000) || y > FX.fromInt(P.Y1 + 4))) stop = 'bounds';
+    if (stop === null && guided && inp.target && (x < FX.fromInt(-64) || x > FX.fromInt(320))) stop = 'bounds';   // Вектор: наведённый снаряд далеко за полем — улетел
     if (stop !== null) {
       if (y > 0 && y < FX.fromInt(H) && x > 0 && x < FX.fromInt(W)) cross(v, bg, FX.trunc(x), FX.trunc(y));
       return { stop, x, y, hit };
