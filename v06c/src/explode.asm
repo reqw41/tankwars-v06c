@@ -50,7 +50,7 @@ ex_find:
 	cp	5
 	ld	a, b
 	jp	nz, ex_find
-	ret				; не обычный взрыв
+	jp	special			; не обычный взрыв: особое оружие
 ex_found:
 	ld	a, (hl)
 	ld	(ex_r), a

@@ -242,7 +242,7 @@ sh_menu:
 	xor	a
 	ld	(sh_count), a
 	ld	(sh_w), a
-	; оружие 0..5: (запас > 0 или цена <= money) и пачка != 0
+	; оружие 0..17: (запас > 0 или цена <= money) и пачка != 0
 sh_mn_w_lp:
 	ld	a, (sh_w)
 	ld	e, a
@@ -298,7 +298,7 @@ sh_mn_w_next:
 	ld	hl, sh_w
 	inc	(hl)
 	ld	a, (hl)
-	cp	6			; в порте продаётся оружие 1..5 (shopMaxWeapon эталона)
+	cp	18
 	jp	c, sh_mn_w_lp
 	jp	sh_mn_d_s0		; наведение не продаётся (shopNoGuides)
 	; категория 1: herb (номер 0), vick (номер 1)

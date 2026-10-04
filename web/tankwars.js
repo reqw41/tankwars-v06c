@@ -29,7 +29,7 @@ export const PROFILE_V06C = { name: 'v06c', W: 256, H: 256, X0: 3, Y0: 27, X1: 2
   terrain: { init: 200, lo: 20, hi: 185, min: 3, max: 205, margin: (n) => 50 - 6 * (n - 2) },
   place: { rnd: 24, off: 5 }, bgKinds: 1,
   sparkM: 48, fountainN: 50,
-  shopMaxWeapon: 5, shopNoGuides: true };   // магазин: только то, что есть в порте на 8080 (оружие 1..5, щит и демпфер)       // гибель: искр и комьев земли в 8 раз меньше, чем в оригинале (скорость 8080)
+  shopNoGuides: true };   // магазин: всё оружие, щит и демпфер; наведения в порте на 8080 нет       // гибель: искр и комьев земли в 8 раз меньше, чем в оригинале (скорость 8080)
 let P = PROFILE_DOS;
 export let W = 320, H = 200, SCREEN = W * H;
 export function setProfile(p) { P = p; W = p.W; H = p.H; SCREEN = W * H; VIEWPORT.splice(0, 4, p.X0, p.Y0, p.X1, p.Y1); }

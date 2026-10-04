@@ -30,7 +30,8 @@ for (let i = 0; i < N; i++) {
   for (const p of ps) { TW.drawTankBarrel(v, p); p.men = [100, 60, 12, 3, 100][master.word(5)]; p.shield = master.word(5) ? 0 : master.word(250); p.score = master.word(30000); p.damp = master.word(4) ? 0 : master.word(30);
     for (const w of [2, 3, 4]) p.ammo[w] = 3; }
   const shooter = 1 + master.word(n), s = ps[shooter - 1];
-  s.weapon = process.env.LASER ? 5 : [1, 1, 2, 3, 4, 11, 0, 5][master.word(8)];
+  s.weapon = process.env.LASER ? 5 : process.env.W ? process.env.W.split(',').map(Number)[master.word(process.env.W.split(',').length)] : [1, 1, 2, 3, 4, 11, 0, 5][master.word(8)];
+  if (s.weapon > 5) s.ammo[s.weapon] = 3;
   if (s.weapon === 5) s.ammo[5] = [1000, 300, 150, 101][master.word(4)];
   // прицел: часть выстрелов — в сторону соседа с подходящей мощностью, часть — случайные
   const tgt = ps[(shooter % n)];

@@ -1439,6 +1439,7 @@ kernel_start:
 	include	"death.asm"
 	include	"turn.asm"
 	include	"laser.asm"
+	include	"special.asm"
 	include	"aistep.asm"
 	include	"hud.asm"
 	include	"aiplan.asm"
