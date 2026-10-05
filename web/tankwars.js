@@ -1694,7 +1694,7 @@ export const WEAPON_NAMES = ['Lead Ball', 'Incinerator', 'Mark II Incin.', '20 K
 export const WEAPON_NAMES_RU = ['Свинцовое ядро', 'Испепелитель', 'Испепелитель II', 'Атомная 20 кт', 'Атомная 5 Мт', 'Лазер', 'CRI 4/D', 'CRI 8/ND', 'CRI 8/D',
   'CRI 20/ND', 'CRI 20/D', 'Ручная граната', 'Звуковая пушка', 'Ком земли', 'Ком земли II', 'Сжатая земля', 'Сверхсж. земля', 'Взрывная земля'];
 export const SHOP_NAMES_RU = [null, ['Наведение Херба', 'Наведение Вика'], ['Силовой щит', 'Гаситель удара']];
-export const AI_NAMES_RU = { 'Mr. Stupid': 'Г-н Тупица', 'Lobber': 'Навесник', 'Rifleman': 'Стрелок', 'Lob & Shoot': 'Навес+выстрел', 'Windless Wit': 'Умник в штиль',
+export const AI_NAMES_RU = { 'Mr. Stupid': 'Г-н Тупица', 'Lobber': 'Навесник', 'Rifleman': 'Стрелок', 'Lob & Shoot': 'Универсал', 'Windless Wit': 'Умник в штиль',
   'Twanger': 'Рикошетчик', 'Birdy Bonker': 'Берди Бонкер' };
 export const dispName = (name) => AI_NAMES_RU[name] || String(name).replace(/^PLAYER /, 'ИГРОК ');
 // Панель хода — строки знакомест 0..2 (точки y 0..23):

@@ -1,7 +1,8 @@
 ; Компьютерный игрок в цикле хода — computerStep(), plan(), aiType(), pickStrategy() эталона web/tankwars.js.
 ;   computer_step: вход A = место игрока, ap_rebound (стены отражают). Выход A = код действия.
 ;   pick_strategy: вход A = место игрока. PL_STRAT = Random(4) + 1 с отбором по типу игрока.
-; Тип игрока — по первой букве русского имени (PL_NAME, коды CP866; имена — s_ainames в strings_game.inc):
+; Тип игрока — по первой букве русского имени, у двух имён на У — по второй (PL_NAME, коды CP866; имена —
+; s_ainames в strings_game.inc):
 ; W — Windless Wit, T — Twanger, L — Lobber («LOB» и буква B) или Lob & Shoot.
 
 computer_step:
@@ -79,19 +80,18 @@ cs_type:
 	inc	b
 	cp	0x91			; С — СТРЕЛОК
 	jp	z, cst_r
-	ld	b, 6
-	cp	0x93			; У — УМНИК В ШТИЛЬ
-	jp	z, cst_r
 	inc	b
+	cp	0x8D			; Н — НАВЕСНИК
+	jp	z, cst_r
+	ld	b, 7
 	cp	0x90			; Р — РИКОШЕТЧИК
 	jp	z, cst_r
 	ld	b, 0
-	cp	0x8D			; Н — НАВЕСНИК или НАВЕС+ВЫСТРЕЛ: шестой знак Н или «+»
+	cp	0x93			; У — УНИВЕРСАЛ или УМНИК В ШТИЛЬ: вторая буква Н или М
 	jp	nz, cst_r
-	ld	de, 5
-	add	hl, de
+	inc	hl
 	ld	a, (hl)
-	ld	b, 4
+	ld	b, 5
 	cp	0x8D
 	jp	z, cst_r
 	inc	b
