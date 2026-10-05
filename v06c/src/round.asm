@@ -182,7 +182,7 @@ rs_pdone:
 
 ; generateWind: eff = (mode == 5) ? Random(5) : mode; span = SPANS[eff];
 ; w = span/2 - Random(span) (16 бит, со знаком); 4 × rnd_hi с порогами 6554,6554,3277,3277: w = w·4 (16 бит);
-; клампы ±30000. Портит AF, BC, DE, HL.
+; предел ±span (профиль Вектора). Портит AF, BC, DE, HL.
 rs_wind_calc:
 	ld	a, (rs_windmode)
 	ld	(rs_mode), a
@@ -265,29 +265,35 @@ rs_wnext:
 	dec	a
 	ld	(rs_wc), a
 	jp	nz, rs_wl
-	; клампы: w > 30000 → 30000; w < -30000 → -30000
+	; предел профиля Вектора: |w| не больше span режима (в оригинале ±30000, и порывы давали ветер в тысячи)
 	ld	hl, (rs_w)
+	ex	de, hl			; DE = w
+	ld	hl, (rs_span)
+	ld	a, d
+	or	a
+	jp	m, rs_wneg
+	ld	a, l			; w >= 0: span − w < 0 — взять span
+	sub	e
+	ld	a, h
+	sbc	a, d
+	jp	c, rs_wstore
+	jp	rs_wkeep
+rs_wneg:
+	add	hl, de			; w < 0: span + w < 0 — взять −span
 	ld	a, h
 	or	a
-	jp	m, rs_wlo		; отрицательное — верхний кламп не нужен
-	cp	0x75		; 30000 = 7530h
-	jp	c, rs_wstore		; w < 30000
-	jp	nz, rs_whi
+	jp	p, rs_wkeep
+	ld	hl, (rs_span)
 	ld	a, l
-	cp	0x31
-	jp	c, rs_wstore		; w <= 30000
-rs_whi:	ld	hl, 30000
+	cpl
+	ld	l, a
+	ld	a, h
+	cpl
+	ld	h, a
+	inc	hl
 	jp	rs_wstore
-rs_wlo:
-	cp	0x8A		; -30000 = 8AC0h; беззнаковое HL < 8AC0h = w < -30000
-	jp	c, rs_wclamplo
-	jp	nz, rs_wstore
-	ld	a, l
-	cp	0xC0
-	jp	c, rs_wclamplo
-	jp	rs_wstore
-rs_wclamplo:
-	ld	hl, 0x8AC0		; -30000
+rs_wkeep:
+	ex	de, hl
 rs_wstore:
 	ld	(rs_wind), hl
 	ret

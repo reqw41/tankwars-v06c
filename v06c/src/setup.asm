@@ -1,10 +1,11 @@
 ; Экран настройки матча (только игра): число игроков, кто на каком месте, число раундов и правила.
 ; Пункты: 0 — ИГРОКОВ, 1..4 — игроки, 5 — РАУНДОВ, 6 — ОТСКОК (стены), 7 — ВЕТЕР, 8 — ОСЫПАНИЕ, 9 — ПАДЕНИЕ танков,
-; 10 — ОБЛОМКИ (взрыв танка ранит соседей), 11 — НАЧАТЬ. Клавиши: вверх/вниз — пункт, влево/вправо — значение
+; 10 — ОБЛОМКИ (взрыв танка ранит соседей), 11 — НАЧАТЬ, 12 — ПОМОЩЬ (экран с клавишами). Клавиши: вверх/вниз — пункт, влево/вправо — значение
 ; (по кругу), пробел или ВК — начать матч. Настройки — g_n, g_types, g_rounds, g_walls, g_windmode, g_crumble,
 ; g_fall, g_xkill (game.asm); курсор изначально на НАЧАТЬ. Перерисовывается только изменившаяся строка.
-ST_NITEMS	equ	12
+ST_NITEMS	equ	13
 ST_START	equ	11
+ST_HELP		equ	12
 ST_COL		equ	4		; столбец подписи
 ST_VCOL		equ	14		; столбец значения
 
@@ -37,7 +38,7 @@ st_pl:
 	ld	bc, 0x0902
 	call	gm_text
 	ld	de, s_help
-	ld	hl, 0x0119
+	ld	hl, 0x011A
 	ld	bc, 0x1D02
 	call	gm_text
 	ld	a, ST_START
@@ -55,7 +56,7 @@ st_key:
 	ld	(g_phase), a
 	call	get_key
 	cp	5
-	ret	z
+	jp	z, st_fire
 	cp	3
 	jp	z, st_down
 	cp	4
@@ -69,7 +70,7 @@ st_key:
 st_chg:
 	ld	a, (st_cur)
 	cp	ST_START
-	jp	z, st_key
+	jp	nc, st_key
 	or	a
 	jp	z, st_c_opt
 	cp	5
@@ -84,6 +85,34 @@ st_chg:
 	and	7
 	ld	(hl), a
 	jp	st_redraw
+	; огонь: на ПОМОЩЬ — экран помощи и снова настройка, иначе — начать матч
+st_fire:
+	ld	a, (st_cur)
+	cp	ST_HELP
+	ret	nz
+	call	clear_screen
+	ld	hl, s_helptext
+	ld	a, 1
+st_h1:
+	ld	(st_y), a
+	ld	a, (hl)
+	cp	0xFF
+	jp	z, st_h2
+	push	hl
+	ld	a, (st_y)
+	ld	c, a
+	xor	a
+	ld	b, 2
+	call	ui_at
+	pop	hl
+	call	ui_zstr
+	inc	hl
+	ld	a, (st_y)
+	inc	a
+	jp	st_h1
+st_h2:
+	call	get_key
+	jp	setup
 	; настройка из таблицы: шаг вперёд или назад, за краем — другой край
 st_c_opt:
 	push	bc
@@ -176,6 +205,8 @@ st_item:
 	ld	(st_i), a
 	cp	ST_START
 	jp	z, sti_start
+	cp	ST_HELP
+	jp	z, sti_help
 	or	a
 	jp	z, sti_opt
 	cp	5
@@ -200,6 +231,13 @@ sti_start:
 	call	st_mark
 	ld	de, s_start
 	ld	hl, ST_COL * 256 + 21
+	ld	bc, 0x0602
+	jp	gm_text
+sti_help:
+	ld	l, 23
+	call	st_mark
+	ld	de, s_helpitem
+	ld	hl, ST_COL * 256 + 23
 	ld	bc, 0x0602
 	jp	gm_text
 sti_opt:

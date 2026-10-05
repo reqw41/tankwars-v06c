@@ -1,5 +1,5 @@
 // Экран настройки матча (v06c/build/game.rom): клавиши двигают курсор и меняют настройки в памяти игры.
-// node v06c/test/setup.mjs [снимок.png]
+// node v06c/test/setup.mjs [снимок.png] [помощь.png]
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +10,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const BUILD = process.env.BUILD || 'v06c/build';
 const L = parseSym(path.join(ROOT, BUILD, 'game.sym'));
 const m = createVector(new Uint8Array(fs.readFileSync(path.join(ROOT, BUILD, 'game.rom'))));
-const KEY = { left: [0, 0x10], right: [0, 0x40], down: [0, 0x80], up: [0, 0x20] };
+const KEY = { left: [0, 0x10], right: [0, 0x40], down: [0, 0x80], up: [0, 0x20], fire: [7, 0x80] };
 function fail(msg) { console.error('FAIL ' + msg); process.exit(1); }
 m.frame(100); m.key(7, 0x80, true);
 for (let f = 0; (m.rd(0x39) | (m.rd(0x3A) << 8)) !== L.isr; f++) { if (f > 600) fail('игра не запустилась после заставки'); m.frame(); }
@@ -26,7 +26,12 @@ const st = () => ({ cur: m.rd(L.st_cur), n: m.rd(L.g_n), types: [0, 1, 2, 3].map
   wind: m.rd(L.g_windmode), crumble: m.rd(L.g_crumble), fall: m.rd(L.g_fall), xkill: m.rd(L.g_xkill) });
 function expect(tag, want) { const s = st(); for (const [k, v] of Object.entries(want)) if (String(s[k]) !== String(v)) fail(`${tag}: ${k} = ${s[k]}, нужно ${v} (${JSON.stringify(s)})`); }
 expect('начало', { cur: 11, n: 2, types: '0235', rounds: 10, walls: 1, wind: 2, crumble: 50, fall: 1, xkill: 1 });
-press('down'); expect('вниз с НАЧАТЬ — по кругу', { cur: 0 });
+press('down'); expect('ниже НАЧАТЬ — ПОМОЩЬ', { cur: 12 });
+press('right'); expect('у ПОМОЩЬ значения нет', { cur: 12, n: 2 });
+press('fire'); m.frame(40);                              // экран помощи
+if (process.argv[3]) savePng(m.bmp(), process.argv[3]);
+press('fire'); m.frame(40); expect('после помощи — снова настройка, курсор на НАЧАТЬ', { cur: 11 });
+press('down'); press('down'); expect('вниз с ПОМОЩЬ — по кругу', { cur: 0 });
 press('right'); press('right'); expect('игроков 4', { n: 4 });
 press('right'); expect('игроков по кругу', { n: 2 });
 press('left'); expect('игроков назад по кругу', { n: 4 }); press('right');

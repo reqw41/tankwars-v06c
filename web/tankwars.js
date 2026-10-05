@@ -28,7 +28,7 @@ export const PROFILE_V06C = { name: 'v06c', W: 256, H: 256, X0: 3, Y0: 27, X1: 2
   playerColors: [[1, X, X], [1, 1, X], [X, 1, 1], [1, X, 1]],          // красный, жёлтый, голубой, пурпурный
   terrain: { init: 200, lo: 20, hi: 185, min: 3, max: 205, margin: (n) => 50 - 6 * (n - 2) },
   place: { rnd: 24, off: 5 }, bgKinds: 1,
-  sparkM: 48, fountainN: 50 };       // гибель: искр и комьев земли в 8 раз меньше, чем в оригинале (скорость 8080)       // гибель: искр и комьев земли в 8 раз меньше, чем в оригинале (скорость 8080)
+  sparkM: 48, fountainN: 50, windCap: true };       // гибель: искр и комьев земли в 8 раз меньше, чем в оригинале (скорость 8080)       // гибель: искр и комьев земли в 8 раз меньше, чем в оригинале (скорость 8080)
 let P = PROFILE_DOS;
 export let W = 320, H = 200, SCREEN = W * H;
 export function setProfile(p) { P = p; W = p.W; H = p.H; SCREEN = W * H; VIEWPORT.splice(0, 4, p.X0, p.Y0, p.X1, p.Y1); }
@@ -800,7 +800,9 @@ export function generateWind(rng, mode) {
   let w = ((span >> 1) - rng.word(span)) << 16 >> 16;
   const THW = [FX.TH.p10, FX.TH.p10, FX.TH.p05, FX.TH.p05];
   for (let i = 0; i < WTHR.length; i++) if (P.fixed ? FX.rndLt(rng, THW[i]) : rng.real() < WTHR[i]) w = ((w << 2) & 0xffff) << 16 >> 16;
-  return Math.max(-30000, Math.min(30000, w));
+  // Вектор (windCap): порывы не уводят ветер дальше ±span выбранного режима; случайные числа тратятся так же
+  const lim = P.windCap ? span : 30000;
+  return Math.max(-lim, Math.min(lim, w));
 }
 
 // =====================================================================================================
