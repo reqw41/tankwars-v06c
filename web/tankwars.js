@@ -1691,11 +1691,11 @@ export const WEAPON_NAMES = ['Lead Ball', 'Incinerator', 'Mark II Incin.', '20 K
   'CRI 20/D', 'Hand Grenade', 'Sonic Blaster', "Ball 'O' Dirt", 'Mark II Dirt', 'Pressured Dirt', 'High Pres. Dirt', 'Xplosive Dirt'];   // DS:1920+0x100*w
 // Тексты экранов Вектора — русские. Имена компьютерных игроков в логике остаются английскими (по ним выбирается
 // планировщик и стратегия закупки), русское имя — только на экране и в записи игрока порта: dispName().
-export const WEAPON_NAMES_RU = ['Свинцовое ядро', 'Испепелитель', 'Испепелитель II', 'Атомная 20 кт', 'Атомная 5 Мт', 'Лазер', 'CRI 4/D', 'CRI 8/ND', 'CRI 8/D',
+export const WEAPON_NAMES_RU = ['Свинцовое ядро', 'Испепелитель', 'Испепелитель II', 'Малыш 20 кт', 'Толстяк 5 Мт', 'Лазер', 'CRI 4/D', 'CRI 8/ND', 'CRI 8/D',
   'CRI 20/ND', 'CRI 20/D', 'Ручная граната', 'Звуковая пушка', 'Ком земли', 'Ком земли II', 'Сжатая земля', 'Сверхсж. земля', 'Взрывная земля'];
 export const SHOP_NAMES_RU = [null, ['Наведение Херба', 'Наведение Вика'], ['Силовой щит', 'Гаситель удара']];
-export const AI_NAMES_RU = { 'Mr. Stupid': 'Г-н Тупица', 'Lobber': 'Навесник', 'Rifleman': 'Стрелок', 'Lob & Shoot': 'Универсал', 'Windless Wit': 'Умник в штиль',
-  'Twanger': 'Рикошетчик', 'Birdy Bonker': 'Берди Бонкер' };
+export const AI_NAMES_RU = { 'Mr. Stupid': 'Тупица', 'Lobber': 'Навесник', 'Rifleman': 'Стрелок', 'Lob & Shoot': 'Универсал', 'Windless Wit': 'Тихушник',
+  'Twanger': 'Рикошетчик', 'Birdy Bonker': 'Гольфист' };
 export const dispName = (name) => AI_NAMES_RU[name] || String(name).replace(/^PLAYER /, 'ИГРОК ');
 // Панель хода — строки знакомест 0..2 (точки y 0..23):
 //   0: имя игрока его цветом (13)              WIND <123 / WIND 123> / WIND 0   (столбцы 21..31)
@@ -1707,7 +1707,7 @@ export function drawPanel(v, p, wind) {
   drawText(v, 0, 0, padR(dispName(p.name), 13), tankColor(p.idx));
   const w = Math.abs(wind), ws = wind < 0 ? '<' + w : wind > 0 ? w + '>' : '0';
   drawText(v, 20, 0, 'ВЕТЕР ' + padL(ws, 6));
-  drawText(v, 0, 1, 'УГОЛ ' + padR(p.facing < 0 ? '<' + p.angle : p.angle + '>', 3) + '  СИЛА ' + padR(p.power, 4) + '  ЛЮДИ ' + padL(Math.max(p.men, 0), 3));
+  drawText(v, 0, 1, 'УГОЛ ' + padR(p.facing < 0 ? '<' + p.angle : p.angle + '>', 3) + '  СИЛА ' + padR(p.power, 4) + '  ЭНЕРГИЯ ' + padL(Math.max(p.men, 0), 3));
   drawText(v, 0, 2, padR(WEAPON_NAMES_RU[p.weapon], 15) + ' x' + padR(p.ammo[p.weapon], 5));
   if (p.herb > 0) drawText(v, 26, 2, (p.guided & 1 ? '*' : ' ') + 'H');
   if (p.vick > 0) drawText(v, 29, 2, (p.guided & 2 ? '*' : ' ') + 'V');
@@ -1726,7 +1726,7 @@ export function drawResults(v, ps, round, rounds) {
   });
   drawText(v, 2, 20, 'ДЕНЬГИ');
   ps.forEach((p, i) => drawText(v, 9 + 6 * i, 20, padL(p.score - p.spent, 5), tankColor(p.idx)));
-  drawText(v, 2, 28, last ? 'МАТЧ ОКОНЧЕН' : 'НАЖМИТЕ КЛАВИШУ');
+  drawText(v, 2, 28, last ? 'ИГРА ОКОНЧЕНА' : 'НАЖМИТЕ ЛЮБУЮ КЛАВИШУ');
 }
 // Магазин (весь экран, без рамки): строка на позицию меню; sel — выбранная строка (0..menu.length+1: дальше BUY и DONE),
 // -1 — без курсора. Позиций не больше 22 (18 видов оружия без двух непродаваемых + 2 наведения + 2 защиты = 20).

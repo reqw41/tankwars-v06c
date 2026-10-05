@@ -48,7 +48,7 @@
   порождает `v06c/tools/text2inc.mjs` из эталона (`names.inc`, `strings.inc`, `strings_game.inc`) — править там и в
   `web/tankwars.js` (`drawPanel`, `drawResults`, `drawShop`, `WEAPON_NAMES_RU`, `AI_NAMES_RU`). В логике эталона имена
   компьютеров английские; в записи игрока порта — русские, и тип компьютера порт узнаёт по первой букве имени
-  (`cs_type` в `aimain.asm`): меняя имена, сохраняй различие по первым буквам (у Универсала и Умника — по второй).
+  (`cs_type` в `aimain.asm`): меняя имена, сохраняй различие по первым буквам (у Тупицы и Тихушника — по второй).
 - **Золотые матчи** `GOLD=n node v06c/test/game.mjs` (n = 0..11, по одному за запуск; 11, 8, 3 идут по 10+ минут):
   матчи компьютеров из `tests/fixtures/v06c/golden.json`. На сборке от 05.10 совпадают все 12 (1731 ход).
 - Эталон: `node web/test/run_fixtures.mjs` (910/910), `node web/test/v06c_selfplay.mjs` (золотые хеши),

@@ -28,8 +28,8 @@ write('names.inc', ['; названия и цены магазина — из э
   dw('wpn_price', TW.SHOP_PRICE[0]), dw('shop_p1', TW.SHOP_PRICE[1]), dw('shop_p2', TW.SHOP_PRICE[2])]);
 
 // --- панель, результаты, магазин: те же строки, что в drawPanel / drawResults / drawShop эталона ---
-const UI = { s_wind: 'ВЕТЕР ', s_ang: 'УГОЛ ', s_pow: '  СИЛА ', s_men: '  ЛЮДИ ', s_x: ' X', s_after: 'ПОСЛЕ РАУНДА ', s_of: ' ИЗ ', s_final: 'ИТОГ МАТЧА',
-  s_hdr: '# ИГРОК        ПОБЕД   ОЧКИ', s_money: 'ДЕНЬГИ', s_press: 'НАЖМИТЕ КЛАВИШУ', s_over: 'МАТЧ ОКОНЧЕН', s_shop: 'МАГАЗИН', s_moneys: 'ДЕНЬГИ ',
+const UI = { s_wind: 'ВЕТЕР ', s_ang: 'УГОЛ ', s_pow: '  СИЛА ', s_men: '  ЭНЕРГИЯ ', s_x: ' X', s_after: 'ПОСЛЕ РАУНДА ', s_of: ' ИЗ ', s_final: 'ИТОГ МАТЧА',
+  s_hdr: '# ИГРОК        ПОБЕД   ОЧКИ', s_money: 'ДЕНЬГИ', s_press: 'НАЖМИТЕ ЛЮБУЮ КЛАВИШУ', s_over: 'ИГРА ОКОНЧЕНА', s_shop: 'МАГАЗИН', s_moneys: 'ДЕНЬГИ ',
   s_cart: '  КОРЗИНА ', s_item: 'ТОВАР            ЦЕНА ЕСТЬ КУП', s_buy: ' КУПИТЬ', s_done: ' ГОТОВО' };
 write('strings.inc', ['; строки панели, результатов и магазина (v06c/tools/text2inc.mjs), не править руками', ...Object.entries(UI).map(([l, t]) => db(l, t, { z: true }))]);
 

@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 W, H, Y0 = 256, 160, 48
 COPY_Y = 172                # с этой строки кадра (из 200) — надпись копирайта
 TEXT_REG = 6                # регистр самого светлого цвета — им пишется надпись
-TEXT, TEXT_COL, TEXT_ROW = 'PRESS ANY KEY', 9, 27
+TEXT, TEXT_COL, TEXT_ROW = 'НАЖМИТЕ ЛЮБУЮ КЛАВИШУ', 5, 27
 
 frame = Image.open(ROOT / 'docs/img/orig-title.png').convert('RGB').resize((320, 200), Image.NEAREST)
 raw = (ROOT / 'orig/bomb/BOMB1.RAW').read_bytes()
@@ -94,7 +94,8 @@ scr = np.zeros((256, W), dtype=np.uint8); scr[Y0:Y0 + H] = out
 font = [int(v, 16) for v in re.findall(r'0x([0-9a-fA-F]{2})', (ROOT / 'v06c/src/font.inc').read_text())]
 for i, ch in enumerate(TEXT):
     for r in range(8):
-        bits = font[(ord(ch) - 32) * 8 + r]
+        g = 64 + ord(ch) - 0x410 if 'А' <= ch <= 'Я' else ord(ch) - 32      # русские прописные — знаки 64..95
+        bits = font[g * 8 + r]
         for b in range(8):
             if bits & (0x80 >> b): scr[TEXT_ROW * 8 + r, (TEXT_COL + i) * 8 + b] = TEXT_REG
 mem = bytearray(32768)          # с 8000h: плоскости 8000, A000, C000, E000
