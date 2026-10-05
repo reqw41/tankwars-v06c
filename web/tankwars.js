@@ -1711,7 +1711,7 @@ export function drawShop(v, p, menu, qty, cart, sel = -1) {
   drawText(v, 0, 0, 'SHOP');
   drawText(v, 5, 0, padR(p.name, 13), tankColor(p.idx));
   drawText(v, 0, 1, 'MONEY ' + padL(p.score - p.spent - cart, 6) + '   CART ' + padL(cart, 6));
-  drawText(v, 2, 3, 'ITEM            PRICE  HAVE BUY');
+  drawText(v, 2, 3, 'ITEM            PRICE HAVE BUY');
   menu.forEach(([cat, i], c) => {
     const row = 4 + c, name = cat === 0 ? WEAPON_NAMES[i] : SHOP_NAMES[cat][i];
     drawText(v, 0, row, sel === c ? '>' : ' ');

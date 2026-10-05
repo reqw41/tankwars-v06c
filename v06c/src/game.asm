@@ -1,5 +1,5 @@
-; Tank Wars / Вектор-06Ц — игровой образ (рубеж М1: раунды людей с клавиатуры).
-; Грузится с 0100h. Собирается из тех же модулей, что и стенд tw.asm; отличие — главный цикл и прерывание кадра.
+; Tank Wars / Вектор-06Ц — игра (v06c/build/game.bin). В файле game.rom она лежит сжатой: загрузчик loader.asm
+; показывает заставку, по клавише распаковывает игру на 0100h и запускает. Собирается из тех же модулей, что и стенд tw.asm; отличие — главный цикл и прерывание кадра.
 ; Клавиши: стрелки влево/вправо — угол, вверх/вниз — мощность (держать — быстрее), ТАБ или W — оружие вперёд,
 ; Q — оружие назад, I — разворот, пробел или ВК — огонь, АР2 — прервать раунд ничьей, СТР — прервать и отдать
 ; победу случайному живому.
@@ -35,7 +35,12 @@ entry:
 	ld	(g_phase), a
 	ld	(gk_last), a
 	ei
-	call	splash
+	; клавиша, которой закрыли заставку (loader.asm), не считается: ждём, пока отпустят
+gm_rel:
+	halt
+	call	kb_code
+	or	a
+	jp	nz, gm_rel
 	; --- экран настройки матча ---
 gm_setup:
 	call	setup
@@ -132,7 +137,7 @@ gm_ai:
 	jp	nz, gm_ai
 gm_ai_fire:
 	ld	a, (g_cur)
-	call	show_panel
+	call	show_panel_nc
 	call	kb_code			; прервать раунд можно и на ходу компьютера
 	cp	K_ABORT
 	jp	z, gm_abort
@@ -207,7 +212,16 @@ gm_ap_lp:
 	ld	hl, gm_i
 	dec	(hl)
 	jp	nz, gm_ap_lp
-	jp	gm_show
+	; панель не очищается: угол, мощность, разворот — только строка ANG/POW; оружие и наведение — вся поверх
+	ld	a, (gm_code)
+	cp	7
+	ld	a, (g_cur)
+	jp	nc, gm_upd
+	call	show_panel_r1
+	jp	gm_input
+gm_upd:
+	call	show_panel_nc
+	jp	gm_input
 
 ; цель наведения игрока g_cur: следующий живой чужой после нынешней цели
 gm_target:
@@ -800,7 +814,6 @@ isr_row:
 	ret
 
 s_gtitle:	db	"TANK WARS"
-s_anykey:	db	"PRESS ANY KEY"
 s_player:	db	"PLAYER "
 s_ainames:				; по 13 байт, порядок — как в выборе игрока оригинала; 7 — Birdy Bonker
 	db	"Mr. Stupid", 0, 0, 0
@@ -884,12 +897,10 @@ gm_p:		dw	0
 	include	"shopui.asm"
 	include	"hshop.asm"
 	include	"setup.asm"
-	include	"dzx0.asm"
-	include	"splash.asm"
 	include	"barrel.asm"
 	include	"text.asm"
 	include	"crumble.asm"
 	include	"pal.asm"
 	include	"ui.asm"
 game_end:
-	savebin	"v06c/build/game.rom", 0x0100, game_end - 0x0100
+	savebin	"v06c/build/game.bin", 0x0100, game_end - 0x0100

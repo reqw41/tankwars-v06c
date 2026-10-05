@@ -33,9 +33,7 @@ if [ "$sz" -gt $((0x8400 - 0x100)) ]; then
 	exit 1
 fi
 
-# игровой образ (v06c/src/game.asm) — те же модули с главным циклом; заставка — кадр оригинала, сжатый ZX0
-python3 v06c/tools/title2planes.py > /dev/null
-"$ROOT/tools/bin/zx0" -f -c v06c/build/title.bin v06c/build/title.zx0 > /dev/null
+# игра (v06c/src/game.asm) — те же модули с главным циклом
 out=$($ASM --i8080 --fullpath -i v06c/src \
 	--lst=v06c/build/game.lst --sym=v06c/build/game.sym \
 	v06c/src/game.asm 2>&1) || {
@@ -49,9 +47,29 @@ if echo "$out" | grep -Eiq 'warning:|warnings: [1-9]'; then
 	exit 1
 fi
 python3 v06c/tools/check_i8080.py v06c/build/game.lst
-gsz=$(wc -c < v06c/build/game.rom | tr -d ' ')
-echo "OK: v06c/build/game.rom ($gsz Б)"
+gsz=$(wc -c < v06c/build/game.bin | tr -d ' ')
+echo "OK: v06c/build/game.bin ($gsz Б)"
 if [ "$gsz" -gt $((0x9E00 - 0x100)) ]; then
 	echo "ИГРА ($gsz Б) ДОСТАЁТ ДО СТЕКА — провал"
 	exit 1
 fi
+
+# образ для машины: загрузчик с заставкой (16 цветов, четыре плоскости) и сжатая игра — v06c/src/loader.asm
+python3 v06c/tools/title2planes.py > /dev/null
+"$ROOT/tools/bin/zx0" -f -c v06c/build/title.bin v06c/build/title.zx0 > /dev/null
+"$ROOT/tools/bin/zx0" -f -c v06c/build/game.bin v06c/build/game.zx0 > /dev/null
+out=$($ASM --i8080 --fullpath -i v06c/src \
+	--lst=v06c/build/loader.lst --sym=v06c/build/loader.sym \
+	v06c/src/loader.asm 2>&1) || {
+	echo "$out"
+	echo "СБОРКА ЗАГРУЗЧИКА ПРОВАЛЕНА"
+	exit 1
+}
+if echo "$out" | grep -Eiq 'warning:|warnings: [1-9]'; then
+	echo "$out"
+	echo "ЕСТЬ ПРЕДУПРЕЖДЕНИЯ sjasmplus (загрузчик) — провал"
+	exit 1
+fi
+python3 v06c/tools/check_i8080.py v06c/build/loader.lst
+rsz=$(wc -c < v06c/build/game.rom | tr -d ' ')
+echo "OK: v06c/build/game.rom ($rsz Б: заставка $(wc -c < v06c/build/title.zx0 | tr -d ' '), игра $(wc -c < v06c/build/game.zx0 | tr -d ' '))"

@@ -2,6 +2,7 @@
 ; Готовая draw_shop (ui.asm) читает игрока в «упакованном» виде (80 байт) и меню по 4 байта на позицию; здесь —
 ; переходник: запись игрока + списки sh_cat/sh_num/sh_qty (shop.asm) -> упакованный вид -> draw_shop.
 ;   show_shop: вход A = место игрока 1..n, su_sel (байт: выбранная строка, 0xFF — ничего).
+;              su_part (0 — экран целиком, 1 и 2 — обновление, тогда su_old — прежняя строка).
 ;              Меню: sh_count позиций, sh_cat[i], sh_num[i], sh_qty[i] (байты); корзина — sh_cart (4 байта).
 ; Только команды 8080. Свои метки и ячейки — с префиксом su_, ячейки после shopui_end.
 
@@ -63,11 +64,18 @@ su_fill:
 	ld	(ui_menu), hl
 	ld	hl, hd_pack
 	ld	(ui_p), hl
-	; 4. нарисовать.
-	call	draw_shop
-	ret
+	; 4. нарисовать: целиком или только изменившееся (su_part, su_old — см. shop_upd в ui.asm).
+	ld	a, (su_old)
+	ld	(ui_old), a
+	ld	a, (su_part)
+	ld	(ui_part), a
+	or	a
+	jp	z, draw_shop
+	jp	shop_upd
 shopui_end:
 
 su_sel:		db	0
+su_old:		db	0			; прежняя строка курсора
+su_part:	db	0			; 0 — экран целиком, 1 — сдвинулся курсор, 2 — изменилось количество
 su_menu:	ds	22 * 4		; меню для draw_shop: категория, номер, количество (слово)
 su_i:		db	0			; счётчик позиций меню

@@ -34,7 +34,6 @@ for (let mi = 0; mi < M; mi++) {
   const n = gold ? gold.players : 2 + master.word(3), seed = gold ? gold.seed >>> 0 : master._next(), nRounds = gold ? gold.rounds.length : 2;
   const types = Array.from({ length: n }, (_, i) => (gold ? AI.indexOf(GOLD_NAMES[(i + gold.seed) % GOLD_NAMES.length]) : mi === 0 ? 0 : KINDS[master.word(KINDS.length)]));     // первый матч — одни люди
   const m = createVector(ROM);
-  m.wr(L.g_n, [n]); m.wr(L.g_rounds, [nRounds]); m.wr(L.g_seed, u32(seed)); m.wr(L.g_fixed, [1]); m.wr(L.g_types, types); m.wr(L.g_step, [1]);
   const phase = () => m.rd(L.g_phase);
   // нажать клавишу и отпустить, дождаться, пока игра снова ждёт ввода (или показывает результаты)
   function press(code, tag) {
@@ -67,11 +66,15 @@ for (let mi = 0; mi < M; mi++) {
   const ps = Array.from({ length: n }, (_, i) => { const p = TW.newPlayer(i + 1, nRounds); if (types[i]) { p.ctrl = 3; p.name = AI[types[i]]; } else p.name = 'PLAYER ' + (i + 1);
     p.strategy = TW.pickStrategy(p.name, rng); return p; });
   const allAi = types.every(Boolean);
-  m.frame(260);                                           // заставка распаковывается около трёх секунд и ждёт, пока клавиши отпущены
-  if (phase() !== PH.splash) fail(`матч ${mi}: нет заставки`);
-  press(5, `матч ${mi}: заставка`);                       // любая клавиша -> экран настройки
-  if (phase() !== PH.title) fail(`матч ${mi}: нет экрана настройки`);
+  // загрузчик: заставка, любая клавиша, распаковка игры (её признак — вектор прерывания указывает на isr игры)
+  m.frame(100);
   if (process.env.SPLASH && mi === 0) savePng(m.bmp(), process.env.SPLASH);
+  m.key(7, 0x80, true);
+  for (let f = 0; (m.rd(0x39) | (m.rd(0x3A) << 8)) !== L.isr; f++) { if (f > 600) fail(`матч ${mi}: игра не запустилась после заставки`); m.frame(); }
+  m.key(7, 0x80, false);
+  m.frame(40);                                            // игра ждёт отпускания клавиши и рисует экран настройки
+  if (phase() !== PH.title || m.rd(L.kb_taken) !== 0) fail(`матч ${mi}: нет экрана настройки`);
+  m.wr(L.g_n, [n]); m.wr(L.g_rounds, [nRounds]); m.wr(L.g_seed, u32(seed)); m.wr(L.g_fixed, [1]); m.wr(L.g_types, types); m.wr(L.g_step, [1]);
   press(5, `матч ${mi}: заставка`);                       // любая клавиша -> первый раунд
   for (let round = 1; round <= nRounds; round++) {
     TW.shufflePlayers(rng, ps);

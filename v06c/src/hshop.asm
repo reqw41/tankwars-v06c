@@ -22,6 +22,7 @@ hs_reset:
 	ld	(sh_cart + 2), hl
 	xor	a
 	ld	(hs_sel), a
+	ld	(su_part), a		; экран целиком
 hs_draw:
 	ld	a, (hs_sel)
 	ld	(su_sel), a
@@ -64,7 +65,14 @@ hs_down:
 	ld	a, 0xFF
 hs_d1:
 	inc	a
+hs_mv:					; курсор на строку A: перерисовать только курсор
+	ld	b, a
+	ld	a, (hs_sel)
+	ld	(su_old), a
+	ld	a, b
 	ld	(hs_sel), a
+	ld	a, 1
+	ld	(su_part), a
 	jp	hs_draw
 hs_up:
 	ld	a, (hs_sel)
@@ -74,8 +82,7 @@ hs_up:
 	inc	a
 hs_u1:
 	dec	a
-	ld	(hs_sel), a
-	jp	hs_draw
+	jp	hs_mv
 hs_plus:
 	call	hs_item
 	jp	nc, hs_wait		; не позиция
@@ -106,6 +113,9 @@ hs_plus:
 	ld	a, 0
 	adc	a, (hl)
 	ld	(hl), a
+hs_chg:					; изменилось количество: строка денег и строка позиции
+	ld	a, 2
+	ld	(su_part), a
 	jp	hs_draw
 hs_minus:
 	call	hs_item
@@ -134,7 +144,7 @@ hs_minus:
 	ld	a, (hl)
 	sbc	a, 0
 	ld	(hl), a
-	jp	hs_draw
+	jp	hs_chg
 
 ; sh_pp и sh_money игрока hs_place
 hs_money:

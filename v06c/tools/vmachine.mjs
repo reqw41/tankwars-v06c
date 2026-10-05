@@ -24,7 +24,7 @@ export function createVector(romPath) {
   memory.init_from_array(img, 0); memory.detach_boot && memory.detach_boot();
   cpu.pc = 0x100; cpu.sp = 0xA000; cpu.iff = false;
   const m = {
-    cpu, memory, keyboard, v06c, frames: 0,
+    cpu, memory, keyboard, v06c, io, frames: 0,
     rd: (a) => memory.bytes[memory.tobank(a & 0xffff)],
     wr: (a, bytes) => bytes.forEach((b, i) => { memory.bytes[memory.tobank((a + i) & 0xffff)] = b & 255; }),
     frame(n = 1) { for (let i = 0; i < n; i++) { v06c.oneInterrupt(true); m.frames++; } },

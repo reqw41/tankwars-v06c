@@ -1,11 +1,22 @@
 ; Панель хода и экран результатов по записям игроков (player.inc) — drawPanel(), drawResults() эталона.
 ; Готовые draw_panel и draw_results (ui.asm) читают игрока в «упакованном» виде по 80 байт; здесь — переходник:
 ; запись игрока -> упакованный вид -> вызов готовой подпрограммы.
-;   show_panel:   вход A = место игрока 1..n; ветер берётся из rs_wind.
+;   show_panel:   вход A = место игрока 1..n; ветер берётся из rs_wind. show_panel_nc, show_panel_r1 — обновление.
 ;   show_results: вход hd_round, hd_rounds (байты); рисует всех n_players игроков по порядку мест.
 ; Только команды 8080 (без ld (nn),r для r<>a). Свои ячейки — после hud_end, имена с hd_.
 
 show_panel:
+	call	hd_prep
+	jp	draw_panel
+; то же поверх уже нарисованной панели этого игрока — без очистки и мигания
+show_panel_nc:
+	call	hd_prep
+	jp	draw_panel_nc
+; только строка ANG/POW/MEN (угол, мощность, разворот)
+show_panel_r1:
+	call	hd_prep
+	jp	dp_row1
+hd_prep:
 	ld	(hd_place), a
 	xor	a
 	ld	(hd_blk), a		; панель рисует первый блок hd_pack
@@ -14,7 +25,6 @@ show_panel:
 	ld	(ui_wind), hl
 	ld	hl, hd_pack
 	ld	(ui_p), hl
-	call	draw_panel
 	ret
 
 show_results:

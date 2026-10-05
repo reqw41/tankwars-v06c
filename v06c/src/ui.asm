@@ -353,8 +353,11 @@ dp_wsub:
 	ld	h, a
 	ret
 
+; draw_panel — панель целиком с очисткой; draw_panel_nc — то же поверх прежней панели того же игрока (все поля
+; пишутся с дополнением пробелами, экран выходит тот же, но без мигания); dp_row1 — только строка ANG/POW/MEN.
 draw_panel:
 	call	clear_panel
+draw_panel_nc:
 	ld	a, (ui_p)
 	ld	l, a
 	ld	a, (ui_p + 1)
@@ -380,7 +383,10 @@ draw_panel:
 	ld	hl, ui_num
 	ld	b, 6
 	call	ui_padl
+	call	dp_row1
+	jp	dp_row2
 	; строка ANG
+dp_row1:
 	xor	a
 	ld	c, 1
 	ld	b, 2
@@ -419,8 +425,9 @@ dp_men:
 	call	ui_itoa
 	ld	hl, ui_num
 	ld	b, 3
-	call	ui_padl
+	jp	ui_padl
 	; оружие
+dp_row2:
 	xor	a
 	ld	c, 2
 	ld	b, 2
@@ -875,6 +882,55 @@ draw_shop:
 	ld	hl, (ui_p)
 	ld	b, 13
 	call	ui_padr_name
+	call	ds_money
+	ld	a, 2
+	ld	c, 3
+	ld	b, 2
+	call	ui_at
+	ld	hl, s_item
+	call	ui_zstr
+	xor	a
+	ld	(ui_i), a
+ds_lp:
+	ld	a, (ui_i)
+	ld	c, a
+	ld	a, (ui_nmenu)
+	cp	c
+	jp	z, ds_btns
+	jp	c, ds_btns
+	call	ds_row1
+	ld	a, (ui_i)
+	inc	a
+	ld	(ui_i), a
+	jp	ds_lp
+
+; Обновление экрана магазина без перерисовки целиком (экран выходит тот же, что у draw_shop):
+;   ui_part = 1 — сдвинулся курсор: перерисовать курсор в строках ui_old и ui_sel;
+;   ui_part = 2 — изменилось количество: строка денег и строка ui_sel.
+shop_upd:
+	ld	a, (ui_part)
+	dec	a
+	jp	z, su_cur
+	call	ds_money
+	jp	su_new
+su_cur:
+	ld	a, (ui_old)
+	call	ds_any
+su_new:
+	ld	a, (ui_sel)
+; строка A: позиция меню или строка кнопок
+ds_any:
+	ld	c, a
+	ld	a, (ui_nmenu)
+	cp	c
+	jp	z, ds_btns
+	jp	c, ds_btns
+	ld	a, c
+	ld	(ui_i), a
+	jp	ds_row1
+
+; строка денег и корзины
+ds_money:
 	xor	a
 	ld	c, 1
 	ld	b, 2
@@ -909,22 +965,10 @@ draw_shop:
 	call	ui_itoa
 	ld	hl, ui_num
 	ld	b, 6
-	call	ui_padl
-	ld	a, 2
-	ld	c, 3
-	ld	b, 2
-	call	ui_at
-	ld	hl, s_item
-	call	ui_zstr
-	xor	a
-	ld	(ui_i), a
-ds_lp:
-	ld	a, (ui_i)
-	ld	c, a
-	ld	a, (ui_nmenu)
-	cp	c
-	jp	z, ds_btns
-	jp	c, ds_btns
+	jp	ui_padl
+
+; строка позиции ui_i: курсор и (кроме ui_part = 1) название, цена, запас, количество
+ds_row1:
 	ld	a, (ui_i)
 	add	a, 4
 	ld	(ui_row), a
@@ -945,18 +989,15 @@ ds_cur:
 	xor	a
 	call	ui_at
 	call	draw_char
-	ld	a, 2
-	ld	c, a
+	ld	a, (ui_part)
+	dec	a
+	ret	z
 	ld	a, (ui_row)
 	ld	c, a
 	ld	b, 2
 	ld	a, 2
 	call	ui_at
-	call	ds_item
-	ld	a, (ui_i)
-	inc	a
-	ld	(ui_i), a
-	jp	ds_lp
+	jp	ds_item
 ds_btns:
 	ld	a, (ui_nmenu)
 	add	a, 5
@@ -1197,7 +1238,7 @@ s_over:	db	"GAME OVER", 0
 s_shop:	db	"SHOP", 0
 s_moneys:	db	"MONEY ", 0
 s_cart:	db	"   CART ", 0
-s_item:	db	"ITEM            PRICE  HAVE BUY", 0
+s_item:	db	"ITEM            PRICE HAVE BUY", 0
 s_buy:	db	" BUY", 0
 s_done:	db	" DONE", 0
 
@@ -1228,6 +1269,8 @@ ui_i:	db	0
 ui_row:	db	0
 ui_cart:	dw	0
 ui_sel:	db	0
+ui_old:	db	0			; прежняя строка курсора (shop_upd)
+ui_part:	db	0			; 0 — магазин целиком, 1 — курсор, 2 — количество
 ui_nmenu:	db	0
 ui_menu:	dw	0
 ui_cat:	db	0
