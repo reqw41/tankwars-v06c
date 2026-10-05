@@ -366,10 +366,7 @@ sx_w5:
 	ld	a, (hl)
 	ld	(sx_d), a
 	call	sx_step
-	push	de
-	xor	a
-	call	putpixel
-	pop	de
+	call	sx_clr
 sx_w6:
 	call	sx_set
 	ld	a, (sx_rad)
@@ -438,6 +435,9 @@ sx_scan:
 	ld	a, (sx_y)
 	ld	e, a
 	call	fl_addr
+	ld	a, c
+	and	0x7E
+	jp	nz, sx_fast		; оба соседа по строке — в том же байте
 	inc	l			; 1: (0, -1)
 	ld	a, 1
 	call	sx_tst
@@ -503,6 +503,96 @@ sx_t1:
 	ld	a, (sx_d)
 	ld	(hl), a
 	pop	hl
+	ret
+; Быстрый просмотр (точка не на краю байта): по строке сверху, своей и снизу — байт «здесь земля» из трёх
+; плоскостей, затем восемь проверок масками. HL — байт точки в плоскости A000, C — её маска.
+sx_fast:
+	ld	a, c
+	rlca
+	ld	b, a			; B — сосед слева
+	ld	a, c
+	rrca
+	ld	d, a			; D — сосед справа
+	inc	l			; y − 1
+	call	sx_grd
+	ld	(sx_gu), a
+	dec	l
+	call	sx_grd
+	ld	(sx_gm), a
+	dec	l			; y + 1
+	call	sx_grd
+	ld	e, a
+	ld	hl, sx_dirs
+	macro	SXT src, mask, dir
+	ld	a, src
+	and	mask
+	jp	z, 1F
+	ld	(hl), dir
+	inc	hl
+1
+	endm
+	ld	a, (sx_odd)
+	or	a
+	jp	nz, sx_f4
+	SXT	(sx_gu), c, 1
+	SXT	(sx_gu), d, 2
+	SXT	(sx_gm), d, 3
+	SXT	e, d, 4
+	SXT	e, c, 5
+	SXT	e, b, 6
+	SXT	(sx_gm), b, 7
+	SXT	(sx_gu), b, 8
+	jp	sx_f9
+sx_f4:					; нечётное оружие по диагонали не ходит
+	SXT	(sx_gu), c, 1
+	SXT	(sx_gm), d, 3
+	SXT	e, c, 5
+	SXT	(sx_gm), b, 7
+sx_f9:
+	ld	de, -sx_dirs
+	add	hl, de
+	ld	a, l
+	ld	(sx_nd), a
+	ret
+; A = биты земли в байте по адресу HL (плоскость A000): есть в A000, нет в C000 и E000. HL, BC, D целы; портит E
+sx_grd:
+	ld	a, h
+	add	a, 0x20
+	ld	h, a
+	ld	e, (hl)
+	add	a, 0x20
+	ld	h, a
+	ld	a, (hl)
+	or	e
+	cpl
+	ld	e, a
+	ld	a, h
+	sub	0x40
+	ld	h, a
+	ld	a, e
+	and	(hl)
+	ret
+; стереть точку (D, E) во всех трёх плоскостях; DE цел
+sx_clr:
+	call	fl_addr
+	ld	a, c
+	cpl
+	ld	c, a
+	ld	a, (hl)
+	and	c
+	ld	(hl), a
+	ld	a, h
+	add	a, 0x20
+	ld	h, a
+	ld	a, (hl)
+	and	c
+	ld	(hl), a
+	ld	a, h
+	add	a, 0x20
+	ld	h, a
+	ld	a, (hl)
+	and	c
+	ld	(hl), a
 	ret
 ; D, E = точка sx_i
 sx_pt:
@@ -570,6 +660,8 @@ sx_row:		db	0
 sx_i:		db	0
 sx_d:		db	0
 sx_nd:		db	0
+sx_gu:		db	0			; биты земли в строке над точкой
+sx_gm:		db	0			; и в строке точки
 sx_x:		db	0
 sx_y:		db	0
 sx_rad:		db	0

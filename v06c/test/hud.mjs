@@ -14,7 +14,7 @@ TW.setProfile(TW.PROFILE_V06C);
 const L = parseSym(path.join(ROOT, 'v06c/build/tw.sym'));
 const rom = new Uint8Array(fs.readFileSync(path.join(ROOT, 'v06c/build/tw.rom')));
 const machine = createMachine();
-const PARAM = 0x80, LIST = 0x8400, MODE_HUD = 32;
+const PARAM = 0x80, LIST = 0x8800, MODE_HUD = 32;
 const N = +process.argv[2] || 120;
 for (const n of ['show_panel', 'show_results', 'hud_end', 'hd_round', 'hd_rounds', 'hd_pack']) if (L[n] === undefined) { console.error('FAIL нет метки ' + n); process.exit(1); }
 let s = 1234; const rnd = (n) => { s = (Math.imul(s, 1103515245) + 12345) >>> 0; return Math.floor(s / 4294967296 * n); };

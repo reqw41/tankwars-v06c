@@ -14,7 +14,7 @@ TW.setProfile(TW.PROFILE_V06C);
 const L = parseSym(path.join(ROOT, 'v06c/build/tw.sym'));
 const rom = new Uint8Array(fs.readFileSync(path.join(ROOT, 'v06c/build/tw.rom')));
 const machine = createMachine();
-const PARAM = 0x80, LIST = 0x8400, RESULT = 0x9600, MODE_DEATH = 28;
+const PARAM = 0x80, LIST = 0x8800, RESULT = 0x9600, MODE_DEATH = 28;
 const variants = (process.argv[2] || '0,1,2,3,4,5,6').split(',').map(Number), N = +process.argv[3] || 30;
 const u32 = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
 for (const variant of variants) {

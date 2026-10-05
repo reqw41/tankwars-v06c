@@ -25,13 +25,13 @@ function press(name) {
 const st = () => ({ cur: m.rd(L.st_cur), n: m.rd(L.g_n), types: [0, 1, 2, 3].map((i) => m.rd(L.g_types + i)).join(''), rounds: m.rd(L.g_rounds), walls: m.rd(L.g_walls),
   wind: m.rd(L.g_windmode), crumble: m.rd(L.g_crumble), fall: m.rd(L.g_fall), xkill: m.rd(L.g_xkill) });
 function expect(tag, want) { const s = st(); for (const [k, v] of Object.entries(want)) if (String(s[k]) !== String(v)) fail(`${tag}: ${k} = ${s[k]}, нужно ${v} (${JSON.stringify(s)})`); }
-expect('начало', { cur: 11, n: 2, types: '0623', rounds: 10, walls: 1, wind: 2, crumble: 50, fall: 1, xkill: 1 });
+expect('начало', { cur: 11, n: 2, types: '0235', rounds: 10, walls: 1, wind: 2, crumble: 50, fall: 1, xkill: 1 });
 press('down'); expect('вниз с НАЧАТЬ — по кругу', { cur: 0 });
 press('right'); press('right'); expect('игроков 4', { n: 4 });
 press('right'); expect('игроков по кругу', { n: 2 });
 press('left'); expect('игроков назад по кругу', { n: 4 }); press('right');
-press('down'); press('right'); expect('тип игрока 1', { cur: 1, types: '1623' });
-press('left'); press('left'); expect('тип игрока по кругу', { types: '7623' }); press('right');
+press('down'); press('right'); expect('тип игрока 1', { cur: 1, types: '1235' });
+press('left'); press('left'); expect('тип игрока по кругу', { types: '7235' }); press('right');
 press('down'); press('down'); expect('игроки 3 и 4 скрыты', { cur: 5 });
 press('left'); expect('раундов 9', { rounds: 9 });
 press('down'); press('right'); expect('отскок: да', { cur: 6, walls: 2 }); press('right'); expect('отскок по кругу', { walls: 0 });

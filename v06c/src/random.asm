@@ -32,21 +32,36 @@ rnd_mod:
 	ld	h, 0
 	ret
 rnd_m8g:
+	ld	a, e
+	or	a
+	jp	m, rnd_m8w
+	; n < 128 (почти все вызовы): остаток в A после сдвига не больше 255 — 16 шагов по пять команд
 	xor	a
-	; n < 256 (почти все вызовы): остаток в A, 16 шагов по 9 команд
 	ld	c, e
-	ld	b, 16
-rnd_m8:
+	dup	16
 	add	hl, hl
 	rla
-	jp	c, rnd_m8s		; остаток >= 256 — вычитать точно
 	cp	c
-	jp	c, rnd_m8n
-rnd_m8s:
+	jp	c, 1F
 	sub	c
-rnd_m8n:
-	dec	b
-	jp	nz, rnd_m8
+1
+	edup
+	ld	l, a
+	ld	h, 0
+	ret
+rnd_m8w:
+	xor	a
+	; 128 <= n < 256: после сдвига остаток бывает больше 255 — тогда вычитать без сравнения
+	ld	c, e
+	dup	16
+	add	hl, hl
+	rla
+	jp	c, 1F			; остаток >= 256 — вычитать точно
+	cp	c
+	jp	c, 2F
+1	sub	c
+2
+	edup
 	ld	l, a
 	ld	h, 0
 	ret
@@ -56,108 +71,95 @@ rnd_mod16:
 	jp	umod16
 
 ; rand_seed := (rand_seed * 0x08088405 + 1) & 0xffffffff
-; 0x08088405 = биты 0, 2, 10, 15, 19, 27: s + (s<<2) + (s<<2)<<8 + (s<<7)<<8 + (s<<3)<<16 + (s<<3)<<24 + 1.
-; Три сдвига влево на бит и один вправо вместо одиннадцати; сдвиги на 8, 16, 24 — смещением байтов.
+; Умножение по таблицам: K[x] = x·08088405h (4 байта), страницы LCG_TAB..+3 — байты 0..3, индекс — младший байт
+; адреса. s·K = K[s0] + (K[s1] << 8) + (K[s2] << 16) + (K[s3] << 24): десять выборок и сложения с переносом.
+; Таблицы (1 КБ вне образа) строит lcg_init — вызвать один раз до первого Random. Портит AF, BC, DE, HL.
+LCG_TAB		equ	0x9A00
 lcg_next:
-	ld	hl, (rand_seed)
-	ex	de, hl
-	ld	hl, (rand_seed + 2)	; HL:DE = s
-	call	lcg_sh
-	call	lcg_sh			; s << 2
-	ld	(tmp32 + 2), hl
-	ex	de, hl
-	ld	(tmp32), hl
-	ex	de, hl
-	call	lcg_sh			; s << 3: нужно только младшее слово
-	ex	de, hl
-	ld	(lcg_a3), hl
-	; lcg_v = младшие три байта (s << 7): сдвиг вправо на бит байтов s2, s1, s0
-	ld	hl, rand_seed + 2
-	ld	a, (hl)
-	rra
-	dec	hl
-	ld	a, (hl)
-	rra
-	ld	(lcg_v + 2), a
-	dec	hl
-	ld	a, (hl)
-	rra
-	ld	(lcg_v + 1), a
-	ld	a, 0
-	rra
-	ld	(lcg_v), a
-	; s + (s << 2)
-	ld	hl, (rand_seed)
-	ex	de, hl
-	ld	hl, (tmp32)
-	add	hl, de
-	ld	(rand_seed), hl
-	ld	hl, (rand_seed + 2)
-	ex	de, hl
-	ld	hl, (tmp32 + 2)
-	jp	nc, lcg_1
-	inc	hl
-lcg_1:
-	add	hl, de
-	ld	(rand_seed + 2), hl
-	; + 1
-	ld	hl, rand_seed
-	inc	(hl)
-	jp	nz, lcg_2
-	inc	hl
-	inc	(hl)
-	jp	nz, lcg_2
-	inc	hl
-	inc	(hl)
-	jp	nz, lcg_2
-	inc	hl
-	inc	(hl)
-lcg_2:
-	; со смещением на байт: (s << 2) и (s << 7)
-	ld	hl, rand_seed + 1
-	ld	de, tmp32
-	call	lcg_add3
-	ld	hl, rand_seed + 1
-	ld	de, lcg_v
-	call	lcg_add3
-	; со смещением на два и три байта: (s << 3)
-	ld	hl, (rand_seed + 2)
-	ex	de, hl
-	ld	hl, (lcg_a3)
-	add	hl, de
-	ld	(rand_seed + 2), hl
-	ld	a, (lcg_a3)
-	ld	hl, rand_seed + 3
-	add	a, (hl)
-	ld	(hl), a
-	ret
-; HL:DE <<= 1
-lcg_sh:
-	ex	de, hl
-	add	hl, hl
-	ex	de, hl
-	ld	a, l
-	rla
+	ld	a, (rand_seed)
 	ld	l, a
-	ld	a, h
-	rla
-	ld	h, a
-	ret
-; три байта по адресу HL += три байта по адресу DE
-lcg_add3:
-	ld	a, (de)
+	ld	h, LCG_TAB >> 8
+	ld	b, (hl)
+	inc	h
+	ld	c, (hl)
+	inc	h
+	ld	d, (hl)
+	inc	h
+	ld	e, (hl)			; E:D:C:B = K[s0]
+	ld	a, (rand_seed + 1)
+	ld	l, a
+	ld	h, LCG_TAB >> 8
+	ld	a, c
 	add	a, (hl)
-	ld	(hl), a
-	inc	hl
-	inc	de
-	ld	a, (de)
+	ld	c, a
+	inc	h
+	ld	a, d
 	adc	a, (hl)
-	ld	(hl), a
-	inc	hl
-	inc	de
-	ld	a, (de)
+	ld	d, a
+	inc	h
+	ld	a, e
 	adc	a, (hl)
-	ld	(hl), a
+	ld	e, a
+	ld	a, (rand_seed + 2)
+	ld	l, a
+	ld	h, LCG_TAB >> 8
+	ld	a, d
+	add	a, (hl)
+	ld	d, a
+	inc	h
+	ld	a, e
+	adc	a, (hl)
+	ld	e, a
+	ld	a, (rand_seed + 3)
+	ld	l, a
+	ld	h, LCG_TAB >> 8
+	ld	a, e
+	add	a, (hl)
+	ld	e, a
+	inc	b			; + 1
+	jp	nz, lcg_1
+	inc	c
+	jp	nz, lcg_1
+	inc	d
+	jp	nz, lcg_1
+	inc	e
+lcg_1:
+	ld	h, c
+	ld	l, b
+	ld	(rand_seed), hl
+	ld	h, e
+	ld	l, d
+	ld	(rand_seed + 2), hl
+	ret
+; таблицы K[x] = x·08088405h для x = 0..255
+lcg_init:
+	ld	bc, 0
+	ld	d, b
+	ld	e, b
+	ld	l, b
+lcg_i1:
+	ld	h, LCG_TAB >> 8
+	ld	(hl), b
+	inc	h
+	ld	(hl), c
+	inc	h
+	ld	(hl), d
+	inc	h
+	ld	(hl), e
+	ld	a, b
+	add	a, 0x05
+	ld	b, a
+	ld	a, c
+	adc	a, 0x84
+	ld	c, a
+	ld	a, d
+	adc	a, 0x08
+	ld	d, a
+	ld	a, e
+	adc	a, 0x08
+	ld	e, a
+	inc	l
+	jp	nz, lcg_i1
 	ret
 
 ; HL = HL % BC (беззнаковое). Если BC = 0, HL = 0. Портит AF, DE.
@@ -204,7 +206,4 @@ umod_next:
 random_end:
 
 rand_seed:	ds	4
-lcg_a3:		dw	0
-lcg_v:		ds	3
-tmp32:		ds	4
 umod_cnt:	db	0

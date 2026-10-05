@@ -8,7 +8,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const L = parseSym(path.join(ROOT, 'v06c/build/tw.sym'));
 const rom = new Uint8Array(fs.readFileSync(path.join(ROOT, 'v06c/build/tw.rom')));
 const machine = createMachine();
-const PARAM = 0x80, LIST = 0x8400, MODE_SOUND = 35;
+const PARAM = 0x80, LIST = 0x8800, MODE_SOUND = 35;
 for (const n of ['snd_tone', 'snd_off', 'snd_play', 'snd_tick', 'sound_end', 'snd_ptr', 'snd_cnt']) if (L[n] === undefined) { console.error('FAIL нет метки ' + n); process.exit(1); }
 let log = [];
 const real = machine.io.realoutput.bind(machine.io);

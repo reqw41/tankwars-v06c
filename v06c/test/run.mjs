@@ -9,7 +9,8 @@ import { planesToScreen, firstPixelDiff, screenToPlanes } from '../tools/screen.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const ROM = path.join(ROOT, 'v06c/build/tw.rom');
 const SYM = path.join(ROOT, 'v06c/build/tw.sym');
-const PARAM = 0x0080, LIST = 0x8400, RESULT = 0x9600;
+const PARAM = 0x0080, LIST = 0x8800, RESULT = 0x9600;
+const RN = 500;      // вызовов Random за запуск: 1000 байт результатов, до таблиц генератора (9A00h) не достают
 const MODE_RANDOM = 1, MODE_PIXELS = 2, MODE_LINES = 3, MODE_BENCH = 4;
 const MODE_ERASELN = 5, MODE_FRAME = 6, MODE_TANK = 7, MODE_CROSS = 8, MODE_RING = 9;
 const MODE_CLEAR = 10, MODE_BARREL = 11, MODE_TEXT = 12, MODE_CRUMBLE = 13, MODE_REPLACE = 14, MODE_PAL = 15;
@@ -70,13 +71,13 @@ function fail(msg) {
 }
 
 function testRandom() {
-  const seeds = [0, 1, 0x08088405, 0x12345678, 0xDEADBEEF, 7, 42, 0xFFFFFFFF, 0x80000000, 99991];
+  const seeds = [0, 1, 0x08088405, 0x12345678, 0xDEADBEEF, 7, 42, 0xFFFFFFFF, 0x80000000, 99991, 0x00FF00FF, 0xFF00FF00, 0x01020304, 0xFFFEFDFC, 0x7FFFFFFF, 255, 256, 65535, 65536, 0xABCDEF01];
   const gen = new LCG(0xC0FFEE);
   let cases = 0, calls = 0;
   for (const seed of seeds) {
-    const ns = new Uint8Array(1000 * 2);
+    const ns = new Uint8Array(RN * 2);
     const nList = [];
-    for (let i = 0; i < 1000; i++) {
+    for (let i = 0; i < RN; i++) {
       const k = gen.below(12);
       const n = [0, 1, 2, 7, 10, 16, 100, 256, 1000, 32767, 65535, 3][k];
       nList.push(n);
@@ -84,11 +85,11 @@ function testRandom() {
       ns[i * 2 + 1] = (n >> 8) & 255;
     }
     const extra = new Uint8Array(15);
-    extra[1] = 1000 & 255; extra[2] = 1000 >> 8;
+    extra[1] = RN & 255; extra[2] = RN >> 8;
     extra.set(u32(seed), 3);
     const r = runMode(MODE_RANDOM, extra, ns);
     const rng = new TW.TPRandom(seed);
-    for (let i = 0; i < 1000; i++) {
+    for (let i = 0; i < RN; i++) {
       const got = readU16(r.mem, RESULT + i * 2);
       const exp = rng.word(nList[i]);
       if (got !== exp) {
@@ -102,7 +103,7 @@ function testRandom() {
     }
     cases++;
   }
-  console.log(`OK  Random: ${cases} начальных × 1000 вызовов (${calls}), seed совпал`);
+  console.log(`OK  Random: ${cases} начальных × ${RN} вызовов (${calls}), seed совпал`);
 }
 
 function testPixels() {
@@ -394,7 +395,7 @@ function testText() {
   add(0, 4, 4, 'PLAYER 1');
   add(31, 31, 2, 'Z');
   add(-1, 0, 2, 'X'); // skipped by both
-  while (strs.length < 200) {
+  while (strs.length < 170) {      // 170 строк — около 3,2 КБ, буфер LIST стенда 3,5 КБ
     const n = gen.below(33);
     let s = '';
     for (let i = 0; i < n; i++) s += String.fromCharCode(32 + gen.below(64));

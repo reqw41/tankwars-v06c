@@ -78,6 +78,8 @@ export function loadRom(machine, romBuf) {
 }
 
 export function poke(machine, addr, bytes) {
+  // буфер LIST стенда (8800h) не должен доставать до RESULT (9600h)
+  if (addr >= 0x8800 && addr < 0x9600 && addr + bytes.length > 0x9600) throw new Error(`poke: ${bytes.length} байт с ${addr.toString(16)} достают до RESULT`);
   for (let i = 0; i < bytes.length; i++) machine.memory.write((addr + i) & 0xffff, bytes[i] & 0xff, false);
 }
 

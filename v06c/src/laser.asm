@@ -157,6 +157,7 @@ lz_s2:
 	ld	hl, lz_dy
 	ld	b, 4
 	call	fx_negm
+	call	lz_retab
 
 lz_loop:
 	xor	a
@@ -187,14 +188,14 @@ lz_dig:
 	ld	de, 20
 	call	random
 	ld	a, l
-	ld	de, lz_dx
+	ld	de, lz_tdx
 	ld	hl, lz_x
 	call	lz_back
 	ld	(lz_gx), hl
 	ld	de, 20
 	call	random
 	ld	a, l
-	ld	de, lz_dy
+	ld	de, lz_tdy
 	ld	hl, lz_y
 	call	lz_back
 	ld	(lz_gy), hl
@@ -394,7 +395,7 @@ lz_w2:
 	jp	c, lz_w3
 	ld	hl, lz_dx
 lz_hit:
-	call	lz_bounce
+	call	lz_bnc
 lz_w3:
 	ld	a, (lz_dy + 3)
 	or	a
@@ -415,8 +416,11 @@ lz_w4:
 	jp	c, lz_w5
 	ld	hl, lz_dy
 lz_hit2:
-	call	lz_bounce
+	call	lz_bnc
 lz_w5:
+	ld	a, (lz_tb)		; шаг луча сменился (отражение) — таблицы шаг·k заново
+	or	a
+	call	nz, lz_retab
 	ld	a, (lz_done)
 	or	a
 	jp	nz, lz_end
@@ -471,34 +475,77 @@ lz_m7:
 	dec	a
 	jp	nz, lz_m7
 	ret
-; HL = trunc((HL) − (DE)·A), A = 0..39: точка позади луча
+; HL = trunc((HL) − T[A]), DE = таблица шаг·k (lz_tdx или lz_tdy), A = 0..19: точка позади луча
 lz_back:
-	ld	(lz_ptr), hl
-	ex	de, hl
-	ld	(lz_ptr2), hl
-	push	af
-	ld	hl, lz_t
-	ex	de, hl
-	ld	hl, (lz_ptr)
-	ex	de, hl
-	ld	b, 4
-	call	fx_copy
-	pop	af
-lz_bk1:
-	or	a
-	jp	z, lz_bk2
-	push	af
-	ld	hl, (lz_ptr2)
-	ex	de, hl
-	ld	hl, lz_t
-	ld	b, 4
-	call	fx_subm
-	pop	af
-	dec	a
-	jp	lz_bk1
-lz_bk2:
+	push	hl
+	add	a, a
+	add	a, a
+	ld	l, a
+	ld	h, 0
+	add	hl, de			; HL = адрес T[A]
+	pop	de			; DE = адрес координаты
+	ld	bc, lz_t
+	ld	a, (de)
+	sub	(hl)
+	ld	(bc), a
+	dup	3
+	inc	hl
+	inc	de
+	inc	bc
+	ld	a, (de)
+	sbc	a, (hl)
+	ld	(bc), a
+	edup
 	ld	hl, lz_t
 	jp	lz_tr
+lz_bnc:
+	ld	a, 1
+	ld	(lz_tb), a
+	jp	lz_bounce
+; таблицы шаг·k, k = 0..19, по нынешнему шагу луча: точка позади луча берётся одним вычитанием
+lz_retab:
+	xor	a
+	ld	(lz_tb), a
+	ld	hl, lz_tdx
+	ld	de, lz_dx
+	call	lz_mktab
+	ld	hl, lz_tdy
+	ld	de, lz_dy
+; таблица по адресу HL: T[0] = 0, T[k] = T[k−1] + (DE), k = 1..19, числа по 4 байта
+lz_mktab:
+	ex	de, hl
+	ld	(lz_ptr2), hl
+	ex	de, hl
+	ld	b, 4
+	call	fx_zero			; HL = адрес T[1]
+	ld	a, 19
+lz_mt1:
+	push	af
+	ld	d, h
+	ld	e, l
+	dec	de
+	dec	de
+	dec	de
+	dec	de			; DE = адрес T[k−1]
+	push	hl
+	ld	b, 4
+	call	fx_copy
+	pop	hl
+	push	hl
+	ex	de, hl
+	ld	hl, (lz_ptr2)
+	ex	de, hl
+	ld	b, 4
+	call	fx_addm
+	pop	hl
+	inc	hl
+	inc	hl
+	inc	hl
+	inc	hl
+	pop	af
+	dec	a
+	jp	nz, lz_mt1
+	ret
 ; HL = trunc((HL) − Random(40) + 20): искра у танка
 lz_spark:
 	ld	de, lz_t
@@ -630,3 +677,6 @@ lz_dx:		ds	4
 lz_dy:		ds	4
 lz_t:		ds	4
 lz_pts:		ds	60
+lz_tdx:		ds	80			; шаг луча по x · k, k = 0..19
+lz_tdy:		ds	80			; то же по y
+lz_tb:		db	0			; шаг луча менялся — таблицы устарели

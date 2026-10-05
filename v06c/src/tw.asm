@@ -15,7 +15,7 @@ PARAM_Y		equ	PARAM + 11
 PARAM_X2	equ	PARAM + 12
 PARAM_Y2	equ	PARAM + 13
 PARAM_C		equ	PARAM + 14
-LIST		equ	0x8400
+LIST		equ	0x8800
 RESULT		equ	0x9600
 STACK		equ	0x9F00
 
@@ -78,6 +78,7 @@ PPI_OUT		equ	0x88
 entry:
 	di
 	ld	sp, STACK
+	call	lcg_init		; таблицы генератора случайных чисел (9A00h..9DFFh)
 	call	set_palette
 	ld	a, (PARAM_MODE)
 	cp	MODE_RANDOM

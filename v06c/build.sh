@@ -27,9 +27,9 @@ fi
 python3 v06c/tools/check_i8080.py v06c/build/tw.lst
 sz=$(wc -c < v06c/build/tw.rom | tr -d ' ')
 echo "OK: v06c/build/tw.rom ($sz Б)"
-# потолок образа: буфер LIST стенда начинается с 8400h — образ не должен до него доставать
-if [ "$sz" -gt $((0x8400 - 0x100)) ]; then
-	echo "ОБРАЗ ($sz Б) ДОСТАЁТ ДО БУФЕРА LIST (8400h) — провал"
+# потолок образа: буфер LIST стенда начинается с 8800h — образ не должен до него доставать
+if [ "$sz" -gt $((0x8800 - 0x100)) ]; then
+	echo "ОБРАЗ ($sz Б) ДОСТАЁТ ДО БУФЕРА LIST (8800h) — провал"
 	rm -f v06c/build/tw.rom
 	exit 1
 fi
@@ -50,8 +50,8 @@ fi
 python3 v06c/tools/check_i8080.py v06c/build/game.lst
 gsz=$(wc -c < v06c/build/game.bin | tr -d ' ')
 echo "OK: v06c/build/game.bin ($gsz Б)"
-if [ "$gsz" -gt $((0x9E00 - 0x100)) ]; then
-	echo "ИГРА ($gsz Б) ДОСТАЁТ ДО СТЕКА — провал"
+if [ "$gsz" -gt $((0x9A00 - 0x100)) ]; then
+	echo "ИГРА ($gsz Б) ДОСТАЁТ ДО ТАБЛИЦ ГЕНЕРАТОРА (9A00h) — провал"
 	exit 1
 fi
 
