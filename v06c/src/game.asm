@@ -415,7 +415,7 @@ gar_find:
 	jp	nz, gar_find
 	jp	gm_end
 
-; новый игрок на месте gm_i (0..n-1) — newPlayer() эталона, человек «PLAYER n»
+; новый игрок на месте gm_i (0..n-1) — newPlayer() эталона, человек «ИГРОК n»
 gm_newplayer:
 	ld	a, (gm_i)
 	inc	a
@@ -500,7 +500,7 @@ gnp_c:
 	or	a
 	jp	nz, gnp_ai
 	ld	hl, s_player
-	ld	b, 7
+	ld	b, 6
 	call	gm_copy
 	ld	a, (gm_i)
 	add	a, '1'
@@ -813,16 +813,7 @@ isr_row:
 	ei
 	ret
 
-s_gtitle:	db	"TANK WARS"
-s_player:	db	"PLAYER "
-s_ainames:				; по 13 байт, порядок — как в выборе игрока оригинала; 7 — Birdy Bonker
-	db	"Mr. Stupid", 0, 0, 0
-	db	"Lobber", 0, 0, 0, 0, 0, 0, 0
-	db	"Rifleman", 0, 0, 0, 0, 0
-	db	"Lob & Shoot", 0, 0
-	db	"Windless Wit", 0
-	db	"Twanger", 0, 0, 0, 0, 0, 0
-	db	"Birdy Bonker", 0
+	include	"strings_game.inc"
 gm_colors:				; делители R, G, B: красный, жёлтый, голубой, пурпурный
 	db	1, 0xFF, 0xFF
 	db	1, 1, 0xFF
@@ -834,9 +825,9 @@ g_n:		db	2		; игроков
 g_types:	db	0, 6, 2, 3	; игроки по местам: 0 — человек, 1..7 — компьютер (номер имени)
 g_step:		db	0		; 1 — компьютер ждёт клавишу перед выстрелом
 g_rounds:	db	10
-g_walls:	db	1		; стены: 0 обычные, 1 случайно, 2 отражают
+g_walls:	db	1		; стены: 0 не отражают, 1 случайно, 2 отражают
 g_windmode:	db	2		; ветер: 0 None .. 4 Gale, 5 Random
-g_crumble:	db	50		; осыпание, %
+g_crumble:	db	50		; осыпание, % (на экране настройки — шагом 10)
 g_fall:		db	1		; танки падают
 g_xkill:	db	1		; обломки ранят
 g_seed:		db	0x39, 0x30, 0x00, 0x00

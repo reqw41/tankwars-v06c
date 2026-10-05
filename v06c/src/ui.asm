@@ -373,7 +373,7 @@ draw_panel_nc:
 	ld	hl, (ui_p)
 	ld	b, 13
 	call	ui_padr_name
-	ld	a, 21
+	ld	a, 20
 	ld	c, 0
 	ld	b, 2
 	call	ui_at
@@ -798,7 +798,7 @@ dr_ml:
 	add	a, a
 	add	a, c
 	add	a, a			; *6
-	add	a, 8
+	add	a, 9
 	ld	c, 20
 	call	ui_at
 	ld	a, (ui_nlen)
@@ -876,7 +876,7 @@ draw_shop:
 	call	ui_zstr
 	call	ui_tankc
 	ld	b, a
-	ld	a, 5
+	ld	a, 8
 	ld	c, 0
 	call	ui_at
 	ld	hl, (ui_p)
@@ -1095,44 +1095,23 @@ ds_qty:
 	jp	ui_padl
 
 ds_name:
+	ld	a, (ui_idx)
+	ld	l, a
+	ld	h, 0
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	call	dp_wsub_a		; ·15
 	ld	a, (ui_cat)
-	or	a
-	jp	nz, dn_s
-	ld	a, (ui_idx)
-	ld	l, a
-	ld	h, 0
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	call	dp_wsub_a
 	ld	de, wpn_names
-	add	hl, de
-	ret
-dn_s:
-	cp	1
-	jp	nz, dn_s2
-	ld	a, (ui_idx)
-	ld	l, a
-	ld	h, 0
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	call	dp_wsub_a
+	or	a
+	jp	z, dn_add
 	ld	de, shop_n1
-	add	hl, de
-	ret
-dn_s2:
-	ld	a, (ui_idx)
-	ld	l, a
-	ld	h, 0
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	add	hl, hl
-	call	dp_wsub_a
+	dec	a
+	jp	z, dn_add
 	ld	de, shop_n2
+dn_add:
 	add	hl, de
 	ret
 
@@ -1149,32 +1128,19 @@ dp_wsub_a:
 	ret
 
 ds_price:
+	ld	a, (ui_idx)
+	ld	l, a
+	ld	h, 0
+	add	hl, hl
 	ld	a, (ui_cat)
-	or	a
-	jp	nz, dp_c1
-	ld	a, (ui_idx)
-	ld	l, a
-	ld	h, 0
-	add	hl, hl
 	ld	de, wpn_price
-	add	hl, de
-	jp	ld_i16
-dp_c1:
-	cp	1
-	jp	nz, dp_c2
-	ld	a, (ui_idx)
-	ld	l, a
-	ld	h, 0
-	add	hl, hl
+	or	a
+	jp	z, dpr_add
 	ld	de, shop_p1
-	add	hl, de
-	jp	ld_i16
-dp_c2:
-	ld	a, (ui_idx)
-	ld	l, a
-	ld	h, 0
-	add	hl, hl
+	dec	a
+	jp	z, dpr_add
 	ld	de, shop_p2
+dpr_add:
 	add	hl, de
 	jp	ld_i16
 
@@ -1223,24 +1189,7 @@ draw_panel_end:
 draw_results_end:
 draw_shop_end:
 
-s_wind:	db	"WIND ", 0
-s_ang:	db	"ANG ", 0
-s_pow:	db	"  POW ", 0
-s_men:	db	"  MEN ", 0
-s_x:	db	" x", 0
-s_after:	db	"AFTER ROUND ", 0
-s_of:	db	" OF ", 0
-s_final:	db	"FINAL RESULTS", 0
-s_hdr:	db	"# PLAYER        WINS  SCORE", 0
-s_money:	db	"MONEY", 0
-s_press:	db	"PRESS ANY KEY", 0
-s_over:	db	"GAME OVER", 0
-s_shop:	db	"SHOP", 0
-s_moneys:	db	"MONEY ", 0
-s_cart:	db	"   CART ", 0
-s_item:	db	"ITEM            PRICE HAVE BUY", 0
-s_buy:	db	" BUY", 0
-s_done:	db	" DONE", 0
+	include	"strings.inc"
 
 pow10:
 	db	0x80, 0x96, 0x98, 0x00	; 10000000

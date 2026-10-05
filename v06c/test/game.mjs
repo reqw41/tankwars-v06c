@@ -33,6 +33,9 @@ for (let mi = 0; mi < M; mi++) {
   const gold = GOLD ? (GOLD.matches || GOLD.cases || GOLD)[GOLD_IDS[mi]] : null;
   const n = gold ? gold.players : 2 + master.word(3), seed = gold ? gold.seed >>> 0 : master._next(), nRounds = gold ? gold.rounds.length : 2;
   const types = Array.from({ length: n }, (_, i) => (gold ? AI.indexOf(GOLD_NAMES[(i + gold.seed) % GOLD_NAMES.length]) : mi === 0 ? 0 : KINDS[master.word(KINDS.length)]));     // первый матч — одни люди
+  // правила матча: первые два матча и золотые — по умолчанию, дальше случайные (как их выставил бы экран настройки)
+  const cfg = gold || mi < 2 || process.env.DEFCFG ? { walls: 1, wind: 2, crumble: 50, fall: 1, xkill: 1 }
+    : { walls: master.word(3), wind: master.word(6), crumble: [0, 10, 50, 100][master.word(4)], fall: master.word(2), xkill: master.word(2) };
   const m = createVector(ROM);
   const phase = () => m.rd(L.g_phase);
   // нажать клавишу и отпустить, дождаться, пока игра снова ждёт ввода (или показывает результаты)
@@ -75,16 +78,17 @@ for (let mi = 0; mi < M; mi++) {
   m.frame(40);                                            // игра ждёт отпускания клавиши и рисует экран настройки
   if (phase() !== PH.title || m.rd(L.kb_taken) !== 0) fail(`матч ${mi}: нет экрана настройки`);
   m.wr(L.g_n, [n]); m.wr(L.g_rounds, [nRounds]); m.wr(L.g_seed, u32(seed)); m.wr(L.g_fixed, [1]); m.wr(L.g_types, types); m.wr(L.g_step, [1]);
+  m.wr(L.g_walls, [cfg.walls]); m.wr(L.g_windmode, [cfg.wind]); m.wr(L.g_crumble, [cfg.crumble]); m.wr(L.g_fall, [cfg.fall]); m.wr(L.g_xkill, [cfg.xkill]);
   press(5, `матч ${mi}: заставка`);                       // любая клавиша -> первый раунд
   for (let round = 1; round <= nRounds; round++) {
     TW.shufflePlayers(rng, ps);
-    const r = TW.roundStart(rng, ps, 1, 0, 2), v = r.v, bg = r.bg;
-    const fl = { rebound: r.rebound, crumble: 50, fall: true, xkill: true, sound: false, wind: r.wind, ballVisible: true, trail: false };
+    const r = TW.roundStart(rng, ps, cfg.walls, 0, cfg.wind), v = r.v, bg = r.bg;
+    const fl = { rebound: r.rebound, crumble: cfg.crumble, fall: !!cfg.fall, xkill: !!cfg.xkill, sound: false, wind: r.wind, ballVisible: true, trail: false };
     let cur = r.first, winner = null, over = false;
     for (let t = 0; !over; t++) {
       cur = TW.nextAlive(ps, cur); const p = ps[cur - 1];
       TW.turnBegin(p.hist); TW.autoSwitchWeapon(p);
-      const tag = `матч ${mi} (игроки ${types.map((k) => AI[k] || 'человек').join(', ')}; seed 0x${seed.toString(16)}) раунд ${round} ход ${t + 1} место ${cur} ${p.name}`;
+      const tag = `матч ${mi} (игроки ${types.map((k) => AI[k] || 'человек').join(', ')}; seed 0x${seed.toString(16)}; правила ${JSON.stringify(cfg)}) раунд ${round} ход ${t + 1} место ${cur} ${p.name}`;
       const shot = () => { const res = TW.fire(v, bg, ps, cur, rng, fl); if (res) TW.recordShot(p.hist, p, res.x, res.y); TW.afterShot(v, bg, ps, cur, rng, fl); };
       if (p.ctrl === 3) {
         TW.computerTurn(v, bg, ps, p, rng, fl.rebound);
@@ -98,7 +102,7 @@ for (let mi = 0; mi < M; mi++) {
         continue;
       }
       if (phase() !== PH.input) fail(`${tag}: игра не ждёт ввода (фаза ${phase()})`);
-      if (process.env.SHOT && mi === 0 && round === 1 && t === 4) savePng(m.bmp(), process.env.SHOT);
+      if (process.env.SHOT && mi === 0 && round === 1 && t === 0) savePng(m.bmp(), process.env.SHOT);
       check(tag + ' перед вводом', ps, rng, v, (w) => TW.drawPanel(w, p, fl.wind));
       // сценарий: навестись на соседа, покрутить угол и мощность, иногда сменить оружие и развернуться
       const tgt = ps.filter((q) => q.alive && q !== p)[0];
@@ -156,6 +160,7 @@ for (let mi = 0; mi < M; mi++) {
           if (L.shopui_end - L.show_shop < 4) return;         // экран магазина ещё заглушка
           const want = new Uint8Array(65536); TW.drawShop(want, q, menu, qty, cart, sel);
           const g = planesToScreen(m.mem()); for (let k = 0; k < 65536; k++) if (g[k] !== want[k]) fail(`${stag}: экран: (${k & 255},${k >> 8}) 8080=${g[k]} эталон=${want[k]}`);
+          if (process.env.SHOP && shopChecked === 2) savePng(m.bmp(), process.env.SHOP);
           shopChecked++;
         };
         const key = (c) => {

@@ -106,68 +106,38 @@ hd_p_rec_ok:
 	add	hl, de
 	ld	a, (hd_place)
 	ld	(hl), a		; место игрока
-	; поля записи -> блок
-	ld	a, PL_NAME
-	ld	c, 0
-	ld	b, 14
+	; поля записи -> блок, по таблице
+	ld	hl, hd_tab
+hd_p_f:
+	ld	a, (hl)
+	inc	hl
+	ld	c, (hl)
+	inc	hl
+	ld	b, (hl)
+	inc	hl
 	call	hd_cp
-	ld	a, PL_FACING
-	ld	c, 17
-	ld	b, 1
-	call	hd_cp
-	ld	a, PL_ANGLE
-	ld	c, 18
-	ld	b, 1
-	call	hd_cp		; старший байт угла уже 0
-	ld	a, PL_POWER
-	ld	c, 20
-	ld	b, 2
-	call	hd_cp
-	ld	a, PL_MEN
-	ld	c, 22
-	ld	b, 2
-	call	hd_cp
-	ld	a, PL_WEAPON
-	ld	c, 24
-	ld	b, 1
-	call	hd_cp
-	ld	a, PL_GUIDED
-	ld	c, 25
-	ld	b, 1
-	call	hd_cp
-	ld	a, PL_HERB
-	ld	c, 26
-	ld	b, 2
-	call	hd_cp
-	ld	a, PL_VICK
-	ld	c, 28
-	ld	b, 2
-	call	hd_cp
-	ld	a, PL_WINS
-	ld	c, 30
-	ld	b, 2
-	call	hd_cp
-	ld	a, PL_SCORE
-	ld	c, 32
-	ld	b, 4
-	call	hd_cp
-	ld	a, PL_SPENT
-	ld	c, 36
-	ld	b, 4
-	call	hd_cp
-	ld	a, PL_SHIELD
-	ld	c, 40
-	ld	b, 2
-	call	hd_cp		; младшие 2 байта
-	ld	a, PL_DAMP
-	ld	c, 42
-	ld	b, 2
-	call	hd_cp		; младшие 2 байта
-	ld	a, PL_AMMO
-	ld	c, 44
-	ld	b, 36
-	call	hd_cp
+	ld	a, (hl)
+	inc	a
+	jp	nz, hd_p_f
 	ret
+; смещение в записи, смещение в блоке, длина (старший байт угла остаётся 0; щит и демпфер — младшие 2 байта)
+hd_tab:
+	db	PL_NAME, 0, 14
+	db	PL_FACING, 17, 1
+	db	PL_ANGLE, 18, 1
+	db	PL_POWER, 20, 2
+	db	PL_MEN, 22, 2
+	db	PL_WEAPON, 24, 1
+	db	PL_GUIDED, 25, 1
+	db	PL_HERB, 26, 2
+	db	PL_VICK, 28, 2
+	db	PL_WINS, 30, 2
+	db	PL_SCORE, 32, 4
+	db	PL_SPENT, 36, 4
+	db	PL_SHIELD, 40, 2
+	db	PL_DAMP, 42, 2
+	db	PL_AMMO, 44, 36
+	db	0xFF
 
 ; Копия B байт: запись+(A) -> блок+(C); адреса записи/блока в hd_src/hd_dst. HL, DE сохраняет.
 hd_cp:

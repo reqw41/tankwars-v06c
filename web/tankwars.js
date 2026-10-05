@@ -1645,9 +1645,9 @@ export function playRound(rng, ps, cfg, maxTurns = 5000) {
 
 // =====================================================================================================
 // Экран Вектора целиком: шрифт, панель хода, результаты, магазин (docs/spec/v06c-screen.md).
-// Знакоместо 8×8, 32 столбца × 32 строки; текст только из 64 знаков 20h..5Fh (строчные буквы → прописные).
+// Знакоместо 8×8, 32 столбца × 32 строки; текст из 96 знаков: 20h..5Fh и русские прописные (строчные → прописные).
 // =====================================================================================================
-// Знак 5×7 в знакоместе 8×8 (столбцы 1..5, строки 0..6). 5 байт на знак — столбцы, бит 0 сверху. 320 байт.
+// Знак 5×7 в знакоместе 8×8 (столбцы 1..5, строки 0..6). 5 байт на знак — столбцы, бит 0 сверху. 480 байт.
 const FONT_HEX =
   '0000000000' + '00005F0000' + '0007000700' + '147F147F14' + '242A7F2A12' + '2313086462' + '3649562050' + '0008070300' +
   '001C224100' + '0041221C00' + '2A1C7F1C2A' + '08083E0808' + '0080703000' + '0808080808' + '0000606000' + '2010080402' +
@@ -1657,12 +1657,28 @@ const FONT_HEX =
   '7F0808087F' + '00417F4100' + '2040413F01' + '7F08142241' + '7F40404040' + '7F021C027F' + '7F0408107F' + '3E4141413E' +
   '7F09090906' + '3E4151215E' + '7F09192946' + '2649494932' + '03017F0103' + '3F4040403F' + '1F2040201F' + '3F4038403F' +
   '6314081463' + '0304780403' + '6159494D43' + '007F414141' + '0204081020' + '004141417F' + '0402010204' + '4040404040';
-export const FONT = hexBytes(FONT_HEX);
+// Русские прописные А..Я — знаки 64..95 (в записи игрока и в порте это коды CP866 80h..9Fh); буквы, совпадающие
+// по начертанию с латинскими, повторяют их.
+const FONT_CYR_HEX =
+  '7C1211127C' + '7F49494931' + '7F49494936' + '7F01010101' + '603E213F60' + '7F49494941' + '63147F1463' + '2241494936' +
+  '7F1008047F' + '7C2112097C' + '7F08142241' + '403E01017F' + '7F021C027F' + '7F0808087F' + '3E4141413E' + '7F0101017F' +
+  '7F09090906' + '3E41414122' + '03017F0103' + '274848483F' + '1C227F221C' + '6314081463' + '3F20203F60' + '070808087F' +
+  '7F407F407F' + '3F203F207F' + '017F484830' + '7F4830007F' + '7F48484830' + '224149493E' + '7F083E413E' + '462919097F';
+export const FONT = hexBytes(FONT_HEX + FONT_CYR_HEX);
 export const TEXT_COLOR = () => P.frame;
 // col 0..31, row 0..31 — знакоместа. Фон знакоместа очищается в 0.
+const CYR = 'АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ';
+// код знака, как он лежит в памяти порта: 20h..5Fh или 80h..9Fh (А..Я, CP866); Ё -> Е, прочее -> «?»
+export function charCode(ch) {
+  ch = ch.toUpperCase(); if (ch === 'Ё') ch = 'Е';
+  const k = CYR.indexOf(ch); if (k >= 0) return 0x80 + k;
+  const c = ch.charCodeAt(0); return c >= 0x20 && c <= 0x5f ? c : 0x3f;
+}
+export const encodeText = (str) => Array.from(str, charCode);
+export const decodeText = (bytes) => Array.from(bytes, (c) => (c >= 0x80 && c <= 0x9f ? CYR[c - 0x80] : String.fromCharCode(c))).join('');
 export function drawChar(v, col, row, ch, color) {
-  let c = ch.toUpperCase().charCodeAt(0); if (c < 0x20 || c > 0x5f) c = 0x3f;
-  const g = (c - 0x20) * 5, x0 = col * 8, y0 = row * 8;
+  const c = charCode(ch);
+  const g = (c >= 0x80 ? c - 0x40 : c - 0x20) * 5, x0 = col * 8, y0 = row * 8;
   if (col < 0 || col > 31 || row < 0 || row > 31) return;
   for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
     const on = x >= 1 && x <= 5 && y < 7 && (FONT[g + x - 1] >> y) & 1;
@@ -1673,6 +1689,14 @@ export function drawText(v, col, row, str, color = TEXT_COLOR()) { for (let i = 
 const padL = (s, n) => String(s).padStart(n).slice(-n), padR = (s, n) => String(s).padEnd(n).slice(0, n);
 export const WEAPON_NAMES = ['Lead Ball', 'Incinerator', 'Mark II Incin.', '20 Kilo Nuke', '5 Meg Nuke', 'Laser', 'CRI 4/D', 'CRI 8/ND', 'CRI 8/D', 'CRI 20/ND',
   'CRI 20/D', 'Hand Grenade', 'Sonic Blaster', "Ball 'O' Dirt", 'Mark II Dirt', 'Pressured Dirt', 'High Pres. Dirt', 'Xplosive Dirt'];   // DS:1920+0x100*w
+// Тексты экранов Вектора — русские. Имена компьютерных игроков в логике остаются английскими (по ним выбирается
+// планировщик и стратегия закупки), русское имя — только на экране и в записи игрока порта: dispName().
+export const WEAPON_NAMES_RU = ['Свинцовое ядро', 'Испепелитель', 'Испепелитель II', 'Атомная 20 кт', 'Атомная 5 Мт', 'Лазер', 'CRI 4/D', 'CRI 8/ND', 'CRI 8/D',
+  'CRI 20/ND', 'CRI 20/D', 'Ручная граната', 'Звуковая пушка', 'Ком земли', 'Ком земли II', 'Сжатая земля', 'Сверхсж. земля', 'Взрывная земля'];
+export const SHOP_NAMES_RU = [null, ['Наведение Херба', 'Наведение Вика'], ['Силовой щит', 'Гаситель удара']];
+export const AI_NAMES_RU = { 'Mr. Stupid': 'Г-н Тупица', 'Lobber': 'Навесник', 'Rifleman': 'Стрелок', 'Lob & Shoot': 'Навес+выстрел', 'Windless Wit': 'Умник в штиль',
+  'Twanger': 'Рикошетчик', 'Birdy Bonker': 'Берди Бонкер' };
+export const dispName = (name) => AI_NAMES_RU[name] || String(name).replace(/^PLAYER /, 'ИГРОК ');
 // Панель хода — строки знакомест 0..2 (точки y 0..23):
 //   0: имя игрока его цветом (13)              WIND <123 / WIND 123> / WIND 0   (столбцы 21..31)
 //   1: ANG <75 или ANG 75>   POW 1000   MEN 100
@@ -1680,11 +1704,11 @@ export const WEAPON_NAMES = ['Lead Ball', 'Incinerator', 'Mark II Incin.', '20 K
 export function drawPanel(v, p, wind) {
   for (let i = 0; i < 24 * W; i++) v[i] = 0;
   if (!p) return;
-  drawText(v, 0, 0, padR(p.name, 13), tankColor(p.idx));
+  drawText(v, 0, 0, padR(dispName(p.name), 13), tankColor(p.idx));
   const w = Math.abs(wind), ws = wind < 0 ? '<' + w : wind > 0 ? w + '>' : '0';
-  drawText(v, 21, 0, 'WIND ' + padL(ws, 6));
-  drawText(v, 0, 1, 'ANG ' + padR(p.facing < 0 ? '<' + p.angle : p.angle + '>', 3) + '  POW ' + padR(p.power, 4) + '  MEN ' + padL(Math.max(p.men, 0), 3));
-  drawText(v, 0, 2, padR(WEAPON_NAMES[p.weapon], 15) + ' x' + padR(p.ammo[p.weapon], 5));
+  drawText(v, 20, 0, 'ВЕТЕР ' + padL(ws, 6));
+  drawText(v, 0, 1, 'УГОЛ ' + padR(p.facing < 0 ? '<' + p.angle : p.angle + '>', 3) + '  СИЛА ' + padR(p.power, 4) + '  ЛЮДИ ' + padL(Math.max(p.men, 0), 3));
+  drawText(v, 0, 2, padR(WEAPON_NAMES_RU[p.weapon], 15) + ' x' + padR(p.ammo[p.weapon], 5));
   if (p.herb > 0) drawText(v, 26, 2, (p.guided & 1 ? '*' : ' ') + 'H');
   if (p.vick > 0) drawText(v, 29, 2, (p.guided & 2 ? '*' : ' ') + 'V');
 }
@@ -1692,32 +1716,32 @@ export function drawPanel(v, p, wind) {
 export function drawResults(v, ps, round, rounds) {
   v.fill(0); frameRects(v);
   const last = round >= rounds;
-  drawText(v, 2, 5, last ? 'FINAL RESULTS' : 'AFTER ROUND ' + round + ' OF ' + rounds);
-  drawText(v, 2, 8, '# PLAYER        WINS  SCORE');
+  drawText(v, 2, 5, last ? 'ИТОГ МАТЧА' : 'ПОСЛЕ РАУНДА ' + round + ' ИЗ ' + rounds);
+  drawText(v, 2, 8, '# ИГРОК        ПОБЕД   ОЧКИ');
   ps.forEach((p, i) => {
     const row = 10 + 2 * i;
     drawText(v, 2, row, String(i + 1));
-    drawText(v, 4, row, padR(p.name, 13), tankColor(p.idx));
+    drawText(v, 4, row, padR(dispName(p.name), 13), tankColor(p.idx));
     drawText(v, 18, row, padL(p.wins, 4) + padL(p.score, 7));
   });
-  drawText(v, 2, 20, 'MONEY');
-  ps.forEach((p, i) => drawText(v, 8 + 6 * i, 20, padL(p.score - p.spent, 5), tankColor(p.idx)));
-  drawText(v, 2, 28, last ? 'GAME OVER' : 'PRESS ANY KEY');
+  drawText(v, 2, 20, 'ДЕНЬГИ');
+  ps.forEach((p, i) => drawText(v, 9 + 6 * i, 20, padL(p.score - p.spent, 5), tankColor(p.idx)));
+  drawText(v, 2, 28, last ? 'МАТЧ ОКОНЧЕН' : 'НАЖМИТЕ КЛАВИШУ');
 }
 // Магазин (весь экран, без рамки): строка на позицию меню; sel — выбранная строка (0..menu.length+1: дальше BUY и DONE),
 // -1 — без курсора. Позиций не больше 22 (18 видов оружия без двух непродаваемых + 2 наведения + 2 защиты = 20).
 export function drawShop(v, p, menu, qty, cart, sel = -1) {
   v.fill(0);
-  drawText(v, 0, 0, 'SHOP');
-  drawText(v, 5, 0, padR(p.name, 13), tankColor(p.idx));
-  drawText(v, 0, 1, 'MONEY ' + padL(p.score - p.spent - cart, 6) + '   CART ' + padL(cart, 6));
-  drawText(v, 2, 3, 'ITEM            PRICE HAVE BUY');
+  drawText(v, 0, 0, 'МАГАЗИН');
+  drawText(v, 8, 0, padR(dispName(p.name), 13), tankColor(p.idx));
+  drawText(v, 0, 1, 'ДЕНЬГИ ' + padL(p.score - p.spent - cart, 6) + '  КОРЗИНА ' + padL(cart, 6));
+  drawText(v, 2, 3, 'ТОВАР            ЦЕНА ЕСТЬ КУП');
   menu.forEach(([cat, i], c) => {
-    const row = 4 + c, name = cat === 0 ? WEAPON_NAMES[i] : SHOP_NAMES[cat][i];
+    const row = 4 + c, name = cat === 0 ? WEAPON_NAMES_RU[i] : SHOP_NAMES_RU[cat][i];
     drawText(v, 0, row, sel === c ? '>' : ' ');
     drawText(v, 2, row, padR(name, 15) + padL(SHOP_PRICE[cat][i], 6) + padL(Math.min(shopHave(p, cat, i), 99999), 6) + padL(qty[c] || '', 3));
   });
   const row = 5 + menu.length;
-  drawText(v, 0, row, (sel === menu.length ? '>' : ' ') + ' BUY');
-  drawText(v, 10, row, (sel === menu.length + 1 ? '>' : ' ') + ' DONE');
+  drawText(v, 0, row, (sel === menu.length ? '>' : ' ') + ' КУПИТЬ');
+  drawText(v, 10, row, (sel === menu.length + 1 ? '>' : ' ') + ' ГОТОВО');
 }

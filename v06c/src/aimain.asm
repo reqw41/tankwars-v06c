@@ -1,7 +1,7 @@
 ; Компьютерный игрок в цикле хода — computerStep(), plan(), aiType(), pickStrategy() эталона web/tankwars.js.
 ;   computer_step: вход A = место игрока, ap_rebound (стены отражают). Выход A = код действия.
 ;   pick_strategy: вход A = место игрока. PL_STRAT = Random(4) + 1 с отбором по типу игрока.
-; Тип игрока — по имени (PL_NAME, регистр букв не важен): M — Mr. Stupid, B — Birdy Bonker, R — Rifleman,
+; Тип игрока — по первой букве русского имени (PL_NAME, коды CP866; имена — s_ainames в strings_game.inc):
 ; W — Windless Wit, T — Twanger, L — Lobber («LOB» и буква B) или Lob & Shoot.
 
 computer_step:
@@ -70,32 +70,29 @@ cs_type:
 	ld	de, PL_NAME
 	add	hl, de
 	ld	a, (hl)
-	and	0xDF
 	ld	b, 1
-	cp	'M'
+	cp	0x83			; Г — Г-Н ТУПИЦА
 	jp	z, cst_r
 	inc	b
-	cp	'B'
+	cp	0x81			; Б — БЕРДИ БОНКЕР
 	jp	z, cst_r
 	inc	b
-	cp	'R'
+	cp	0x91			; С — СТРЕЛОК
 	jp	z, cst_r
 	ld	b, 6
-	cp	'W'
+	cp	0x93			; У — УМНИК В ШТИЛЬ
 	jp	z, cst_r
 	inc	b
-	cp	'T'
+	cp	0x90			; Р — РИКОШЕТЧИК
 	jp	z, cst_r
 	ld	b, 0
-	cp	'L'
+	cp	0x8D			; Н — НАВЕСНИК или НАВЕС+ВЫСТРЕЛ: шестой знак Н или «+»
 	jp	nz, cst_r
-	inc	hl
-	inc	hl
-	inc	hl
+	ld	de, 5
+	add	hl, de
 	ld	a, (hl)
-	and	0xDF
 	ld	b, 4
-	cp	'B'
+	cp	0x8D
 	jp	z, cst_r
 	inc	b
 cst_r:

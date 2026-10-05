@@ -404,7 +404,7 @@ function testText() {
   const v = new Uint8Array(P.W * P.H);
   for (const t of strs) {
     chunks.push(t.col & 255, t.row & 255, t.color, t.s.length);
-    for (let i = 0; i < t.s.length; i++) chunks.push(t.s.charCodeAt(i) & 255);
+    for (let i = 0; i < t.s.length; i++) chunks.push(t.s.charCodeAt(i) & 255);      // коды как есть: 60h..7Fh и дальше порт рисует как эталон («?» или строчные → прописные)
     TW.drawText(v, t.col, t.row, t.s, t.color);
   }
   const extra = new Uint8Array(15);
@@ -533,8 +533,7 @@ function i16b(n) { n = (n << 16) >> 16; return [n & 255, (n >> 8) & 255]; }
 function i32b(n) { n |= 0; return [n & 255, (n >> 8) & 255, (n >> 16) & 255, (n >>> 24) & 255]; }
 function packPlayer(p) {
   const b = new Uint8Array(PLY);
-  const name = String(p.name ?? '');
-  for (let i = 0; i < Math.min(name.length, 16); i++) b[i] = name.charCodeAt(i);
+  TW.encodeText(TW.dispName(String(p.name ?? '')).slice(0, 16)).forEach((c, i) => { b[i] = c; });      // имя, как на экране
   b[16] = p.idx;
   b[17] = p.facing & 255;
   b.set(i16b(p.angle), 18);

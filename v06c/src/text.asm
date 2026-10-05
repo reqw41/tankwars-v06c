@@ -1,4 +1,5 @@
-; Знак и строка: drawChar / drawText. Шрифт 64×8 байт-строк (font2rows.mjs из FONT эталона).
+; Знак и строка: drawChar / drawText. Шрифт 96×8 байт-строк (font2rows.mjs из FONT эталона): знаки 20h..5Fh
+; (строчные латинские → прописные) и русские прописные А..Я с кодами CP866 80h..9Fh.
 
 font:
 	include	"font.inc"
@@ -11,6 +12,13 @@ draw_char:
 	cp	32
 	ret	nc
 	ld	a, (ch)
+	cp	0x80
+	jp	c, dc_lat
+	cp	0xA0
+	jp	nc, dc_qm
+	sub	0x40			; А..Я — знаки 64..95
+	jp	dc_idx
+dc_lat:
 	cp	'a'
 	jp	c, dc_nu
 	cp	'z' + 1
@@ -25,6 +33,7 @@ dc_qm:
 	ld	a, 0x3F
 dc_ok:
 	sub	0x20
+dc_idx:
 	ld	l, a
 	ld	h, 0
 	add	hl, hl

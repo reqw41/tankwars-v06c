@@ -7,6 +7,7 @@ ROOT=$(pwd)
 ASM="$ROOT/tools/bin/sjasmplus"
 mkdir -p v06c/build
 node v06c/tools/font2rows.mjs
+node v06c/tools/text2inc.mjs
 node v06c/tools/disc2tab.mjs
 node v06c/tools/fx2tab.mjs
 

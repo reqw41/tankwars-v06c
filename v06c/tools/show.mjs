@@ -73,7 +73,7 @@ mode(11, cnt(ps.length), tanks);
 // панель хода — текст шрифтом 5×7 подпрограммами ядра
 {
   const p = ps[1], b = new Uint8Array(80), i16 = (v) => w16(v & 0xffff), i32 = (v) => [v & 255, (v >> 8) & 255, (v >> 16) & 255, (v >> 24) & 255];
-  for (let i = 0; i < Math.min(p.name.length, 16); i++) b[i] = p.name.charCodeAt(i);
+  TW.encodeText(TW.dispName(p.name).slice(0, 16)).forEach((c, i) => { b[i] = c; });
   b[16] = p.idx; b[17] = p.facing & 255; b.set(i16(p.angle), 18); b.set(i16(p.power), 20); b.set(i16(p.men), 22); b[24] = p.weapon; b[25] = p.guided;
   b.set(i16(p.herb), 26); b.set(i16(p.vick), 28); b.set(i16(p.wins), 30); b.set(i32(p.score), 32); b.set(i32(p.spent), 36); b.set(i16(p.shield), 40); b.set(i16(p.damp), 42);
   for (let i = 0; i < 18; i++) b.set(i16(p.ammo[i] | 0), 44 + i * 2);

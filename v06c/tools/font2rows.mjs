@@ -8,8 +8,9 @@ import * as TW from '../../web/tankwars.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const out = path.join(ROOT, 'v06c/src/font.inc');
 const FONT = TW.FONT;
-const lines = ['; 64 знака × 8 рядов; бит 7 — левая точка знакоместа (столбец 0 пуст, глиф в 1..5).'];
-for (let g = 0; g < 64; g++) {
+const N = FONT.length / 5;      // 96: знаки 20h..5Fh и русские А..Я
+const lines = [`; ${N} знаков × 8 рядов; бит 7 — левая точка знакоместа (столбец 0 пуст, глиф в 1..5).`];
+for (let g = 0; g < N; g++) {
   const src = FONT.subarray(g * 5, g * 5 + 5);
   const row = [];
   for (let y = 0; y < 8; y++) {
@@ -24,4 +25,4 @@ for (let g = 0; g < 64; g++) {
   lines.push('\tdb\t' + row.join(', '));
 }
 fs.writeFileSync(out, lines.join('\n') + '\n');
-console.log('OK: v06c/src/font.inc (64×8)');
+console.log(`OK: v06c/src/font.inc (${N}×8)`);
