@@ -7,6 +7,16 @@ crumble:
 	xor	a
 	ld	(cr_col), a
 cr_cols:
+	; столбец, в котором после прошлого осыпания ничего не менялось, уже устойчив — пропустить
+	ld	a, (cr_col)
+	ld	e, a
+	ld	d, 0
+	ld	hl, cr_dirty
+	add	hl, de
+	ld	a, (hl)
+	or	a
+	jp	z, cr_nxt
+	ld	(hl), 0
 	ld	a, (cr_col)
 	or	a
 	ld	b, 0x1F
@@ -256,6 +266,58 @@ cr_nxt:
 	cp	32
 	jp	nz, cr_cols
 	ret
+; --- Пометки «столбец байтов менялся» (cr_dirty, 32 байта). Осыпание смотрит только помеченные столбцы.
+; Помечать обязан каждый, кто меняет точки поля: круг (взрыв, грязь) — свой диапазон; мяч, прошедший сквозь землю;
+; ствол танка; всё редкое (начало раунда, падение танка, гибель, лазер, особое оружие) — весь экран.
+cr_mark_all:
+	ld	hl, cr_dirty
+	ld	b, 32
+	ld	a, 1
+cr_ma1:
+	ld	(hl), a
+	inc	hl
+	dec	b
+	jp	nz, cr_ma1
+	ret
+; точки x от D до E включительно (0..255, D <= E)
+cr_mark_span:
+	ld	a, e
+	rrca
+	rrca
+	rrca
+	and	0x1F
+	ld	e, a
+	ld	a, d
+	rrca
+	rrca
+	rrca
+	and	0x1F
+	ld	d, a
+	ld	c, a
+	ld	b, 0
+	ld	hl, cr_dirty
+	add	hl, bc
+	ld	a, e
+	sub	d
+	inc	a
+	ld	b, a
+	ld	a, 1
+	jp	cr_ma1
+; точки x от A − B до A + B с обрезкой по экрану
+cr_mark_x:
+	ld	c, a
+	sub	b
+	jp	nc, cr_mx1
+	xor	a
+cr_mx1:
+	ld	d, a
+	ld	a, c
+	add	a, b
+	jp	nc, cr_mx2
+	ld	a, 255
+cr_mx2:
+	ld	e, a
+	jp	cr_mark_span
 crumble_end:
 
 ; Заменить цвет 3 на 0 для o=65535..1 (точку (0,0) не трогать).
@@ -299,6 +361,7 @@ cr_bit:	db	0
 cr_bi:	db	0
 cr_n:	db	0
 cr_e:		db	0
+cr_dirty:	ds	32, 1			; в начале помечено всё
 cr_slot:	db	0
 cr_l0:		db	0
 cr_l1:		db	0

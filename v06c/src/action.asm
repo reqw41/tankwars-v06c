@@ -403,6 +403,9 @@ ac_fill:
 ; стереть ствол: линия цвета 0 по текущим tb_* (вызывать ДО изменения угла/facing)
 ac_erase:
 	call	ac_fill
+	ld	a, (tb_x)		; ствол стирает точки вокруг танка — пометить для осыпания
+	ld	b, 8
+	call	cr_mark_x
 	call	tb_ends
 	xor	a
 	ld	(ln_c), a

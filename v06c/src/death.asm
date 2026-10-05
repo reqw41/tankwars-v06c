@@ -9,6 +9,7 @@ DT_Y0		equ	27
 DT_Y1		equ	252
 
 death:
+	call	cr_mark_all		; гибель меняет экран где угодно
 	ld	a, (dt_victim)
 	call	dt_ptr
 	ld	(dt_vp), hl

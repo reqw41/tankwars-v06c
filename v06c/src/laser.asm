@@ -12,6 +12,8 @@ LZ_BEAM		equ	3
 
 laser:
 	ld	(lz_place), a
+	call	cr_mark_all
+	ld	a, (lz_place)
 	call	dt_ptr
 	ld	(lz_p), hl
 	ld	de, PL_POWER

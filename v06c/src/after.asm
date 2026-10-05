@@ -119,6 +119,7 @@ af_do_fall:
 	ld	a, (af_falling)
 	or	a
 	jp	z, af_not_falling
+	call	cr_mark_all		; падающий танк стирает землю (правка архитектора: пометки для осыпания)
 	; стереть ствол: линия цвета 0 от (x,y) до конца ствола
 	call	af_fill_tb
 	call	tb_ends

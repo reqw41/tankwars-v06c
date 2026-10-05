@@ -10,6 +10,19 @@ DK_Y0		equ	27
 DK_Y1		equ	252
 
 disc:
+	; пометить столбцы круга для осыпания: центр ± (радиус + 2); центр за экраном — весь экран
+	ld	a, (dk_x + 1)
+	or	a
+	jp	z, dk_mk1
+	call	cr_mark_all
+	jp	dk_mk2
+dk_mk1:
+	ld	a, (dk_r)
+	add	a, 2
+	ld	b, a
+	ld	a, (dk_x)
+	call	cr_mark_x
+dk_mk2:
 	ld	a, (dk_r)
 	ld	b, a
 	ld	hl, dk_tabs

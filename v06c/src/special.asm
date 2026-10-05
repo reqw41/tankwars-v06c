@@ -3,6 +3,7 @@
 ; Вызывается из explode для оружия, которое не обычный взрыв и не шар грязи. Порядок случайных чисел — как в эталоне.
 
 special:
+	call	cr_mark_all
 	ld	a, (ex_weapon)
 	cp	12
 	jp	z, sx_sonic

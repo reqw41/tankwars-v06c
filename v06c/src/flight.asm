@@ -374,6 +374,7 @@ fl_er:
 	call	fl_cross
 	jp	fl_e1
 fl_e0:
+	call	fl_mark
 	xor	a
 	call	draw_cross
 fl_e1:
@@ -659,6 +660,7 @@ fl_fin:
 	ld	d, a
 	ld	a, (fl_y + 2)
 	ld	e, a
+	call	fl_mark
 	xor	a
 	jp	draw_cross
 fl_cont:
@@ -685,6 +687,7 @@ fl_cont:
 	ld	(fl_ey), a
 	ld	a, 1
 	ld	(fl_drawn), a
+	call	fl_mark
 	ld	a, FL_BALL
 	call	draw_cross
 fl_c1:
@@ -740,6 +743,14 @@ fl_mul10:
 	ld	b, 4
 	jp	fx_addm			; 8v + 2v
 
+; мяч рисуется или стирается не в чистом воздухе (D = x): пометить столбцы для осыпания. DE цел.
+fl_mark:
+	push	de
+	ld	a, d
+	ld	b, 2
+	call	cr_mark_x
+	pop	de
+	ret
 ; Наведение — guideFix() эталона. fl_guided: бит 0 — Herb's Guide, бит 1 — Vick's Guide; цель — (fl_gtx, fl_gty).
 ; Vick: по x ближе 2 точек к цели — vx = 0, снаряд идёт к цели по вертикали шагом 0.5.
 ; Herb: по y ближе 2 точек — vy = 0, vx растёт в 1.01 раза в сторону цели.
