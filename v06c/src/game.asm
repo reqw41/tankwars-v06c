@@ -620,6 +620,7 @@ gp_m:
 	xor	a
 	ld	(pal_dirty), a
 	call	pal_prepare
+	call	pal_expand
 	ld	a, 1
 	ld	(pal_dirty), a
 	ret
@@ -646,6 +647,7 @@ gpt:
 	dec	b
 	jp	nz, gpt
 	call	pal_prepare
+	call	pal_expand
 	ld	a, 1
 	ld	(pal_dirty), a
 	ret
@@ -766,21 +768,16 @@ kb_map:					; строка матрицы, бит, код действия
 	db	0xFF
 
 ; ---------------------------------------------------------------------------------------------------
-; Прерывание кадра: палитра (пока луч в бордюре), клавиатура, счётчик кадров.
+; Прерывание кадра: клавиатура, палитра (обе — в гашении кадра), звук, счётчик кадров.
 ; ---------------------------------------------------------------------------------------------------
 isr:
 	push	af
 	push	bc
 	push	de
 	push	hl
-	ld	a, (pal_dirty)
-	or	a
-	jp	z, isr_kb
-	xor	a
-	ld	(pal_dirty), a
-	call	pal_out
-isr_kb:
-	call	snd_tick
+	; Клавиатура — первой, сразу после прерывания: пока порт B ВВ55 стоит на вводе, машина видит на нём FFh —
+	; белый бордюр и режим 512 точек. В гашении кадра (25 строк после прерывания) этого не видно, а позже ядро
+	; MiSTer выводит из-за этого целый кадр в режиме 512.
 	ld	a, 0x8A			; порт A — выход (выбор строки), порт B — вход
 	out	(0), a
 	ld	hl, kb_rows
@@ -803,6 +800,15 @@ isr_row:
 	xor	a
 	out	(2), a
 	out	(1), a
+	; палитра — готовые 16 регистров, тоже в гашении
+	ld	a, (pal_dirty)
+	or	a
+	jp	z, isr_snd
+	xor	a
+	ld	(pal_dirty), a
+	call	pal_write
+isr_snd:
+	call	snd_tick
 	ld	hl, (g_frames)
 	inc	hl
 	ld	(g_frames), hl
