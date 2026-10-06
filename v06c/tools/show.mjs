@@ -1,6 +1,7 @@
 // Показать сборку: образ v06c/build/tw.rom исполняется в vector06js вместе с видеотрактом (развёртка, палитра),
 // подпрограммы ядра вызываются по очереди через режимы стенда, кадр эмулятора сохраняется в PNG.
 // node v06c/tools/show.mjs [out.png]   — картинка та, что показал бы Вектор: 576×288 вместе с бордюром.
+import os from 'node:os';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
@@ -10,7 +11,7 @@ import * as TW from '../../web/tankwars.js';
 import { parseSym } from './run.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const VEC = process.env.VECTOR06JS || '~/projects/vector06js';
+const VEC = process.env.VECTOR06JS || path.join(os.homedir(), 'projects/vector06js');
 const json = (p) => JSON.parse(fs.readFileSync(path.join(ROOT, p), 'utf8'));
 TW.init({ barrel: json('web/data/barrel.json'), trig: json('web/data/trig.json') });
 TW.setProfile(TW.PROFILE_V06C);

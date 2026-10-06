@@ -59,14 +59,9 @@
   затем `BUILD=work/snapN ...`.
 
 ## Железо
-- MiSTer `MISTER` (доступ — в локальном docs/LOCAL.md). Обычный Вектор: `games/VECTOR06/TankWars.rom`, запуск
-  `echo "load_core /media/fat/TankWars.mgl" > /dev/MiSTer_cmd`.
-- Турбо+: файл `TANKWARS.COM` на **двух** образах — `games/VECTOR06/Turbo/HDD128.img` и `HDD128-tonyamiga.img`
-  (второй монтирует `Vector-Turbo+TonyAmiga.mgl`, пользователь запускает и его) — обновлять оба; кладётся `~/projects/vturbo-js/tools/fat16put.py`
-  **при выгруженном ядре** (`load_core /media/fat/menu.rbf`), запуск ядра — `/media/fat/Vector-Turbo+.mgl`, в CP/M
-  набрать `TANKWARS -V T3`. Клавиатура и снимки удалённо: `/media/fat/Scripts/.vkbd.py "type ...;k ENTER;w 8000;shot"`,
-  снимки в `/media/fat/screenshots/VECTOR06`. После загрузки ядра подожди ~40 с, иначе набор теряется.
-- Рядом с образом HDD лежит копия до правок `HDD128.bak-tankwars.img` (128 МБ) — удалить, когда пользователь скажет.
+- Проверка на MiSTer: ядро Вектора-06Ц (`TankWars.rom`) и ядро Турбо+ (`TANKWARS.COM` на образе диска, запуск из CP/M
+  командой `TANKWARS -V T3`). Адрес, доступ, пути и порядок заливки — в локальном файле `docs/LOCAL.md`
+  (в репозиторий не входит). Образ диска Турбо+ менять только при выгруженном ядре.
 
 ## Делегирование Qwen
 `git worktree add ../tankwars-v06c-qN -b qN`, затем в фоне

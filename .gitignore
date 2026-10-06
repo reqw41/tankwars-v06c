@@ -9,3 +9,12 @@ work/*/export/
 work/*/*.log
 __pycache__/
 v06c/build/
+# оригинальная игра и её производные — только локально (права автора игры)
+orig/
+re/*.exe
+re/*.ovr
+re/ds25.bin
+re/export/
+re/*.log
+# локальные доступы и железо
+docs/LOCAL.md

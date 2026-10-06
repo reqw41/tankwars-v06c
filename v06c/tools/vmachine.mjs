@@ -1,9 +1,10 @@
 // Вектор целиком (процессор, видеотракт, кадровое прерывание, клавиатура) под node — для игрового образа.
+import os from 'node:os';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
 
-const VEC = process.env.VECTOR06JS || '~/projects/vector06js';
+const VEC = process.env.VECTOR06JS || path.join(os.homedir(), 'projects/vector06js');
 export function createVector(romPath) {
   const g = {}; g.window = g;
   const fcx = () => ({ createImageData: () => ({ data: new Uint8ClampedArray(4) }), putImageData() {}, getImageData: () => ({ data: new Uint8ClampedArray(4) }), fillRect() {}, drawImage() {} });

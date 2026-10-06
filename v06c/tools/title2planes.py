@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Заставка оригинала -> экран Вектора: 256×160 по центру, 16 цветов из палитры R3G3B2, четыре плоскости.
-Источник — кадр настоящей игры docs/img/orig-title.png (картинка BOMB1.RAW + буквы TANK WARS, которые игра рисует
-поверх); строки с копирайтом берутся из самой BOMB1.RAW — без надписи.
+Источник — v06c/assets/title-src.png, 320×200: кадр заставки настоящей игры без надписи копирайта.
   v06c/tools/title2planes.py [--dither сила] [--despeckle] [--preview файл.png]
+  v06c/tools/title2planes.py --from-original   — заново собрать title-src.png из кадра docs/img/orig-title.png и
+      картинки orig/bomb/BOMB1.RAW (нужны файлы оригинальной игры; в репозитории их нет): строки с копирайтом
+      берутся из самой картинки, где надписи ещё нет.
 Пишет v06c/build/title.bin (весь экран: плоскости 8000/A000/C000/E000, 32768 байт) и v06c/src/title_pal.inc
 (16 байт BBGGGRRR по номеру регистра палитры).
 Номер регистра точки: бит 3 — плоскость 8000, бит 2 — A000, бит 1 — C000, бит 0 — E000 (как в pal_out)."""
@@ -16,10 +18,14 @@ COPY_Y = 172                # с этой строки кадра (из 200) —
 TEXT_REG = 6                # регистр самого светлого цвета — им пишется надпись
 TEXT, TEXT_COL, TEXT_ROW = 'НАЖМИТЕ ЛЮБУЮ КЛАВИШУ', 5, 27
 
-frame = Image.open(ROOT / 'docs/img/orig-title.png').convert('RGB').resize((320, 200), Image.NEAREST)
-raw = (ROOT / 'orig/bomb/BOMB1.RAW').read_bytes()
-pic = Image.frombytes('P', (320, 200), raw[:64000]); pic.putpalette([v * 255 // 63 for v in raw[64000:64768]])
-frame.paste(pic.convert('RGB').crop((0, COPY_Y, 320, 200)), (0, COPY_Y))
+SRC = ROOT / 'v06c/assets/title-src.png'
+if '--from-original' in sys.argv:
+    frame = Image.open(ROOT / 'docs/img/orig-title.png').convert('RGB').resize((320, 200), Image.NEAREST)
+    raw = (ROOT / 'orig/bomb/BOMB1.RAW').read_bytes()
+    pic = Image.frombytes('P', (320, 200), raw[:64000]); pic.putpalette([v * 255 // 63 for v in raw[64000:64768]])
+    frame.paste(pic.convert('RGB').crop((0, COPY_Y, 320, 200)), (0, COPY_Y))
+    SRC.parent.mkdir(exist_ok=True); frame.save(SRC)
+frame = Image.open(SRC).convert('RGB')
 px = np.asarray(frame.resize((W, H), Image.LANCZOS), dtype=np.float64).reshape(-1, 3)
 
 # все 256 цветов Вектора

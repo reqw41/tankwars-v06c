@@ -1,12 +1,13 @@
 // Headless vector06js: загрузить ROM с 0100h, исполнить до HLT или метки, выгрузить память и регистры.
 // Никаких окон. Эмулятор: ~/projects/vector06js (или VECTOR06JS).
+import os from 'node:os';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const VEC = process.env.VECTOR06JS || '~/projects/vector06js';
+const VEC = process.env.VECTOR06JS || path.join(os.homedir(), 'projects/vector06js');
 
 export function parseSym(symPath) {
   const L = {};
