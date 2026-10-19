@@ -74,3 +74,8 @@ fi
 python3 v06c/tools/check_i8080.py v06c/build/loader.lst
 rsz=$(wc -c < v06c/build/game.rom | tr -d ' ')
 echo "OK: v06c/build/game.rom ($rsz Б: заставка $(wc -c < v06c/build/title.zx0 | tr -d ' '), игра $(wc -c < v06c/build/game.zx0 | tr -d ' '))"
+
+# готовый образ — в rom/ (в репозитории): грузится с 0100h, на Векторе Турбо+ из CP/M — TANKWARS.COM, ключ -V T3
+mkdir -p rom
+cp v06c/build/game.rom rom/tankwars.rom
+echo "OK: rom/tankwars.rom"

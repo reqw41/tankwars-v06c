@@ -9,6 +9,7 @@
 L_STACK		equ	0x8000		; стек загрузчика — под экраном
 S2_STACK	equ	0xA000		; стек на время распаковки игры: выше игры, ниже перенесённых данных
 S2_SIZE		equ	0x80		; место под вторую ступень в конце памяти
+JOY_IDLE_CELL	equ	0x00F0		; значение покоя джойстика «П» для игры (game.asm), ниже её образа
 
 ld_entry:
 	di
@@ -24,6 +25,13 @@ ld_entry:
 	xor	a
 	out	(2), a
 	out	(1), a
+	ld	a, 0x83			; джойстик «П»: ВВ55 №2, порт B — вход, опрос обоих; значение покоя — в ld_jidle
+	out	(4), a
+	ld	a, 0x9F
+	out	(5), a
+	in	a, (6)
+	ld	(ld_jidle), a
+	ld	(JOY_IDLE_CELL), a	; передать игре: она замерить не может (огонь, закрывший заставку, ещё нажат)
 	ei
 	call	ld_black
 	ld	de, ld_zpic
@@ -105,9 +113,12 @@ ld_keys:
 	xor	a
 	out	(2), a
 	out	(1), a
-	ld	a, b
-	or	a
+	in	a, (6)			; джойстик «П»: любой бит, отличный от покоя, — нажатие
+	ld	hl, ld_jidle
+	xor	(hl)
+	or	b
 	ret
+ld_jidle:	db	0xFF
 
 	module	lo
 	include	"dzx0.asm"
