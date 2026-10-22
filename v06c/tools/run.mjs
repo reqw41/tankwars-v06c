@@ -1,5 +1,11 @@
 // Headless vector06js: загрузить ROM с 0100h, исполнить до HLT или метки, выгрузить память и регистры.
 // Никаких окон. Эмулятор: ~/projects/vector06js (или VECTOR06JS).
+//
+// Это машина для стендов v06c/test/*.mjs и инструментов: процессор, память и порты vector06js без видеотракта и без
+// прерываний кадра. Образ кладётся с 0100h, стек — 9F00h (как у tw.asm), прерывания запрещены; исполнение идёт
+// покомандно, поэтому можно остановиться на любой метке (.sym рядом с образом) и посчитать такты участка.
+// Модуль экспортирует createMachine/loadRom/poke/peek/runUntil/parseSym/dumpMem/printProf; запуск напрямую —
+// отладочный (usage ниже).
 import os from 'node:os';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -9,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const VEC = process.env.VECTOR06JS || path.join(os.homedir(), 'projects/vector06js');
 
+// Метки из .sym sjasmplus («ИМЯ: EQU 0x....») -> { ИМЯ: адрес }. Нет файла — пустой объект.
 export function parseSym(symPath) {
   const L = {};
   if (!fs.existsSync(symPath)) return L;
@@ -19,6 +26,7 @@ export function parseSym(symPath) {
   return L;
 }
 
+// vector06js написан для браузера: подставляем пустые window/document/canvas, чтобы его файлы исполнились в node:vm.
 function stubWindow() {
   const g = {};
   g.window = g;
@@ -38,6 +46,7 @@ function stubWindow() {
   return g;
 }
 
+// Файлы эмулятора грузятся один раз на процесс: стенды создают сотни машин подряд.
 let cachedCtx = null;
 function emuContext() {
   if (cachedCtx) return cachedCtx;
@@ -54,6 +63,7 @@ function emuContext() {
   return ctx;
 }
 
+// Машина без видеотракта: память, клавиатура, таймер ВИ53, AY, дисковод (его требует конструктор IO), процессор.
 export function createMachine() {
   const ctx = emuContext();
   const memory = new ctx.Memory();
@@ -67,6 +77,7 @@ export function createMachine() {
   return { ctx, memory, io, cpu, timer };
 }
 
+// Образ с 0100h, остальная память — нули; загрузчик ПЗУ отключается, старт с 0100h, стек 9F00h, прерывания запрещены.
 export function loadRom(machine, romBuf) {
   const img = new Uint8Array(0x10000);
   const n = Math.min(romBuf.length, 0x10000 - 0x100);
@@ -78,6 +89,7 @@ export function loadRom(machine, romBuf) {
   machine.cpu.iff = false;
 }
 
+// Положить байты в память (вход стенда: PARAM, LIST, RESULT).
 export function poke(machine, addr, bytes) {
   // буфер LIST стенда (8800h) не должен доставать до RESULT (9600h)
   if (addr >= 0x8800 && addr < 0x9600 && addr + bytes.length > 0x9600) throw new Error(`poke: ${bytes.length} байт с ${addr.toString(16)} достают до RESULT`);
@@ -103,7 +115,11 @@ export function regs(machine) {
   };
 }
 
-/** Исполнять до HLT, PC===haltPc, или maxInsns. Возврат: cpu_cycles и vcycles (Вектор). */
+/** Исполнять до HLT, PC===haltPc, или maxInsns. Возврат: cpu_cycles и vcycles (Вектор).
+ *  cpuCycles — такты 8080 по справочнику, vcycles — такты Вектора: каждый машинный цикл растянут до 4 тактов (так их
+ *  считает vector06js); замеры скорости порта берут vcycles. countFromPc — считать bodyCpu/bodyV только с этого адреса
+ *  (вход замеряемой подпрограммы); prof — Float64Array(65536) или подобный: сюда копятся vcycles по адресам команд.
+ *  Прерываний нет: код, ждущий прерывания кадра (HALT при EI), здесь просто остановится. */
 export function runUntil(machine, { haltPc = null, maxInsns = 20_000_000, countFromPc = null, prof = null } = {}) {
   const cpu = machine.cpu;
   const timer = machine.timer;
@@ -121,8 +137,9 @@ export function runUntil(machine, { haltPc = null, maxInsns = 20_000_000, countF
     if (counting) { bodyCpu += cc; bodyV += vc; }
     if (prof) prof[opAt] += vc;                        // профиль: такты по адресам команд
     tacc += vc;
+    // таймер ВИ53 считает вдвое реже, чем идут такты процессора (1,5 МГц при 3 МГц)
     if (tacc > 1) { const tn = tacc >> 1; tacc -= tn * 2; timer.Count(tn); }
-    if (cpu.last_opcode === 0xd3) machine.io.commit();
+    if (cpu.last_opcode === 0xd3) machine.io.commit();  // OUT: применить запись в порт, как основной цикл эмулятора
     insns++;
     if (cpu.last_opcode === 0x76) break; // HLT: PC уже на той же команде
     if (haltPc != null && (cpu.pc & 0xffff) === haltPc) break;
@@ -134,6 +151,7 @@ export function runUntil(machine, { haltPc = null, maxInsns = 20_000_000, countF
   return { insns, cpuCycles, vcycles, bodyCpu, bodyV, pc: cpu.pc & 0xffff, mem: dumpMem(machine), regs: regs(machine) };
 }
 
+// Отладочный запуск: node v06c/tools/run.mjs ROM [--dump mem.bin] [--halt МЕТКА] [--cycles N] [--poke адрес:hex]
 function parseArgs(argv) {
   const o = { rom: null, dump: null, cycles: null, halt: null, poke: null };
   const a = argv.slice(2);

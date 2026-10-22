@@ -1,4 +1,18 @@
 // Сравнение подпрограмм 8080 с эталоном web/tankwars.js (PROFILE_V06C).
+//
+// Запуск: sh v06c/build.sh && node v06c/test/run.mjs. Падает на первом расхождении (FAIL с адресом точки или номером
+// случая), иначе печатает OK по группам, затем замеры: размер подпрограмм (БАЙТЫ) и такты (ТАКТЫ) на типовых вызовах.
+//
+// Как устроено. Образ стенда v06c/build/tw.rom (v06c/src/tw.asm) исполняется в headless vector06js
+// (v06c/tools/run.mjs). На каждый вызов: свежая машина, заголовок PARAM (режим и поля), входной список в LIST, при
+// необходимости — заранее нарисованный экран в плоскостях A000h..FFFFh; затем исполнение до HALT. Тот же вход
+// прогоняется через эталон, и результат сравнивается целиком: экран 256×256 (planesToScreen — плоскости -> цвета
+// 0..7), ответы в RESULT, итоговый seed генератора. Случаи — крайние вручную плюс сотни случайных из своего LCG с
+// постоянным зерном, так что прогон детерминирован.
+//
+// Группы этого файла — примитивы ядра: Random, точка, линия, рамка, танк, крестик, очистка, ствол, закрашенный круг,
+// текст, осыпание, замена временного цвета, палитра, панель/результаты/магазин по упакованным записям. Логика игры
+// (полёт, взрыв, ход, ИИ, магазин, матч) проверяется соседними файлами v06c/test/*.mjs тем же способом.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,18 +47,21 @@ function u32(n) {
 function readU16(mem, a) { return mem[a] | (mem[a + 1] << 8); }
 function readU32(mem, a) { return (mem[a] | (mem[a + 1] << 8) | (mem[a + 2] << 16) | (mem[a + 3] << 24)) >>> 0; }
 
+// Свой генератор случайных случаев (не Random игры): постоянное зерно — одни и те же случаи на каждом прогоне.
 class LCG {
   constructor(seed) { this.s = seed >>> 0; }
   next() { this.s = (Math.imul(this.s, 1664525) + 1013904223) >>> 0; return this.s; }
   below(n) { return this.next() % n; }
 }
 
+// Машина создаётся один раз, образ перезагружается перед каждым вызовом (память — заново с нуля).
 let machine;
 function boot() {
   if (!machine) machine = createMachine();
   loadRom(machine, fs.readFileSync(ROM));
 }
 
+// Заголовок PARAM: байт режима и 15 байт полей (раскладка — в tw.asm, PARAM_*).
 function hdr(mode, extra = []) {
   const b = new Uint8Array(16);
   b[0] = mode;
@@ -52,6 +69,7 @@ function hdr(mode, extra = []) {
   return b;
 }
 
+// Один вызов стенда на чистом экране: заголовок, список в LIST, исполнение до HALT.
 function runMode(mode, extra, listBytes) {
   boot();
   poke(machine, PARAM, hdr(mode, extra));
@@ -70,6 +88,7 @@ function fail(msg) {
   process.exit(1);
 }
 
+// Random(n): 20 начальных зёрен × 500 вызовов с разными n (0, 1, степени двойки, 65535…), каждое значение и итоговый seed.
 function testRandom() {
   const seeds = [0, 1, 0x08088405, 0x12345678, 0xDEADBEEF, 7, 42, 0xFFFFFFFF, 0x80000000, 99991, 0x00FF00FF, 0xFF00FF00, 0x01020304, 0xFFFEFDFC, 0x7FFFFFFF, 255, 256, 65535, 65536, 0xABCDEF01];
   const gen = new LCG(0xC0FFEE);
@@ -106,6 +125,7 @@ function testRandom() {
   console.log(`OK  Random: ${cases} начальных × ${RN} вызовов (${calls}), seed совпал`);
 }
 
+// Точка: углы и края экрана, края поля и 500 случайных точек; экран и чтение каждой точки обратно.
 function testPixels() {
   const gen = new LCG(2026);
   const pts = [];
@@ -138,6 +158,7 @@ function testPixels() {
   console.log(`OK  точка: ${n} put+get, экран 256×256 совпал`);
 }
 
+// Линия: все направления, длина 1, диагонали поля и 300 случайных отрезков на одном экране.
 function testLines() {
   const gen = new LCG(0xBEEF);
   const segs = [];
@@ -188,6 +209,7 @@ function testLines() {
   console.log(`OK  линия: ${n} отрезков, экран 256×256 совпал`);
 }
 
+// Стирание линий цветом 0 на сплошном фоне 1 (на Векторе нет буфера фона: «восстановить» = 0).
 function testEraseLines() {
   const gen = new LCG(0xE1);
   const segs = [];
@@ -217,6 +239,7 @@ function testEraseLines() {
   console.log(`OK  линия стирания: ${n} отрезков на фоне 1, экран совпал`);
 }
 
+// Рамка с линией земли и без (стены отражают или нет), 200 вызовов подряд на одном экране.
 function testFrame() {
   const cases = [0, 1, 0, 1, 0];
   while (cases.length < 200) cases.push(cases.length & 1);
@@ -233,6 +256,7 @@ function testFrame() {
   console.log(`OK  рамка: ${n} (rebound 0/1), экран совпал`);
 }
 
+// Корпус танка: рисование и стирание у краёв поля и экрана и в 200 случайных местах, цвета 4..7.
 function testTank() {
   const gen = new LCG(0x7A11);
   const ops = [];
@@ -264,6 +288,7 @@ function testTank() {
   console.log(`OK  корпус танка: ${n} draw/erase, экран совпал`);
 }
 
+// Крестик-снаряд: углы экрана и поля, рисование цветом 3 и стирание.
 function testCross() {
   const gen = new LCG(0xC205);
   const ops = [];
@@ -317,6 +342,7 @@ function testDisc() {
   console.log(`OK  закрашенный круг: ${n} (три и два центра, центры за полем), экран совпал`);
 }
 
+// Очистка всего экрана и одной панели (строки 0..23) поверх случайного мусора.
 function testClear() {
   const gen = new LCG(99);
   const v0 = new Uint8Array(P.W * P.H);
@@ -344,6 +370,7 @@ function testClear() {
   console.log('OK  очистка строк 0..23');
 }
 
+// Танк со стволом: углы 0, 45, 75, 90 и 200 случайных 0..90, оба направления, мёртвый танк, рисование и стирание.
 function testBarrel() {
   const gen = new LCG(0xBA11);
   const ops = [];
@@ -384,6 +411,8 @@ function testBarrel() {
   console.log(`OK  танк со стволом: ${n}, экран совпал`);
 }
 
+// Строки: пустая, строчные латинские, «?» на всю ширину, правый нижний угол, знакоместо за экраном и 170
+// случайных строк из кодов 20h..5Fh любыми цветами 1..7.
 function testText() {
   const gen = new LCG(0x7E87);
   const strs = [];
@@ -417,6 +446,7 @@ function testText() {
   console.log(`OK  знак/строка: ${strs.length}, экран совпал`);
 }
 
+// Вызов стенда на заранее нарисованном экране v0 (цвета 0..7 -> плоскости A000h..FFFFh).
 function runOnScreen(mode, v0, extra = new Uint8Array(15)) {
   boot();
   poke(machine, 0xA000, screenToPlanes(v0).subarray(0xA000));
@@ -424,6 +454,7 @@ function runOnScreen(mode, v0, extra = new Uint8Array(15)) {
   return runUntil(machine, { haltPc: null, maxInsns: 80_000_000 });
 }
 
+// Осыпание по столбцам: пустой и сплошной экран, рельеф с воронкой r = 30, 200 случайных рельефов.
 function testCrumble() {
   const cases = [];
   const empty = new Uint8Array(65536);
@@ -461,6 +492,7 @@ function testCrumble() {
   console.log(`OK  осыпание: ${cases.length} (пустой, сплошной, воронка r=30, случайные)`);
 }
 
+// Замена временного цвета 3 на 0 по всему экрану (точку (0,0) эталон не трогает).
 function testReplace() {
   const gen = new LCG(0x3E3);
   const cases = [];
@@ -485,8 +517,10 @@ function testReplace() {
   console.log(`OK  replaceTmp: ${cases.length}, точка (0,0) не трогается`);
 }
 
+// Байт палитры Вектора: BBGGGRRR.
 function encPal(r, g, b) { return ((b & 3) << 6) | ((g & 7) << 3) | (r & 7); }
 
+// Палитра: 16 регистров — страница (цвета 0..3) и яркость танков по здоровью (tankPalV06C), парами для плоскости 8000h.
 function testPal() {
   const gen = new LCG(0x0A1);
   const PAGE = [[0, 0, 0], [1, 5, 0], [5, 5, 2], [7, 6, 1]].map(([r, g, b]) => encPal(r, g, b));
@@ -529,6 +563,7 @@ function testPal() {
   console.log(`OK  палитра: ${n} наборов 16 регистров`);
 }
 
+// Упакованная запись игрока для ui.asm (PLY_* там же): 80 байт.
 const PLY = 80;
 function i16b(n) { n = (n << 16) >> 16; return [n & 255, (n >> 8) & 255]; }
 function i32b(n) { n |= 0; return [n & 255, (n >> 8) & 255, (n >> 16) & 255, (n >>> 24) & 255]; }
@@ -559,11 +594,14 @@ function mkPlayer(over = {}) {
   return p;
 }
 
+// Сравнение экранов с понятным сообщением о первой несовпавшей точке.
 function cmpScreen(got, exp, tag) {
   const d = firstPixelDiff(got, exp);
   if (d) fail(`${tag} (${d.x},${d.y}) emu=${d.got} oracle=${d.exp}`);
 }
 
+// Панель хода: пять состояний — места 1..4, оба направления, ветер влево/вправо/0, отрицательная энергия, имя
+// длиннее поля, наведение Herb/Vick.
 function testPanel() {
   const cases = [
     [mkPlayer({ idx: 1, name: 'Player 1', weapon: 1, ammo: new Array(18).fill(0), power: 200, angle: 90, facing: 1, men: 100 }), 0],
@@ -587,6 +625,7 @@ function testPanel() {
   console.log(`OK  панель: ${n} состояний`);
 }
 
+// Экран результатов: 1..4 игрока, отрицательные очки, длинное имя, промежуточный и последний раунд.
 function testResults() {
   const mk = (n, extra = {}) => Array.from({ length: n }, (_, i) => mkPlayer({
     idx: extra.idx?.[i] ?? i + 1,
@@ -616,6 +655,7 @@ function testResults() {
   console.log(`OK  результаты: ${n} состояний`);
 }
 
+// Экран магазина: пустое меню, курсор на позиции и на кнопках, корзина с суммой.
 function testShop() {
   const p0 = mkPlayer({ idx: 1, name: 'Buyer', score: 50000, spent: 1000, weapon: 1, ammo: Object.assign(new Array(18).fill(0), { 1: 3, 5: 10 }), herb: 2, vick: 0, shield: 4, damp: 0 });
   const menuA = [[0, 1], [0, 5], [1, 0], [2, 0], [2, 1]];
@@ -647,6 +687,7 @@ function testShop() {
   console.log(`OK  магазин: ${n} состояний`);
 }
 
+// Замер: заголовок MODE_BENCH с полями PARAM_X/Y/X2/Y2/C, PARAM_N и seed.
 function pokeBench(kind, fields) {
   boot();
   const b = new Uint8Array(16);
@@ -662,6 +703,7 @@ function pokeBench(kind, fields) {
   poke(machine, PARAM, b);
 }
 
+// Такты одной подпрограммы: от входа (entry) до метки bench_*_ret в tw.asm.
 function bench(name, entry, ret, kind, fields) {
   pokeBench(kind, fields);
   const r = runUntil(machine, { haltPc: ret, countFromPc: entry, maxInsns: 20_000_000 });
@@ -669,6 +711,7 @@ function bench(name, entry, ret, kind, fields) {
   return { cpu: r.bodyCpu, v: r.bodyV };
 }
 
+// Размеры подпрограмм по меткам начала и *_end из tw.sym.
 function sizes(L) {
   const rows = [
     ['Random', L.random, L.random_end],
@@ -757,6 +800,7 @@ poke(machine, 0xA000, screenToPlanes(field).subarray(0xA000));
 pokeBench(KIND_CRUMBLE, {});
 const rCb = runUntil(machine, { haltPc: L.bench_crumble_ret, countFromPc: L.crumble, maxInsns: 80_000_000 });
 console.log(`ТАКТЫ  осыпание рельеф+воронка r=30: cpu_cycles=${rCb.bodyCpu} (vcycles=${rCb.bodyV})`);
+// Сводная таблица; строки «таблица_v6» — замер против цели задачи V6 (docs/tasks/V6-kernel-speed.md, V6-review.md).
 console.log('--- таблица ---');
 console.log(`подпрограмма\tбайт\tтакты_cpu\tvcycles`);
 const row = (name, b, t) => console.log(`${name}\t${b}\t${t.cpu}\t${t.v}`);

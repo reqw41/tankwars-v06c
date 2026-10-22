@@ -1,4 +1,10 @@
-; Корпус танка (33 точки) и крестик (5). Смещение — слово dx+dy*256.
+; Корпус танка (33 точки) и крестик-снаряд (5 точек) — drawTank/eraseTank и cross эталона (в оригинале спрайт танка —
+; 1062:03d2, docs/spec/terrain.md). Точки — смещения dx + dy·256 от (x, y): адрес считается как HL = x + y·256 и
+; складывается со смещением, ровно как смещение o = y·256 + x в эталоне — с тем же заворотом через край строки.
+; Цвет пишется прямо в три плоскости без общего putpixel: отдельные пути для 0 (стереть), 3 (временный цвет) и
+; 4 (танк места 1 — только плоскость E000h); остальные цвета — через plot_hlc.
+;   draw_tank:  D = x, E = y, A = цвет.  erase_tank: D = x, E = y (цвет 0).  draw_cross: D = x, E = y, A = цвет.
+; Портят все регистры.
 
 SPRITE:
 	dw	0, 1, 2, 3, 4, -1, -2, -3, -4
@@ -32,6 +38,7 @@ draw_cross:
 	ld	(tk_base), hl
 	ld	hl, CROSS
 	ld	a, CROSS_N
+; общий цикл: HL — таблица смещений, A — число точек
 spr_go:
 	ld	(tk_ptr), hl
 	ld	(tk_n), a
@@ -56,7 +63,7 @@ spr_lp:
 	ld	e, a
 	ld	a, l
 	and	7
-	add	a, low pix_mask
+	add	a, low pix_mask		; маска по x&7; таблица выровнена на 8 (pixel.asm), переноса нет
 	ld	l, a
 	ld	a, high pix_mask
 	ld	h, a
@@ -72,6 +79,7 @@ spr_lp:
 	jp	z, tk_c4
 	call	plot_hlc
 	jp	spr_nx
+; цвет 0: снять точку во всех трёх плоскостях
 tk_c0:
 	ld	a, c
 	cpl
@@ -92,6 +100,7 @@ tk_c0:
 	and	(hl)
 	ld	(hl), a
 	jp	spr_nx
+; цвет 3: A000h и C000h — 1, E000h — 0
 tk_c3:
 	ld	a, (hl)
 	or	c
@@ -110,6 +119,7 @@ tk_c3:
 	and	(hl)
 	ld	(hl), a
 	jp	spr_nx
+; цвет 4: только E000h
 tk_c4:
 	ld	a, c
 	cpl

@@ -1,9 +1,28 @@
-; Tank Wars / Вектор-06Ц — тестовый образ стенда (не игра).
-; Грузится с 0100h. Экран: три плоскости A000h–FFFFh. Плоскость 8000h в картинку
-; не входит: палитра парами одинаковых цветов.
+; Tank Wars / Вектор-06Ц — ТЕСТОВЫЙ ОБРАЗ СТЕНДА v06c/build/tw.rom (не игра; игра — game.asm, те же модули).
+;
+; Зачем. Порт пишется подпрограмма за подпрограммой, и каждую сверяют с эталоном web/tankwars.js (профиль
+; PROFILE_V06C, docs/spec/v06c.md) отдельно от остальной игры. Стенды v06c/test/*.mjs грузят этот образ в эмулятор
+; (v06c/tools/run.mjs), кладут входные данные в память, запускают с 0100h до HALT и сравнивают память и экран с тем,
+; что на тех же данных дал эталон. Так расхождение видно сразу в той подпрограмме, где оно возникло.
+;
+; Протокол обмена со стендом (адреса — те же константы в v06c/test/run.mjs):
+;   PARAM  0080h, 16 байт — заголовок вызова: PARAM_MODE — что делать (MODE_*), остальные поля — по режиму,
+;          их смысл описан над каждым do_*. PARAM_SEED (4 байта) — состояние генератора Random: стенд кладёт его до
+;          вызова, режимы со случайностью возвращают его обратно, и следующий вызов продолжает ту же
+;          последовательность, что и эталон.
+;   LIST   8800h — входной список записей (у режимов «по записям игроков» — таблица players, PL_SIZE на игрока).
+;   RESULT 9600h — ответы; у части режимов и вход (это сказано у режима).
+;   Конец — HALT в цикле done. Прерывания запрещены с первой команды: стенд останавливается на HALT сам.
+; Режим MODE_BENCH замеряет скорость: вокруг вызова стоят метки bench_*_call и bench_*_ret, стенд считает такты от
+; входа в подпрограмму до метки *_ret (runUntil с countFromPc/haltPc).
+;
+; Память стенда: образ не должен доставать до LIST (8800h) — это проверяет build.sh; 9A00h..9DFFh — таблицы генератора
+; (lcg_init); стек под 9F00h. Экран: три плоскости A000h–FFFFh, 8 цветов (бит 0 цвета — A000h, бит 1 — C000h,
+; бит 2 — E000h). Плоскость 8000h в картинку не входит: палитра программируется парами одинаковых цветов (set_palette).
 	device	noslot64k
 	org	0x0100
 
+; поля заголовка PARAM; один и тот же байт в разных режимах значит разное (см. do_*)
 PARAM		equ	0x0080
 PARAM_MODE	equ	PARAM + 0
 PARAM_KIND	equ	PARAM + 1
@@ -19,6 +38,8 @@ LIST		equ	0x8800
 RESULT		equ	0x9600
 STACK		equ	0x9F00
 
+; режимы стенда: значение PARAM_MODE. MODE_RING и KIND_RING — номера от кольца ring(), которого в
+; профиле Вектора больше нет (docs/spec/v06c.md, п. 8): в разборе режимов их нет, такой вызов сразу уходит в done.
 MODE_RANDOM	equ	1
 MODE_PIXELS	equ	2
 MODE_LINES	equ	3
@@ -54,6 +75,7 @@ MODE_HUD		equ	32
 MODE_AIPLAN	equ	33
 MODE_SHOPUI	equ	34
 MODE_SOUND	equ	35
+; что замерять в MODE_BENCH (PARAM_KIND)
 KIND_RANDOM	equ	1
 KIND_PIXEL	equ	2
 KIND_LINE	equ	3
@@ -68,6 +90,9 @@ KIND_PANEL	equ	11
 KIND_CRUMBLE	equ	12
 KIND_DISC	equ	13
 
+; порты Вектора: ВВ55 (0 — управляющее слово, 1 — порт C, 2 — порт B: цвет бордюра и номер регистра палитры,
+; 3 — порт A: вертикальная прокрутка), 0Ch — запись цвета в регистр палитры. 88h — режим ВВ55: A, B и младшая
+; половина C на выход.
 PPI_CW		equ	0x00
 PPI_C		equ	0x01
 PPI_B		equ	0x02
@@ -75,8 +100,9 @@ PPI_A		equ	0x03
 PAL_PORT	equ	0x0C
 PPI_OUT		equ	0x88
 
+; Вход стенда: генератор и палитра, затем разбор PARAM_MODE. Каждый do_* заканчивается переходом на done.
 entry:
-	di
+	di		; стенд работает без прерываний: HALT в done — знак конца
 	ld	sp, STACK
 	call	lcg_init		; таблицы генератора случайных чисел (9A00h..9DFFh)
 	call	set_palette
@@ -149,7 +175,7 @@ entry:
 	jp	z, do_shopui
 	cp	MODE_SOUND
 	jp	z, do_sound
-	jp	done
+	jp	done		; неизвестный режим (в том числе MODE_RING) — ничего не делать
 done:
 	halt
 	jp	done
@@ -208,9 +234,12 @@ sp_b2:
 	out	(PPI_B), a
 	ret
 
+; Условные цвета стенда в формате Вектора (BBGGGRRR) для цветов 0..7. В игре палитру ставит pal.asm (цвета
+; страницы и яркость танков по здоровью); стенду картинка нужна только как содержимое плоскостей.
 pal_rgb:
 	db	0x00, 0x02, 0x14, 0x16, 0xA0, 0xA2, 0xB4, 0xB6
 
+; Random: LIST — список n (слова), PARAM_COUNT штук; RESULT — Random(n) по слову на вызов. Seed — в обе стороны.
 do_random:
 	ld	hl, PARAM_SEED
 	ld	de, rand_seed
@@ -251,6 +280,8 @@ dr_fin:
 	call	copy_b
 	jp	done
 
+; Точки: LIST — по 3 байта x, y, цвет; все точки ставятся, затем каждая читается обратно getpixel в RESULT
+; (байт на точку). Проверяет и запись, и чтение, и то, что поздние точки не портят ранние.
 do_pixels:
 	ld	hl, (PARAM_COUNT)
 	ld	(left), hl
@@ -301,6 +332,7 @@ dp_rdlp:
 	ld	(res_ptr), hl
 	jp	dp_rdlp
 
+; Линии: LIST — по 5 байт x1, y1, x2, y2, цвет (координаты без знака, старшие байты слов ln_* обнуляются).
 do_lines:
 	ld	hl, (PARAM_COUNT)
 	ld	(left), hl
@@ -341,6 +373,8 @@ dl_lp:
 	call	line
 	jp	dl_lp
 
+; Замер: PARAM_KIND — что звать, параметры — PARAM_X/Y/X2/Y2/C. Стенд считает такты от входа в подпрограмму
+; до метки bench_*_ret.
 do_bench:
 	ld	a, (PARAM_KIND)
 	cp	KIND_RANDOM
@@ -423,11 +457,13 @@ bench_line_call:
 bench_line_ret:
 	jp	done
 
+; Стирание линий: экран заливается цветом 1 (земля), потом линии из LIST (как do_lines) — обычно цветом 0.
 do_eraseln:
 	ld	a, 1
 	call	fill_screen
 	jp	do_lines
 
+; Рамка: LIST — по байту на вызов: признак «стены отражают» (без него рисуется нижняя линия земли).
 do_frame:
 	ld	hl, (PARAM_COUNT)
 	ld	(left), hl
@@ -447,6 +483,7 @@ df_lp:
 	call	draw_frame
 	jp	df_lp
 
+; Корпус танка: LIST — по 4 байта x, y, цвет, стереть (0 — нарисовать цветом, иначе стереть в 0).
 do_tank:
 	ld	hl, (PARAM_COUNT)
 	ld	(left), hl
@@ -480,6 +517,7 @@ dt_draw:
 	call	draw_tank
 	jp	dt_lp
 
+; Крестик — снаряд в полёте (cross эталона): LIST — по 3 байта x, y, цвет.
 do_cross:
 	ld	hl, (PARAM_COUNT)
 	ld	(left), hl
@@ -550,6 +588,7 @@ bench_disc_call:
 bench_disc_ret:
 	jp	done
 
+; Очистка: PARAM_KIND 0 — весь экран, 1 — только панель (строки 0..23).
 do_clear:
 	ld	a, (PARAM_KIND)
 	or	a
@@ -599,6 +638,8 @@ bench_clear_call:
 bench_clear_ret:
 	jp	done
 
+; Танк со стволом: LIST — по 8 байт x, y, место (1..4, цвет 3+место), угол (слово 0..90), куда смотрит (1/FFh),
+; жив, стереть (0 — нарисовать, иначе стереть).
 do_barrel:
 	ld	hl, (PARAM_COUNT)
 	ld	(left), hl
@@ -663,6 +704,7 @@ bench_barrel_call:
 bench_barrel_ret:
 	jp	done
 
+; Строки текста: LIST — записи столбец, строка, цвет, длина и сама строка (длина байт); длина 0 — пустая запись.
 do_text:
 	ld	hl, (PARAM_COUNT)
 	ld	(left), hl
@@ -715,6 +757,7 @@ bench_char_call:
 bench_char_ret:
 	jp	done
 
+; Осыпание земли и замена временного цвета 3 на 0 — на экране, который заранее положил стенд.
 do_crumble:
 	call	crumble
 	jp	done
@@ -1350,6 +1393,8 @@ dsn_2:
 	call	snd_off
 	jp	done
 
+; Палитра: LIST — 32 байта: pal_men (здоровье, 4 слова), делители R, G, B (по 4 слова), затем pal_apply.
+; Результат — 16 регистров в RESULT (pal_expand).
 do_pal:
 	ld	hl, LIST
 	ld	de, pal_men
@@ -1367,6 +1412,9 @@ do_pal:
 	call	pal_apply
 	jp	done
 
+; Экраны по «упакованным» записям ui.asm (80 байт на игрока): PARAM_KIND 0 — панель хода, 1 — результаты,
+; 2 — магазин. Это ранний вход; игра зовёт те же подпрограммы через переходники hud.asm и shopui.asm (do_hud,
+; do_shopui).
 do_ui:
 	ld	a, (PARAM_KIND)
 	or	a
@@ -1377,6 +1425,7 @@ do_ui:
 	jp	z, do_shop
 	jp	done
 
+; LIST: ветер (слово), затем упакованная запись игрока
 do_panel:
 	ld	hl, LIST
 	ld	a, (hl)
@@ -1389,6 +1438,7 @@ do_panel:
 	call	draw_panel
 	jp	done
 
+; LIST: номер раунда, раундов всего, число игроков, затем упакованные записи по порядку мест
 do_results:
 	ld	a, (LIST)
 	ld	(ui_round), a
@@ -1401,6 +1451,8 @@ do_results:
 	call	draw_results
 	jp	done
 
+; LIST: корзина (слово), выбранная строка, число позиций, позиции по 4 байта (категория, номер, количество-слово),
+; затем упакованная запись игрока
 do_shop:
 	ld	hl, LIST
 	ld	a, (hl)
@@ -1444,6 +1496,7 @@ bench_crumble_call:
 bench_crumble_ret:
 	jp	done
 
+; копирование B байт из HL в DE (B = 1..255; HL, DE — за концом)
 copy_b:
 	ld	a, (hl)
 	ld	(de), a
@@ -1453,6 +1506,7 @@ copy_b:
 	jp	nz, copy_b
 	ret
 
+; Модули порта — те же файлы, что включает game.asm. Метки kernel_start/kernel_end — для отчёта о размере ядра.
 	include	"player.inc"
 kernel_start:
 	include	"random.asm"
@@ -1494,10 +1548,12 @@ kernel_start:
 	include	"ui.asm"
 kernel_end:
 
+; ячейки разбора списков стенда
 list_ptr:	dw	0
 res_ptr:	dw	0
 left:		dw	0
 
+; Образ стенда и отчёт о размерах подпрограмм при сборке (видно в выводе build.sh).
 rom_end:
 	savebin	"v06c/build/tw.rom", 0x0100, rom_end - 0x0100
 	display	"rom_end=", /h, rom_end
